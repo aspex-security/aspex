@@ -13,7 +13,8 @@
 [![MCP-scanned by Aspex](https://img.shields.io/badge/MCP--scanned-by%20Aspex-5B44C3)](https://github.com/aspex-security/aspex)
 
 ```sh
-gh release download v0.1.0 --repo aspex-security/aspex -p "install.sh" -O - | sh
+# macOS / Linux
+brew install aspex-security/tap/aspex
 ```
 
 **Offline. No account. No data leaves your machine. Ever.**
@@ -113,14 +114,14 @@ All findings map to **OWASP LLM Top 10 2025**, **MITRE ATLAS**, and **CWE**.
 ### Install
 
 ```sh
-# Homebrew (macOS / Linux)
+# macOS / Linux (recommended)
 brew install aspex-security/tap/aspex
 
-# One line — macOS, Linux, Windows (WSL). Requires gh CLI (https://cli.github.com).
-gh release download v0.1.0 --repo aspex-security/aspex -p "install.sh" -O - | sh
+# Linux / Windows WSL — no Homebrew
+curl -fsSL https://raw.githubusercontent.com/aspex-security/aspex/main/install.sh | sh
 
 # Install to a custom directory
-INSTALL_DIR=~/.local/bin gh release download v0.1.0 --repo aspex-security/aspex -p "install.sh" -O - | sh
+INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/aspex-security/aspex/main/install.sh | sh
 
 # Or download a binary directly: https://github.com/aspex-security/aspex/releases
 ```
@@ -258,11 +259,11 @@ Deviations flagged: new tools called for the first time, off-hours activity, ove
 ### Install
 
 ```sh
-# Homebrew (macOS / Linux)
+# macOS / Linux (recommended)
 brew install aspex-security/tap/aspex
 
-# One line — installs both aspex-scan and aspex-trace
-gh release download v0.1.0 --repo aspex-security/aspex -p "install.sh" -O - | sh
+# Linux / Windows WSL — no Homebrew
+curl -fsSL https://raw.githubusercontent.com/aspex-security/aspex/main/install.sh | sh
 
 # Or download a binary directly: https://github.com/aspex-security/aspex/releases
 ```
