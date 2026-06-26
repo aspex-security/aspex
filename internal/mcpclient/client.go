@@ -15,6 +15,10 @@ import (
 
 const initTimeout = 15 * time.Second
 
+// ClientVersion is set by the caller (cmd/aspex-scan) at startup so the MCP
+// initialize handshake reports the real binary version rather than a hardcoded string.
+var ClientVersion = "dev"
+
 // Tool represents a tool exposed by an MCP server.
 type Tool struct {
 	Name        string          `json:"name"`
@@ -182,7 +186,7 @@ func (c *stdioClient) initialize() (ServerInfo, error) {
 		"protocolVersion": "2024-11-05",
 		"clientInfo": map[string]string{
 			"name":    "aspex-scan",
-			"version": "0.1.0",
+			"version": ClientVersion,
 		},
 		"capabilities": map[string]interface{}{},
 	}

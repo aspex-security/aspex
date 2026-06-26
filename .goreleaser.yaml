@@ -101,6 +101,38 @@ brews:
     test: |
       system "#{bin}/aspex-scan version"
       system "#{bin}/aspex-trace version"
+    caveats: |
+      Aspex is ready. Two commands are now available:
+
+        aspex-scan    — Scan MCP server configs for security risks
+        aspex-trace   — Audit AI agent activity from native client logs
+
+      ── QUICK START ────────────────────────────────────────────────
+        aspex-scan                  Scan all MCP clients on this machine
+        aspex-scan inspect github   Deep-inspect the 'github' server
+
+        aspex-trace                 Audit the last 24 h of agent activity
+        aspex-trace --since 7d      Audit the last 7 days
+
+      ── FULL HELP ──────────────────────────────────────────────────
+        aspex-scan --help
+        aspex-trace --help
+
+      ── COMMON WORKFLOWS ───────────────────────────────────────────
+        # Save an HTML report
+        aspex-scan --html ~/aspex-report.html
+
+        # CI: exit 1 on any critical finding
+        aspex-scan --fail-on critical
+
+        # Detect suspicious agent behavior
+        aspex-trace --suppress-noise --fail-on high
+
+        # Learn a behavioral baseline, then detect deviations
+        aspex-trace baseline --learn --since 7d
+        aspex-trace --baseline ~/.config/aspex/aspex-trace-baseline.json
+
+      No data is sent anywhere. Both tools run entirely offline.
 
 checksum:
   name_template: "checksums.txt"
