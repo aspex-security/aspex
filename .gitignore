@@ -22,3 +22,6 @@ npm/agent-trace/bin/
 *.pprof
 # but keep test fixtures
 !testdata/**/*.log
+
+# marketing materials — kept local only
+docs/marketing/
