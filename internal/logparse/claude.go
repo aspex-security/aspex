@@ -67,19 +67,24 @@ func ParseClaudeLogsDir(dir string, since time.Time) ([]Event, error) {
 // Format: `2026-04-29T10:35:35.449Z [info] [ServerName] Message from client: {...json...}`
 func ParseClaudeLogReader(r io.Reader, since time.Time) ([]Event, error) {
 	var events []Event
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			continue
+	reader := bufio.NewReaderSize(r, 64*1024)
+	for {
+		line, err := reader.ReadString('\n')
+		line = strings.TrimRight(line, "\r\n")
+		if line != "" {
+			ev, ok := parseClaudeTextLine(line, since)
+			if ok {
+				events = append(events, ev)
+			}
 		}
-		ev, ok := parseClaudeTextLine(line, since)
-		if ok {
-			events = append(events, ev)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return events, err
 		}
 	}
-	return events, scanner.Err()
+	return events, nil
 }
 
 // parseClaudeTextLine parses one line of the Claude Desktop plain-text log format.

@@ -61,19 +61,24 @@ func ParseClaudeCodeProjectsDir(rootDir string, since time.Time) ([]Event, error
 // inside assistant messages. MCP tools have names prefixed with "mcp__".
 func ParseClaudeCodeReader(r io.Reader, since time.Time) ([]Event, error) {
 	var events []Event
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 64*1024), 8*1024*1024)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			continue
+	reader := bufio.NewReaderSize(r, 64*1024)
+	for {
+		line, err := reader.ReadString('\n')
+		line = strings.TrimRight(line, "\r\n")
+		if line != "" {
+			evs, ok := parseClaudeCodeLine(line, since)
+			if ok {
+				events = append(events, evs...)
+			}
 		}
-		evs, ok := parseClaudeCodeLine(line, since)
-		if ok {
-			events = append(events, evs...)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return events, err
 		}
 	}
-	return events, scanner.Err()
+	return events, nil
 }
 
 type claudeCodeLine struct {
