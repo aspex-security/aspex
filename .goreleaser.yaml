@@ -161,16 +161,6 @@ checksum:
   name_template: "checksums.txt"
   algorithm: sha256
 
-signs:
-  - cmd: cosign
-    args:
-      - sign-blob
-      - --bundle=${artifact}.bundle
-      - ${artifact}
-      - --yes
-    artifacts: checksum
-    output: true
-
 sboms:
   - artifacts: archive
     documents:
@@ -197,12 +187,4 @@ release:
   prerelease: auto
   name_template: "v{{.Version}}"
   footer: |
-    ## Verify the release
-
-    All release binaries are signed with cosign. To verify:
-
-    ```
-    cosign verify-blob --bundle checksums.txt.bundle checksums.txt
-    ```
-
     **Full Changelog**: https://github.com/aspex-security/aspex/compare/{{.PreviousTag}}...{{.Tag}}
