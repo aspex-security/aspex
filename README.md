@@ -13,7 +13,7 @@
 [![MCP-scanned by Aspex](https://img.shields.io/badge/MCP--scanned-by%20Aspex-5B44C3)](https://github.com/stevend-dotcom/aspex)
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/stevend-dotcom/aspex/main/install.sh | sh
+gh release download v0.1.0 --repo stevend-dotcom/aspex -p "install.sh" -O - | sh
 ```
 
 **Offline. No account. No data leaves your machine. Ever.**
@@ -106,16 +106,13 @@ All findings map to **OWASP LLM Top 10 2025**, **MITRE ATLAS**, and **CWE**.
 ### Install
 
 ```sh
-# One line — macOS, Linux, Windows (WSL)
-curl -fsSL https://raw.githubusercontent.com/stevend-dotcom/aspex/main/install.sh | sh
-
-# Pick a specific version
-VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/stevend-dotcom/aspex/main/install.sh | sh
+# One line — macOS, Linux, Windows (WSL). Requires gh CLI (https://cli.github.com).
+gh release download v0.1.0 --repo stevend-dotcom/aspex -p "install.sh" -O - | sh
 
 # Install to a custom directory
-INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/stevend-dotcom/aspex/main/install.sh | sh
+INSTALL_DIR=~/.local/bin gh release download v0.1.0 --repo stevend-dotcom/aspex -p "install.sh" -O - | sh
 
-# Direct binary download: https://github.com/stevend-dotcom/aspex/releases
+# Or download a binary directly: https://github.com/stevend-dotcom/aspex/releases
 ```
 
 ### Usage
@@ -244,9 +241,9 @@ Deviations flagged: new tools called for the first time, off-hours activity, ove
 
 ```sh
 # One line — installs both aspex-scan and aspex-trace
-curl -fsSL https://raw.githubusercontent.com/stevend-dotcom/aspex/main/install.sh | sh
+gh release download v0.1.0 --repo stevend-dotcom/aspex -p "install.sh" -O - | sh
 
-# Direct binary download: https://github.com/stevend-dotcom/aspex/releases
+# Or download a binary directly: https://github.com/stevend-dotcom/aspex/releases
 ```
 
 ### Usage
