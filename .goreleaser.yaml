@@ -163,11 +163,9 @@ checksum:
 
 signs:
   - cmd: cosign
-    certificate: "${artifact}.pem"
     args:
       - sign-blob
-      - --output-certificate=${certificate}
-      - --output-signature=${signature}
+      - --bundle=${artifact}.bundle
       - ${artifact}
       - --yes
     artifacts: checksum
@@ -204,7 +202,7 @@ release:
     All release binaries are signed with cosign. To verify:
 
     ```
-    cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig checksums.txt
+    cosign verify-blob --bundle checksums.txt.bundle checksums.txt
     ```
 
     **Full Changelog**: https://github.com/aspex-security/aspex/compare/{{.PreviousTag}}...{{.Tag}}
