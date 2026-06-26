@@ -90,22 +90,23 @@ aspex-scan reads every MCP client config on the machine, connects to each server
 
 | Category | Rules | Examples |
 |---|---|---|
-| **Prompt injection** | MCP001, MCP002, MCP018 | Hidden Unicode in descriptions, "ignore previous instructions", homoglyph tool names, descriptions >2000 chars |
-| **Code execution** | MCP003, MCP020 | `run_command`, `bash`, `eval_code`, `run_python`, code interpreter tools |
-| **Credential theft** | MCP006, MCP011, MCP014 | API keys in plaintext env, `get_env` tools, browser cookie/keychain access |
+| **Prompt injection** | MCP001, MCP002, MCP018, MCP151–MCP156 | Hidden Unicode, "ignore previous instructions", homoglyph tool names, injection phrases in prompt descriptions |
+| **Code execution** | MCP003, MCP020, MCP027–MCP034 | `run_command`, `bash`, `eval_code`, container exec, kubectl exec, language REPLs, build system invocations |
+| **Credential access** | MCP006, MCP011, MCP014, MCP035–MCP041, MCP093 | API keys in env, `get_env`, browser cookies/keychain, Vault reads, private key/SSH key extraction |
+| **Data exfiltration** | MCP042–MCP047 | Email send, Slack/Teams post, webhooks, S3/GCS upload, FTP upload, pastebin creation |
 | **Filesystem** | MCP004, MCP008, MCP017 | Arbitrary write, cron/LaunchAgent/rc-file persistence, CI/CD config write |
-| **Network** | MCP005, MCP016, MCP021, MCP023 | Unrestricted SSRF, internal network access, plaintext HTTP, cloud metadata endpoint |
-| **Supply chain** | MCP007, MCP022 | `@latest` / `@next` tags, package manifest write |
-| **Surveillance** | MCP012, MCP013 | Clipboard read, screen capture |
-| **Recon** | MCP009, MCP024 | Process spawn, port scan, `list_processes` |
-| **Remote server** | MCP010, MCP021 | No auth token, plaintext HTTP |
+| **Persistence** | MCP063–MCP068 | Windows registry Run keys, login items, daemon install, systemd units, scheduled tasks |
+| **Surveillance** | MCP012, MCP013, MCP048–MCP053 | Clipboard read, screen capture, audio/microphone, camera/video, keystroke logging, location tracking |
+| **Recon** | MCP009, MCP024, MCP054–MCP056 | Process spawn, port scan, user/AD enumeration, cloud resource enumeration |
+| **Cloud & infrastructure** | MCP057–MCP062, MCP096–MCP100 | IAM role/policy modification, firewall rules, compute provisioning, DNS modification, audit trail disable |
+| **Defense evasion** | MCP069–MCP075 | Log clearing, AV/EDR exclusion, shadow copy deletion, timestomping |
+| **Privilege escalation** | MCP076–MCP079 | Sudo execution, setuid/capability add, sudoers write, process injection |
+| **Network attacks** | MCP082–MCP085, MCP101–MCP107 | Reverse shell, port forwarding, DNS tunnel, Tor proxy, packet capture, ARP spoof, TLS interception |
+| **Supply chain** | MCP007, MCP022, MCP032, MCP033 | `@latest`/`@next` tags, package manifest write, package manager installs, build system hooks |
+| **Remote server** | MCP010, MCP021 | No auth token, plaintext HTTP transport |
 | **Attack surface** | MCP019, MCP025, MCP026 | No input schema, duplicate tool names, >30 tools |
-| **Container & orchestration** | MCP027–MCP035 | exec into containers, privileged deploy, cluster admin binding |
-| **Data exfiltration** | MCP036–MCP050 | Email send, outbound webhooks, cloud storage upload |
-| **Persistence** | MCP051–MCP070 | Registry writes, launchd/systemd daemons, init script modification |
-| **Surveillance (expanded)** | MCP071–MCP090 | Audio capture, video/camera access, location tracking |
-| **Defense evasion** | MCP091–MCP110 | Log clearing, AV/EDR bypass, timestomping |
-| **Supply chain expansion** | MCP111–MCP130 | Package manager abuse, build system hooks, dependency confusion |
+| **Schema-based** | MCP121–MCP125 | Schema accepts `shell_command`, `sudo_password`, `private_key`, AWS secret key |
+| **Resource URIs** | MCP130–MCP140 | `/etc/shadow`, SSH keys, `.aws/credentials`, `.env`, private key files, executable MIME types |
 
 All findings map to **OWASP LLM Top 10 2025**, **MITRE ATLAS**, and **CWE**.
 
@@ -220,21 +221,23 @@ Reads the native log files that Claude Desktop, Claude Code CLI, Cursor, and Win
 
 | Category | Rules | Examples |
 |---|---|---|
-| **Credential access** | AT001, AT010, AT016 | `.env`, `.ssh/id_rsa`, `.aws/credentials`, `kubeconfig`, browser cookies, env var dump |
-| **Code execution** | AT003, AT014 | Shell tools called, arbitrary code eval |
-| **Persistence** | AT014, AT006 | LaunchAgent/cron/rc-file writes, shell init modification |
-| **Exfiltration** | AT002, AT015, AT017 | Outbound network calls, cross-server data chains, database dumps |
+| **Credential file access** | AT001, AT021–AT025 | `.env`, `.ssh/id_rsa`, `.aws/credentials`, kubeconfig, browser password stores, cloud credential files |
+| **Code execution** | AT003 | Shell tool invocations from MCP servers |
+| **Reverse shell / payload** | AT026–AT030 | Netcat reverse shell, Python reverse shell, curl-pipe-to-shell, base64-encoded commands, eval-of-downloaded-content |
+| **Exfiltration** | AT002, AT015, AT017, AT031–AT035 | Outbound URLs, cross-server data chains, database dumps, S3 upload, webhooks, email send, FTP/SFTP |
+| **Persistence writes** | AT006, AT014, AT036–AT040 | LaunchAgent/LaunchDaemon plist, Windows registry Run keys, crontab, systemd units, shell init files |
+| **Privilege escalation** | AT041–AT043 | Sudo invocation in args, SUID/capability manipulation, sudoers write |
+| **Defense evasion** | AT044–AT047 | Log clearing commands, shell history deletion, AV exclusion add, timestomping |
+| **Cloud & infrastructure** | AT048–AT050 | IAM modification, firewall rule add, CloudTrail disable |
+| **Container** | AT051–AT053 | Container exec, privileged container flags, kubectl apply |
 | **Surveillance** | AT019, AT020 | Clipboard read, screen capture |
-| **Recon** | AT012, AT018, AT013 | Other-user home dir access, network scanning, mass file enumeration |
-| **Supply chain** | AT009 | Package manifest modified |
-| **Infrastructure** | AT007, AT008 | Cloud metadata endpoint access, VCS internals |
-| **Anomalous patterns** | AT004, AT005, AT011 | High-volume data, off-hours activity, error bursts (stateful) |
-| **Container & orchestration** | AT021–AT030 | exec into containers, privileged deploy, cluster admin activity |
-| **Data exfiltration (expanded)** | AT031–AT050 | Email send via MCP, outbound webhooks, cloud storage upload |
-| **Persistence (expanded)** | AT051–AT065 | Registry writes, systemd/launchd daemon installs, init modifications |
-| **Surveillance (expanded)** | AT066–AT080 | Audio/video capture, location API access |
-| **Defense evasion** | AT081–AT095 | Log deletion, AV process termination |
-| **Supply chain expansion** | AT096–AT110 | Package manager invocations, build system modifications |
+| **Recon** | AT012, AT018, AT013, AT071–AT073 | Other-user home dir, port scan, mass file enumeration, AD/domain recon, network discovery |
+| **Supply chain** | AT009, AT074–AT076 | Package manifest write, package manager install, dependency confusion flags, build hook modification |
+| **Obfuscation / staging** | AT060–AT063 | Hex/octal-encoded commands, IFS manipulation, memory dump tools, Windows token stealing |
+| **Cryptocurrency** | AT067, AT068 | Crypto transfer initiated, wallet seed phrase in arguments |
+| **C2 / malware** | AT081–AT084 | Lateral movement tools (psexec/wmiexec), C2 frameworks (Cobalt Strike, Metasploit), rootkit tools |
+| **Sensitive data in args** | AT055, AT056, AT069, AT070 | Private key PEM block, TOTP seed, AWS access key prefix, GitHub token prefix |
+| **Anomalous patterns** | AT004, AT005, AT011 | High-volume arguments, off-hours activity, error bursts (stateful, cross-event) |
 
 Stateful rules (AT011 error burst, AT013 mass enumeration, AT015 cross-server chain) track state across the full session, not just individual events.
 
@@ -333,6 +336,26 @@ Every finding in both tools maps to at least one of:
 | [OWASP LLM Top 10 2025](https://owasp.org/www-project-top-10-for-large-language-model-applications/) | LLM01, LLM02, LLM03, LLM06, LLM08 |
 | [MITRE ATLAS](https://atlas.mitre.org/) | AML.T0010, AML.T0043, AML.T0048, AML.T0051, AML.T0057 |
 | [CWE](https://cwe.mitre.org/) | CWE-20, 22, 77, 78, 89, 94, 116, 200, 214, 272, 284, 306, 307, 312, 319, 359, 522, 526, 732, 829, 918 |
+
+---
+
+## Testing
+
+```sh
+go test ./...
+```
+
+80 tests across five packages:
+
+| Package | Tests | What they cover |
+|---|---|---|
+| `internal/rules` | 40 | Every MCP001–MCP026 rule: positive fixture (fires) + negative fixture (does not fire). `TestCleanServer_NoFindings` confirms a benign server produces zero findings. |
+| `internal/trace` | 32 | AT001–AT020 rules: each checked with a fixture event that triggers it and one that does not. Stateful rules (AT011 error burst, AT013 mass enumeration, AT015 cross-server chain) tested across multi-event sequences. |
+| `internal/logparse` | 4 | Cursor clean log, Cursor anomalous log, Claude Desktop anomalous log, `--since` time filter. Fixtures in `testdata/logs/`. |
+| `internal/discover` | 6 | Config parsing for Claude Desktop, Roo-Cline, Continue.dev, and Zed; risky server detection; non-existent file returns nil. Fixtures in `testdata/configs/`. |
+| `internal/score` | 4 | Zero findings = 100, single critical = 0, multiple high findings, band labels (OK/LOW/MEDIUM/HIGH/CRITICAL). |
+
+CI runs tests on ubuntu, macos, and windows against Go 1.26.
 
 ---
 
