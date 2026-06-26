@@ -13,8 +13,8 @@
 [![MCP-scanned by Aspex](https://img.shields.io/badge/MCP--scanned-by%20Aspex-5B44C3)](https://github.com/stevend-dotcom/aspex)
 
 ```sh
-npx @aspex/scan    # inspect every MCP server on this machine
-npx @aspex/trace   # replay what your agent actually did
+go install github.com/stevend-dotcom/aspex/cmd/mcp-scan@latest    # aspex-scan
+go install github.com/stevend-dotcom/aspex/cmd/agent-trace@latest  # aspex-trace
 ```
 
 **Offline. No account. No data leaves your machine. Ever.**
@@ -107,20 +107,16 @@ All findings map to **OWASP LLM Top 10 2025**, **MITRE ATLAS**, and **CWE**.
 ### Install
 
 ```sh
-# No install required
-npx @aspex/scan
+# Go (available now)
+go install github.com/stevend-dotcom/aspex/cmd/mcp-scan@latest
 
-# Global install
-npm install -g @aspex/scan
+# Direct binary: https://github.com/stevend-dotcom/aspex/releases
 
-# Go
-go install github.com/aspex-security/aspex/cmd/mcp-scan@latest
+# npm (coming in v0.2)
+# npx @aspex/scan
 
 # Homebrew (coming in v0.3)
-brew install aspex-security/tap/aspex-scan
-
-# Direct binary (macOS, Linux, Windows)
-# https://github.com/aspex-security/aspex/releases
+# brew install aspex-security/tap/aspex-scan
 ```
 
 ### Usage
@@ -174,7 +170,7 @@ Adds a hook that runs `--no-exec --fail-on high` on any staged MCP config file.
 
 ```yaml
 - name: Scan MCP configuration
-  uses: aspex-security/aspex/.github/actions/mcp-scan-action@v0.2.0
+  uses: stevend-dotcom/aspex/.github/actions/mcp-scan-action@v0.2.0
   with:
     fail-on: high
 ```
@@ -248,9 +244,13 @@ Deviations flagged: new tools called for the first time, off-hours activity, ove
 ### Install
 
 ```sh
-npx @aspex/trace
-npm install -g @aspex/trace
-go install github.com/aspex-security/aspex/cmd/agent-trace@latest
+# Go (available now)
+go install github.com/stevend-dotcom/aspex/cmd/agent-trace@latest
+
+# Direct binary: https://github.com/stevend-dotcom/aspex/releases
+
+# npm (coming in v0.2)
+# npx @aspex/trace
 ```
 
 ### Usage
@@ -279,7 +279,7 @@ Flags:
 
 ```yaml
 - name: Trace agent activity
-  uses: aspex-security/aspex/.github/actions/agent-trace-action@v0.2.0
+  uses: stevend-dotcom/aspex/.github/actions/agent-trace-action@v0.2.0
   with:
     since: 24h
     fail-on: critical
