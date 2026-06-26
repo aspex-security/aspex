@@ -90,6 +90,7 @@ brews:
       name: goreleaserbot
       email: bot@goreleaser.com
     commit_msg_template: "Brew formula update for aspex version {{ .Tag }}"
+    directory: Formula
     homepage: "https://github.com/aspex-security/aspex"
     description: "AI Agent Security Toolkit: scan MCP servers and audit agent activity"
     license: "Apache-2.0"
