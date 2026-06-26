@@ -40,9 +40,9 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "aspex-trace",
 		Short: "Audit what your MCP agents actually did",
-		Long: `aspex-trace reads the native log files that Claude Desktop, Cursor,
-and other MCP clients already write to disk, parses them into a unified
-audit trail, and flags anomalous or sensitive tool call activity.
+		Long: `aspex-trace reads the native log files that Claude Desktop, Claude Code,
+Cursor, and other MCP clients already write to disk, parses them into a
+unified audit trail, and flags anomalous or sensitive tool call activity.
 
 No proxy, no config modification, no data sent anywhere.`,
 		SilenceUsage:  true,
@@ -52,7 +52,7 @@ No proxy, no config modification, no data sent anywhere.`,
 		},
 	}
 
-	root.Flags().StringVar(&tf.client, "client", "", "Filter to one client (claude, cursor)")
+	root.Flags().StringVar(&tf.client, "client", "", "Filter to one client (claude, claude-code, cursor)")
 	root.Flags().StringVar(&tf.server, "server", "", "Filter to one MCP server name")
 	root.Flags().StringVar(&tf.since, "since", "24h", "How far back to look (e.g. 24h, 7d)")
 	root.Flags().BoolVar(&tf.jsonOut, "json", false, "Machine-readable JSON output")
@@ -129,8 +129,7 @@ func runBaseline(bf baselineFlags) error {
 
 	var allEvents []logparse.Event
 
-	clients := []string{"claude", "cursor"}
-	// VS Code and Windsurf log parsing is pending (vscode.go not yet implemented).
+	clients := []string{"claude", "claude-code", "cursor"}
 	if bf.client != "" {
 		clients = []string{bf.client}
 	}
@@ -140,6 +139,8 @@ func runBaseline(bf baselineFlags) error {
 		switch cl {
 		case "claude":
 			dirs = logparse.ClaudeLogPaths()
+		case "claude-code":
+			dirs = logparse.ClaudeCodeLogPaths()
 		case "cursor":
 			dirs = logparse.CursorLogPaths()
 		}
@@ -149,6 +150,8 @@ func runBaseline(bf baselineFlags) error {
 			switch cl {
 			case "claude":
 				evs, parseErr = logparse.ParseClaudeLogsDir(dir, since)
+			case "claude-code":
+				evs, parseErr = logparse.ParseClaudeCodeProjectsDir(dir, since)
 			case "cursor":
 				evs, parseErr = logparse.ParseCursorLogsDir(dir, since)
 			}
@@ -196,8 +199,7 @@ func runTrace(tf traceFlags) error {
 	var clientsFound []string
 	serverSet := map[string]struct{}{}
 
-	clients := []string{"claude", "cursor"}
-	// VS Code and Windsurf log parsing is pending (vscode.go not yet implemented).
+	clients := []string{"claude", "claude-code", "cursor"}
 	if tf.client != "" {
 		clients = []string{tf.client}
 	}
@@ -207,6 +209,8 @@ func runTrace(tf traceFlags) error {
 		switch cl {
 		case "claude":
 			dirs = logparse.ClaudeLogPaths()
+		case "claude-code":
+			dirs = logparse.ClaudeCodeLogPaths()
 		case "cursor":
 			dirs = logparse.CursorLogPaths()
 		}
@@ -217,6 +221,8 @@ func runTrace(tf traceFlags) error {
 			switch cl {
 			case "claude":
 				evs, parseErr = logparse.ParseClaudeLogsDir(dir, since)
+			case "claude-code":
+				evs, parseErr = logparse.ParseClaudeCodeProjectsDir(dir, since)
 			case "cursor":
 				evs, parseErr = logparse.ParseCursorLogsDir(dir, since)
 			}
