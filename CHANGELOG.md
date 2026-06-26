@@ -14,6 +14,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 **aspex-scan — new commands**
 - `inventory` — enumerate every MCP server and tool across all clients; table and `--json` output
 - `attack-paths` — novel cross-server attack chain analysis: maps per-server capabilities (file-read, shell-exec, network-send, credential-read, persistence, env-read, email-send) and surfaces dangerous combinations that form complete attack chains (Data Exfiltration, Credential Theft, Persistence via Shell, C2, Env Var Exfiltration, Email Exfiltration) with MITRE ATT&CK tactic + reference
+- `shadow` — tool name collision detection across all servers; surfaces ambiguous routing that enables interception of tool calls intended for trusted servers; classifies collisions as CRITICAL/HIGH/MEDIUM by transport and capability
+- `phantom` — clean-face attack detection: calls `tools/list` twice per server with a configurable delay and diffs results; flags added/removed tools, changed descriptions (including injection-signal language detection), and servers that become unreachable on the second call
 - `completion <shell>` — shell completions for bash, zsh, fish, PowerShell
 - `version --check` — query GitHub Releases API for a newer version
 
@@ -21,7 +23,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - `stats` — fast activity dashboard (client/server/tool breakdowns) without evaluating detection rules
 - `session [id]` — forensic timeline reconstruction: list recent sessions or drill into a specific one to see every event in chronological order with rule findings inline
 - `export` — export all events to CSV or JSONL for SIEM ingest or custom analysis
-- `live` — real-time monitoring: polls logs on a configurable interval and prints new findings as they appear
+- `live` — real-time monitoring: polls logs on a configurable interval and prints new findings as they appear; clean Ctrl-C via signal handler
+- `killchain` — multi-event attack pattern reconstruction: correlates suspicious events within a 5-minute window into coherent kill chain patterns (Exfiltration Trifecta, Persistence Establishment, Recon to Credential, Lateral Movement, Injection Signature) with MITRE ATT&CK references
+- `provenance` — instruction provenance tracing: links each HIGH/CRITICAL finding backward to the preceding ingestion event (file_read, web_fetch, browser_load, resource_read) most likely to have delivered the injected instruction; confidence-scored by temporal proximity and event distance
 - `completion <shell>` — shell completions for bash, zsh, fish, PowerShell
 - `version --check` — query GitHub Releases API for a newer version
 

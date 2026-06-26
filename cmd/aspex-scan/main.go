@@ -21,6 +21,7 @@ import (
 	"github.com/aspex-security/aspex/internal/report"
 	"github.com/aspex-security/aspex/internal/rules"
 	"github.com/aspex-security/aspex/internal/score"
+	"github.com/aspex-security/aspex/internal/phantom"
 	"github.com/aspex-security/aspex/internal/shadow"
 	"github.com/aspex-security/aspex/internal/version"
 	"github.com/aspex-security/aspex/internal/watch"
@@ -141,6 +142,7 @@ COMPARING OVER TIME
 	root.AddCommand(newInventoryCmd(&gf))
 	root.AddCommand(newAttackPathsCmd(&gf))
 	root.AddCommand(newShadowCmd(&gf))
+	root.AddCommand(newPhantomCmd(&gf))
 	root.AddCommand(newCompletionCmd())
 
 	return root
@@ -713,6 +715,216 @@ func runShadow(gf *globalFlags, jsonOut bool) error {
 		fmt.Fprintf(os.Stdout, " · %s", c(yellow, fmt.Sprintf("%d high", high)))
 	}
 	fmt.Fprintf(os.Stdout, "\n\n")
+	return nil
+}
+
+func newPhantomCmd(gf *globalFlags) *cobra.Command {
+	var jsonOut bool
+	var intervalSecs int
+	cmd := &cobra.Command{
+		Use:   "phantom",
+		Short: "Detect servers that return different tools on successive calls",
+		Long: `Inspect each MCP server twice and compare the tool lists.
+
+A legitimate server returns the same tools every time. A server that returns
+different tools on successive calls is exhibiting the "clean-face" attack
+pattern: presenting safe-looking tools to security scanners while serving
+malicious tools to actual AI clients.
+
+Changes detected:
+  CRITICAL  Tool added or removed between calls (selective targeting)
+  CRITICAL  Tool description changed AND contains injection language
+  HIGH      Tool description or schema changed between calls
+
+The interval between calls is configurable — longer intervals test whether
+the server changes its behavior based on session timing.`,
+		Example: `  # Check all servers for phantom tools
+  aspex-scan phantom
+
+  # Use a 10-second interval between calls
+  aspex-scan phantom --interval 10
+
+  # Only check Claude Desktop servers
+  aspex-scan --clients claude phantom
+
+  # JSON output
+  aspex-scan phantom --json`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runPhantom(gf, jsonOut, intervalSecs)
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	cmd.Flags().IntVar(&intervalSecs, "interval", 3, "Seconds between the two tools/list calls")
+	return cmd
+}
+
+func runPhantom(gf *globalFlags, jsonOut bool, intervalSecs int) error {
+	servers, _ := discover.DiscoverAll(gf.clients)
+	if len(servers) == 0 {
+		fmt.Fprintf(os.Stdout, "  No MCP servers found.\n")
+		return nil
+	}
+
+	interval := time.Duration(intervalSecs) * time.Second
+	ctx := context.Background()
+
+	c := func(col, text string) string {
+		if gf.noColor {
+			return text
+		}
+		return col + text + "\033[0m"
+	}
+	bold := "\033[1m"
+	dim := "\033[2m"
+	purple := "\033[35m"
+	red := "\033[91m"
+	yellow := "\033[93m"
+	green := "\033[92m"
+	cyan := "\033[36m"
+
+	if !jsonOut && !gf.jsonOut {
+		fmt.Fprintf(os.Stdout, "\n  %s  %s\n  %s %d servers · %ds interval between calls\n\n",
+			c(purple+bold, "◆"),
+			c(bold, "Phantom Tool Detection"),
+			c(dim, "→"),
+			len(servers),
+			intervalSecs,
+		)
+	}
+
+	type jsonResult struct {
+		Server    string `json:"server"`
+		Client    string `json:"client"`
+		Transport string `json:"transport"`
+		Clean     bool   `json:"clean"`
+		Error     string `json:"error,omitempty"`
+		Changes   []struct {
+			Kind        string `json:"kind"`
+			Tool        string `json:"tool"`
+			Severity    string `json:"severity"`
+			Before      string `json:"before,omitempty"`
+			After       string `json:"after,omitempty"`
+			Explanation string `json:"explanation"`
+		} `json:"changes,omitempty"`
+	}
+
+	var results []jsonResult
+	dirtyCount := 0
+
+	for _, entry := range servers {
+		if !jsonOut && !gf.jsonOut {
+			fmt.Fprintf(os.Stdout, "  %s %s %s\r",
+				c(dim, "scanning"),
+				c(bold, entry.Name),
+				c(dim, "..."),
+			)
+		}
+
+		res := phantom.Analyze(ctx, entry, interval)
+
+		if jsonOut || gf.jsonOut {
+			jr := jsonResult{
+				Server:    res.ServerName,
+				Client:    res.Client,
+				Transport: res.Transport,
+				Clean:     res.Clean(),
+			}
+			if res.Err != nil {
+				jr.Error = res.Err.Error()
+			}
+			for _, ch := range res.Changes {
+				jr.Changes = append(jr.Changes, struct {
+					Kind        string `json:"kind"`
+					Tool        string `json:"tool"`
+					Severity    string `json:"severity"`
+					Before      string `json:"before,omitempty"`
+					After       string `json:"after,omitempty"`
+					Explanation string `json:"explanation"`
+				}{
+					Kind:        ch.Kind,
+					Tool:        ch.ToolName,
+					Severity:    ch.Severity,
+					Before:      ch.Before,
+					After:       ch.After,
+					Explanation: ch.Explanation,
+				})
+			}
+			results = append(results, jr)
+			continue
+		}
+
+		// Terminal output.
+		if res.Err != nil {
+			fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
+				c(yellow, "?"),
+				c(bold, res.ServerName),
+				c(dim, res.Err.Error()),
+			)
+			continue
+		}
+
+		if res.Clean() {
+			fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
+				c(green, "✓"),
+				c(bold, res.ServerName),
+				c(dim, fmt.Sprintf("stable · %d tools on both calls", len(res.FirstCall))),
+			)
+			continue
+		}
+
+		dirtyCount++
+		fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
+			c(red+bold, "!"),
+			c(bold, res.ServerName),
+			c(dim, fmt.Sprintf("%d change(s) detected", len(res.Changes))),
+		)
+		for _, ch := range res.Changes {
+			sevColor := yellow + bold
+			if ch.Severity == "critical" {
+				sevColor = red + bold
+			}
+			fmt.Fprintf(os.Stdout, "    %s  %s %s\n",
+				c(sevColor, strings.ToUpper(ch.Severity)),
+				c(bold, ch.ToolName),
+				c(dim, "("+ch.Kind+")"),
+			)
+			fmt.Fprintf(os.Stdout, "       %s\n", c(dim, ch.Explanation))
+			if ch.Before != "" && ch.After != "" {
+				fmt.Fprintf(os.Stdout, "       %s %s\n", c(dim, "before:"), ch.Before)
+				fmt.Fprintf(os.Stdout, "       %s %s\n", c(dim, " after:"), c(yellow, ch.After))
+			}
+		}
+		fmt.Fprintln(os.Stdout)
+	}
+
+	if jsonOut || gf.jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(map[string]interface{}{
+			"version": version.Version,
+			"servers": results,
+		})
+	}
+
+	fmt.Fprintf(os.Stdout, "\n  %s ", c(dim, "─"))
+	if dirtyCount == 0 {
+		fmt.Fprintf(os.Stdout, "%s All %d server(s) return consistent tool lists.\n",
+			c(green, "✓"),
+			len(servers),
+		)
+		fmt.Fprintf(os.Stdout, "  %s Run %s periodically — servers can change between updates.\n\n",
+			c(dim, "→"),
+			c(cyan, "aspex-scan phantom"),
+		)
+	} else {
+		fmt.Fprintf(os.Stdout, "%s %s inconsistent server(s) detected — investigate before continuing.\n\n",
+			c(red+bold, fmt.Sprintf("%d", dirtyCount)),
+			c(dim, ""),
+		)
+	}
+
 	return nil
 }
 

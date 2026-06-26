@@ -150,6 +150,7 @@ Commands:
   inventory             List every MCP server and tool on this machine
   attack-paths          Identify dangerous cross-server attack chains
   shadow                Detect tool name collisions (shadow attack surface)
+  phantom               Detect servers that return different tools on successive calls
   diff --baseline <f>   Compare to a saved baseline (rug-pull detection)
   verify <package>      Check an npm package against the known-bad registry
   install-hook          Install a git pre-commit hook
@@ -215,6 +216,26 @@ Risk levels:
 - **CRITICAL** — an HTTP/SSE (remote) server shadows a high-value local tool. The remote server wins.
 - **HIGH** — two local servers share a high-capability tool name (`read_file`, `write_file`, `execute_command`).
 - **MEDIUM** — two servers share a less-critical tool name; routing is still ambiguous.
+
+### Phantom tool detection
+
+`phantom` calls `tools/list` twice on each server with a short delay and diffs the results. A legitimate MCP server's tool list is deterministic. A server that returns different tools, or different descriptions, on a second call is either fingerprinting callers (serving clean responses to security scanners, malicious content to AI clients) or is actively compromised.
+
+```sh
+# Check all servers for tool list instability
+aspex-scan phantom
+
+# Adjust the delay between the two calls (default: 2s)
+aspex-scan phantom --interval 5s
+
+# JSON output
+aspex-scan phantom --json | jq '.results[] | select(.changes | length > 0)'
+```
+
+What each finding means:
+- **CRITICAL** — a tool appeared or disappeared between calls, or a description now contains injection-signal language (`ignore previous`, `always call`, etc.)
+- **HIGH** — a tool description changed between calls (targeted content injection)
+- **HIGH** — the server became unreachable on the second call (evasion attempt)
 
 ### MCP inventory
 
@@ -393,6 +414,7 @@ Commands:
   stats                Activity dashboard — no rule evaluation, just counts
   session [id]         Forensic timeline for one session (list or drill in)
   killchain            Detect multi-step attack patterns in event sequences
+  provenance           Trace suspicious calls back to the content that triggered them
   export               Export all events to CSV or JSONL
   live                 Real-time monitoring — tails logs and prints new findings
   baseline --learn     Build a behavioural baseline from recent logs
@@ -435,6 +457,35 @@ aspex-trace killchain --since 7d
 
 # JSON for SIEM ingest
 aspex-trace killchain --json | jq '.chains[] | select(.severity=="critical")'
+```
+
+### Instruction provenance
+
+`provenance` answers the hardest question in prompt injection forensics: not just *what* happened, but *where did the instruction come from?* It links each HIGH/CRITICAL finding backward through the event stream to the ingestion event most likely to have delivered the injected instruction — a file read, URL fetch, browser navigation, or resource load.
+
+```sh
+# Trace the source of suspicious tool calls
+aspex-trace provenance
+
+# Narrow to the last 48 hours
+aspex-trace provenance --since 48h
+
+# JSON for incident response
+aspex-trace provenance --json | jq '.attributions[] | select(.confidence=="high")'
+```
+
+Each attribution shows:
+- The suspicious tool call and its rule findings
+- The preceding ingestion event (file path, URL, or resource URI)
+- Time elapsed between ingestion and execution
+- Confidence: **high** (< 30s, ≤ 3 events apart), **medium** (< 2 min, ≤ 8 events), **low** (further back but still within 10 minutes)
+
+Example output:
+```
+CRITICAL  AT042  Sensitive file exfiltration
+  ●  14:23:11  cursor / filesystem / read_file
+  ↑  Likely source: web_fetch → https://attacker.example/payload.md  (12s before, 2 events apart)
+     Confidence: HIGH — tight temporal coupling consistent with immediate instruction execution
 ```
 
 ### Session forensics
