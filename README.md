@@ -120,35 +120,51 @@ brew install aspex-security/tap/aspex
 # Linux / Windows WSL — no Homebrew
 curl -fsSL https://raw.githubusercontent.com/aspex-security/aspex/main/install.sh | sh
 
-# Install to a custom directory
-INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/aspex-security/aspex/main/install.sh | sh
-
 # Or download a binary directly: https://github.com/aspex-security/aspex/releases
 ```
 
-### Usage
+### Quickstart
+
+```sh
+# Scan every MCP server configured on this machine
+aspex-scan
+
+# Static-only scan (no servers launched) — safe to run anywhere
+aspex-scan --no-exec
+
+# Scan a single server by command
+aspex-scan inspect "npx -y @modelcontextprotocol/server-filesystem ~"
+
+# Scan a remote HTTP/SSE server
+aspex-scan inspect https://my-mcp-server.example.com/sse
+```
+
+### All flags and commands
 
 ```
 aspex-scan [flags]
-aspex-scan [command]
+aspex-scan <command>
 
 Commands:
-  inspect <target>      Inspect a single server by command or URL
+  inspect <target>      Scan a single server by command or URL
   diff --baseline <f>   Compare to a saved baseline (rug-pull detection)
-  verify <package>      Check a package against the known-bad registry
+  verify <package>      Check an npm package against the known-bad registry
   install-hook          Install a git pre-commit hook
   uninstall-hook        Remove the pre-commit hook
   version               Print version
 
 Flags:
   --no-exec             Static only: parse configs, skip launching servers
-  --clients <list>      Comma-separated: claude,claude-code,cursor,vscode,windsurf,cline,roo-cline,continue,zed
+  --clients <list>      Comma-separated list of clients to scan:
+                        claude, claude-code, cursor, vscode, windsurf,
+                        cline, roo-cline, continue, zed (default: all)
   --json                Machine-readable JSON output
   --sarif               SARIF output (for GitHub code scanning)
-  --html <file>         Write a self-contained HTML report to file
+  --html <file>         Write a self-contained HTML report to a file
   --watch               Re-scan automatically when configs change
-  --fail-on <sev>       Exit 1 at this severity: critical, high, medium, low (default: off)
-  --no-color
+  --fail-on <sev>       Exit 1 at or above this severity:
+                        critical, high, medium, low (default: off)
+  --no-color            Disable colour output
 ```
 
 ### Rug-pull detection
@@ -159,7 +175,7 @@ Save a baseline when your config is clean, then check for regressions in CI:
 # Save a clean baseline
 aspex-scan --json > baseline.json
 
-# Check for net-new findings (exit 1 if any)
+# Later: exit 1 if any net-new findings appear
 aspex-scan diff --baseline baseline.json
 ```
 
@@ -172,15 +188,6 @@ aspex-scan install-hook
 ```
 
 Adds a hook that runs `--no-exec --fail-on high` on any staged MCP config file.
-
-### GitHub Action
-
-```yaml
-- name: Scan MCP configuration
-  uses: aspex-security/aspex/.github/actions/aspex-scan-action@v0.1.0
-  with:
-    fail-on: high
-```
 
 ---
 
@@ -258,45 +265,45 @@ Deviations flagged: new tools called for the first time, off-hours activity, ove
 
 ### Install
 
+Both tools install together — `brew install aspex-security/tap/aspex` installs both `aspex-scan` and `aspex-trace`.
+
+### Quickstart
+
 ```sh
-# macOS / Linux (recommended)
-brew install aspex-security/tap/aspex
+# Audit the last 24 hours of agent activity across all supported clients
+aspex-trace
 
-# Linux / Windows WSL — no Homebrew
-curl -fsSL https://raw.githubusercontent.com/aspex-security/aspex/main/install.sh | sh
+# Audit the last 7 days
+aspex-trace --since 7d
 
-# Or download a binary directly: https://github.com/aspex-security/aspex/releases
+# Filter to one client or one server
+aspex-trace --client cursor
+aspex-trace --client claude --server filesystem-mcp
+
+# Exit 1 if any critical findings (useful in CI or post-agent hooks)
+aspex-trace --fail-on critical
 ```
 
-### Usage
+### All flags and commands
 
 ```
 aspex-trace [flags]
-aspex-trace [command]
+aspex-trace <command>
 
 Commands:
-  baseline --learn     Build a behavioral baseline from recent logs
+  baseline --learn     Build a behavioural baseline from recent logs
   version              Print version
 
 Flags:
-  --client <name>      Filter to one client: claude, claude-code, cursor, windsurf
+  --client <name>      Filter to one client:
+                       claude, claude-code, cursor, windsurf (default: all)
   --server <name>      Filter to one MCP server name
-  --since <duration>   24h, 7d, 1h (default: 24h)
-  --baseline <file>    Compare against a saved behavioral baseline
+  --since <duration>   How far back to look: 1h, 24h, 7d (default: 24h)
+  --baseline <file>    Compare against a saved behavioural baseline
   --json               Machine-readable JSON output
   --sarif              SARIF output for code scanning
-  --fail-on <sev>      Exit 1 at this severity (default: high)
-  --no-color
-```
-
-### GitHub Action
-
-```yaml
-- name: Trace agent activity
-  uses: aspex-security/aspex/.github/actions/aspex-trace-action@v0.1.0
-  with:
-    since: 24h
-    fail-on: critical
+  --fail-on <sev>      Exit 1 at or above this severity (default: high)
+  --no-color           Disable colour output
 ```
 
 ---
