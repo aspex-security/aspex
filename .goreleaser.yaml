@@ -183,7 +183,6 @@ release:
   github:
     owner: aspex-security
     name: aspex
-  draft: true
   prerelease: auto
   name_template: "v{{.Version}}"
   footer: |
