@@ -1,0 +1,79 @@
+name: "Onyx Agent Trace"
+description: "Audit MCP agent activity from stored log artifacts and flag anomalies."
+author: "Onyx Security"
+
+branding:
+  icon: activity
+  color: purple
+
+inputs:
+  version:
+    description: "Version of aspex-trace to use"
+    required: false
+    default: "latest"
+  logs-path:
+    description: "Path to a directory containing MCP log files to analyze"
+    required: false
+    default: ""
+  client:
+    description: "Filter to one client (claude, cursor)"
+    required: false
+    default: ""
+  since:
+    description: "How far back to look (e.g. 24h, 7d)"
+    required: false
+    default: "24h"
+  fail-on:
+    description: "Fail the action if flagged events at or above this severity (critical, high, medium, low)"
+    required: false
+    default: "high"
+
+outputs:
+  flagged:
+    description: "Number of flagged events"
+    value: ${{ steps.trace.outputs.flagged }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install aspex-trace
+      shell: bash
+      run: |
+        VERSION="${{ inputs.version }}"
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        ARCH=$(uname -m)
+        if [ "$ARCH" = "x86_64" ]; then ARCH="amd64"; fi
+        if [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi
+
+        if [ "$VERSION" = "latest" ]; then
+          VERSION=$(curl -s https://api.github.com/repos/aspex-security/aspex/releases/latest | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')
+        fi
+
+        URL="https://github.com/aspex-security/aspex/releases/download/v${VERSION}/aspex-trace_${OS}_${ARCH}.tar.gz"
+        curl -fsSL "$URL" | tar -xz -C /usr/local/bin
+        chmod +x /usr/local/bin/aspex-trace
+
+    - name: Run agent-trace
+      id: trace
+      shell: bash
+      run: |
+        ARGS="--json --since ${{ inputs.since }}"
+        if [ -n "${{ inputs.client }}" ]; then ARGS="$ARGS --client ${{ inputs.client }}"; fi
+
+        set +e
+        RESULT=$(aspex-trace $ARGS 2>&1)
+        EXIT=$?
+        set -e
+
+        echo "$RESULT" > trace-result.json
+
+        FLAGGED=$(echo "$RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('flagged', [])))" 2>/dev/null || echo "0")
+        echo "flagged=$FLAGGED" >> "$GITHUB_OUTPUT"
+
+        echo "### Onyx Agent Trace Results" >> "$GITHUB_STEP_SUMMARY"
+        echo "Flagged events: $FLAGGED" >> "$GITHUB_STEP_SUMMARY"
+
+        if [ "$EXIT" -ne 0 ] && [ "${{ inputs.fail-on }}" != "none" ]; then
+          echo "Trace found flagged events at or above --fail-on=${{ inputs.fail-on }}."
+          exit 1
+        fi

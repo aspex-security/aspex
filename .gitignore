@@ -1,0 +1,18 @@
+dist/
+bin/
+*.exe
+*.test
+*.out
+# compiled binaries in repo root
+/mcp-scan
+/agent-trace
+# npm binary wrappers
+npm/mcp-scan/bin/
+npm/agent-trace/bin/
+# macOS metadata
+.DS_Store
+# claude session files
+.claude/
+# local dev artifacts
+*.log
+*.pprof

