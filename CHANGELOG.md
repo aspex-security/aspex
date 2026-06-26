@@ -7,6 +7,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.3.1] — 2026-06-26
+
+### Added
+
+- `aspex` — unified interactive launcher with arrow-key TUI menu. Run with no arguments for a guided menu across all three tools; press `→` for per-tool option submenus (quick-launch presets). Pass-through mode: `aspex scan`, `aspex trace`, `aspex attack` forward directly to the underlying binary.
+- `aspex-attack` routing — until the standalone attack binary ships, `aspex attack` routes to `aspex-scan redteam` automatically.
+
+---
+
 ## [0.3.0] — 2026-06-26
 
 ### Added

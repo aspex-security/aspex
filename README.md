@@ -25,18 +25,23 @@ brew install aspex-security/tap/aspex
 
 ## What is Aspex?
 
-Aspex is an open-source AI agent security toolkit. It ships two CLI tools that cover the two most important questions in any agent-powered workflow.
+Aspex is an open-source AI agent security toolkit. Three CLI tools cover the full attack surface of any agent-powered workflow.
 
 | Tool | Question it answers |
 |---|---|
 | `aspex-scan` | Is the MCP server I just installed safe to run? |
 | `aspex-trace` | What did my agent actually do while I wasn't looking? |
+| `aspex-attack` | Can I actually exploit these servers? |
+
+Run `aspex` for an interactive launcher that puts all three at your fingertips.
 
 **aspex-scan** reads every MCP client config on the machine, connects to each server (stdio and HTTP/SSE), enumerates tools, resources, and prompts, and produces a scored risk report. It catches misconfigurations, dangerous capabilities, and credential leaks before an agent ever calls a tool.
 
 **aspex-trace** reads the native log files that Claude Desktop, Claude Code, Cursor, and Windsurf already write to disk. No proxy. No config change. No runtime dependency. It replays what happened, flags anomalous tool calls, and surfaces post-exploitation patterns: credential reads, persistence writes, outbound network calls.
 
-Both tools run fully offline. No account. No data sent anywhere.
+**aspex-attack** actively calls live MCP tools with adversarial payloads — prompt injection strings, path traversal, SSRF probes — and tells you empirically what's exploitable, not just theoretically risky.
+
+All three tools run fully offline. No account. No data sent anywhere.
 
 ## The problem
 
@@ -45,6 +50,30 @@ You wired an MCP server into Claude Desktop or Cursor. You copy-pasted the confi
 Do you know what that server is actually capable of? Do you know what it did the last time your agent ran?
 
 There is no equivalent of `npm audit` for MCP. No unified view of what your agents did. No security layer between "I installed a server" and "it has shell access to my machine." Aspex is that layer.
+
+---
+
+## Interactive launcher
+
+Run `aspex` with no arguments for an arrow-key menu that puts all three tools at your fingertips — no flags to remember, no man page to consult.
+
+```
+  ◆  ASPEX  v0.3.0
+  AI Security Toolkit · 3 tools · offline · free
+
+  ──────────────────────────────────────────────────────
+
+  ▶  SCAN     Audit MCP server configurations
+     TRACE    Review AI agent activity logs
+     ATTACK   Red team your live MCP servers
+
+  ──────────────────────────────────────────────────────
+  ↑↓ move   Enter run   → options   Q quit
+```
+
+Press `→` on any item to open its options submenu — quick-launch presets for the most common workflows without typing flags.
+
+Pass-through mode also works for scripting: `aspex scan --explain`, `aspex trace --since 7d`, `aspex attack --json`.
 
 ---
 
