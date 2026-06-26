@@ -13,8 +13,8 @@
 [![MCP-scanned by Aspex](https://img.shields.io/badge/MCP--scanned-by%20Aspex-5B44C3)](https://github.com/stevend-dotcom/aspex)
 
 ```sh
-go install github.com/stevend-dotcom/aspex/cmd/mcp-scan@latest    # aspex-scan
-go install github.com/stevend-dotcom/aspex/cmd/agent-trace@latest  # aspex-trace
+go install github.com/stevend-dotcom/aspex/cmd/aspex-scan@latest    # aspex-scan
+go install github.com/stevend-dotcom/aspex/cmd/aspex-trace@latest  # aspex-trace
 ```
 
 **Offline. No account. No data leaves your machine. Ever.**
@@ -108,7 +108,7 @@ All findings map to **OWASP LLM Top 10 2025**, **MITRE ATLAS**, and **CWE**.
 
 ```sh
 # Go (available now)
-go install github.com/stevend-dotcom/aspex/cmd/mcp-scan@latest
+go install github.com/stevend-dotcom/aspex/cmd/aspex-scan@latest
 
 # Direct binary: https://github.com/stevend-dotcom/aspex/releases
 
@@ -170,7 +170,7 @@ Adds a hook that runs `--no-exec --fail-on high` on any staged MCP config file.
 
 ```yaml
 - name: Scan MCP configuration
-  uses: stevend-dotcom/aspex/.github/actions/mcp-scan-action@v0.2.0
+  uses: stevend-dotcom/aspex/.github/actions/aspex-scan-action@v0.2.0
   with:
     fail-on: high
 ```
@@ -209,7 +209,7 @@ Reads the native log files that Claude Desktop, Cursor, and other MCP clients al
   OK: 237 tool calls showed no anomalies.
 ```
 
-*That session happened at 2:17 AM. The agent read AWS credentials, made an outbound curl to an external host, then wrote a LaunchAgent plist. Textbook post-exploitation sequence. agent-trace caught it from logs already on disk.*
+*That session happened at 2:17 AM. The agent read AWS credentials, made an outbound curl to an external host, then wrote a LaunchAgent plist. Textbook post-exploitation sequence. aspex-trace caught it from logs already on disk.*
 
 ### What it catches (20 rules)
 
@@ -236,7 +236,7 @@ Learn what normal looks like for your setup, then flag deviations automatically:
 aspex-trace baseline --learn --since 7d
 
 # Future runs compare against it
-aspex-trace --baseline ~/.config/aspex/agent-trace-baseline.json
+aspex-trace --baseline ~/.config/aspex/aspex-trace-baseline.json
 ```
 
 Deviations flagged: new tools called for the first time, off-hours activity, oversized arguments, new outbound hosts, new file path prefixes.
@@ -245,7 +245,7 @@ Deviations flagged: new tools called for the first time, off-hours activity, ove
 
 ```sh
 # Go (available now)
-go install github.com/stevend-dotcom/aspex/cmd/agent-trace@latest
+go install github.com/stevend-dotcom/aspex/cmd/aspex-trace@latest
 
 # Direct binary: https://github.com/stevend-dotcom/aspex/releases
 
@@ -279,7 +279,7 @@ Flags:
 
 ```yaml
 - name: Trace agent activity
-  uses: stevend-dotcom/aspex/.github/actions/agent-trace-action@v0.2.0
+  uses: stevend-dotcom/aspex/.github/actions/aspex-trace-action@v0.2.0
   with:
     since: 24h
     fail-on: critical
@@ -348,19 +348,19 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add a rule, a trace anomaly, a
 ## Roadmap
 
 **v0.2 (current)**
-- mcp-scan: VS Code, Windsurf, Cline discovery; HTTP/SSE transport; SARIF + HTML report; diff subcommand; watch mode; pre-commit hook; known-bad registry
-- agent-trace: behavioral baseline (learn + compare); SARIF output; baseline deviation rules
+- aspex-scan: VS Code, Windsurf, Cline discovery; HTTP/SSE transport; SARIF + HTML report; diff subcommand; watch mode; pre-commit hook; known-bad registry
+- aspex-trace: behavioral baseline (learn + compare); SARIF output; baseline deviation rules
 
 **v0.3**
 - VS Code extension with inline config warnings
 - Homebrew tap
-- VS Code + Windsurf log parsing in agent-trace
-- `--session` replay in agent-trace
+- VS Code + Windsurf log parsing in aspex-trace
+- `--session` replay in aspex-trace
 
 **v1.0**
 - Community-contributed rule catalog
 - Rule plugin interface for custom org rules
-- `mcp-scan badge` for server authors
+- `aspex-scan badge` for server authors
 - CI policy file (`.mcp-policy.yml`)
 
 ---
