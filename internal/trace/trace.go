@@ -6,6 +6,7 @@
 package trace
 
 import (
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -61,6 +62,7 @@ func AnalyzeEvents(events []logparse.Event) []FlaggedEvent {
 		findings = append(findings, checkAT018NetworkScan(ev)...)
 		findings = append(findings, checkAT019ClipboardRead(ev)...)
 		findings = append(findings, checkAT020ScreenCapture(ev)...)
+		findings = append(findings, checkEvalCatalog(ev)...)
 
 		// Stateful rules (update state, may produce findings).
 		findings = append(findings, checkAT011ErrorBurst(ev, state)...)
@@ -167,6 +169,10 @@ var shellToolNames = []string{
 
 func checkAT003ShellExec(ev *logparse.Event) []rules.Finding {
 	if ev.Event != logparse.EventToolsCall {
+		return nil
+	}
+	// Built-in Claude Code tools (Bash, Read, Edit, etc.) are not MCP shell tools.
+	if ev.Server == "claude-code" {
 		return nil
 	}
 	nameLower := strings.ToLower(ev.Tool)
@@ -483,8 +489,8 @@ func checkAT011ErrorBurst(ev *logparse.Event, state *SessionState) []rules.Findi
 // OWASP LLM02 | CWE-22
 
 var otherUserPatterns = []*regexp.Regexp{
-	lateralPattern(`/home/[^/]+/`),      // Linux other-user home
-	lateralPattern(`/Users/[^/]+/`),     // macOS other-user home
+	lateralPattern(`/home/[^/]+/`),        // Linux other-user home
+	lateralPattern(`/Users/[^/]+/`),       // macOS other-user home
 	lateralPattern(`C:\\Users\\[^\\]+\\`), // Windows other-user home
 }
 
@@ -492,11 +498,26 @@ func lateralPattern(pattern string) *regexp.Regexp {
 	return regexp.MustCompile(pattern)
 }
 
+// currentUserHome is cached at startup to avoid repeated syscalls.
+var currentUserHome = func() string {
+	h, _ := os.UserHomeDir()
+	if h != "" && !strings.HasSuffix(h, "/") {
+		h += "/"
+	}
+	return h
+}()
+
 func checkAT012LateralMovement(ev *logparse.Event) []rules.Finding {
 	if ev.Event != logparse.EventToolsCall && ev.Event != logparse.EventResourceRead {
 		return nil
 	}
 	for _, arg := range ev.Args {
+		// Normalize path separators for comparison.
+		normalized := strings.ReplaceAll(arg, "\\", "/")
+		// Skip if the path is under the current user's own home directory.
+		if currentUserHome != "" && strings.HasPrefix(normalized, strings.ReplaceAll(currentUserHome, "\\", "/")) {
+			continue
+		}
 		for _, pat := range otherUserPatterns {
 			if pat.MatchString(arg) {
 				return []rules.Finding{{
@@ -837,6 +858,12 @@ func checkAT020ScreenCapture(ev *logparse.Event) []rules.Finding {
 		}
 	}
 	return nil
+}
+
+// ---- catalog bridge ----------------------------------------------------------
+
+func checkEvalCatalog(ev *logparse.Event) []rules.Finding {
+	return EvalEventCatalog(ev)
 }
 
 // ---- helpers -----------------------------------------------------------------

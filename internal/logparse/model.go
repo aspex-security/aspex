@@ -1,4 +1,4 @@
-// Package logparse defines the unified event model for agent-trace and per-client log parsers.
+// Package logparse defines the unified event model for aspex-trace and per-client log parsers.
 package logparse
 
 import "time"
@@ -16,7 +16,7 @@ const (
 	EventServerExit   EventType = "server-exit"
 )
 
-// Event is one normalized entry in the agent-trace audit trail.
+// Event is one normalized entry in the aspex-trace audit trail.
 type Event struct {
 	Timestamp  time.Time         `json:"ts"`
 	Client     string            `json:"client"`

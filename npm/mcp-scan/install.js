@@ -5,13 +5,12 @@ const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
-const { createGunzip } = require("zlib");
 const { pipeline } = require("stream");
 
 const VERSION = require("./package.json").version;
 const REPO = "aspex-security/aspex";
 const BIN_DIR = path.join(__dirname, "bin");
-const BIN_NAME = process.platform === "win32" ? "onyx-mcp-scan.exe" : "onyx-mcp-scan";
+const BIN_NAME = process.platform === "win32" ? "aspex-scan.exe" : "aspex-scan";
 const BIN_PATH = path.join(BIN_DIR, BIN_NAME);
 
 function platformTarget() {
@@ -33,7 +32,7 @@ function platformTarget() {
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
     const follow = (u) => {
-      https.get(u, { headers: { "User-Agent": "onyx-mcp-scan-installer" } }, (res) => {
+      https.get(u, { headers: { "User-Agent": "aspex-scan-installer" } }, (res) => {
         if (res.statusCode === 301 || res.statusCode === 302) {
           return follow(res.headers.location);
         }
@@ -51,13 +50,13 @@ function downloadFile(url, dest) {
 async function install() {
   const target = platformTarget();
   const ext = process.platform === "win32" ? ".zip" : ".tar.gz";
-  const assetName = `onyx-mcp-scan_${target}${ext}`;
+  const assetName = `aspex-scan_${target}${ext}`;
   const url = `https://github.com/${REPO}/releases/download/v${VERSION}/${assetName}`;
 
   if (!fs.existsSync(BIN_DIR)) fs.mkdirSync(BIN_DIR, { recursive: true });
 
   const archivePath = path.join(BIN_DIR, assetName);
-  console.log(`Downloading onyx-mcp-scan v${VERSION} for ${target}...`);
+  console.log(`Downloading aspex-scan v${VERSION} for ${target}...`);
 
   try {
     await downloadFile(url, archivePath);
@@ -67,7 +66,6 @@ async function install() {
     process.exit(1);
   }
 
-  // Extract.
   if (process.platform === "win32") {
     execSync(`powershell -Command "Expand-Archive -Path '${archivePath}' -DestinationPath '${BIN_DIR}' -Force"`, { stdio: "inherit" });
   } else {
@@ -76,7 +74,8 @@ async function install() {
 
   fs.unlinkSync(archivePath);
 
-  const extracted = path.join(BIN_DIR, process.platform === "win32" ? "onyx-mcp-scan.exe" : "onyx-mcp-scan");
+  // The binary extracted from the archive is named aspex-scan (or aspex-scan.exe on Windows).
+  const extracted = path.join(BIN_DIR, BIN_NAME);
   if (extracted !== BIN_PATH) {
     fs.renameSync(extracted, BIN_PATH);
   }
@@ -85,7 +84,7 @@ async function install() {
     fs.chmodSync(BIN_PATH, 0o755);
   }
 
-  console.log("onyx-mcp-scan installed successfully.");
+  console.log("aspex-scan installed successfully.");
 }
 
 install().catch((e) => {

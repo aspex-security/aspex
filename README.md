@@ -4,16 +4,16 @@
 
 # Aspex
 
-### MCP Security Toolkit
+### AI Agent Security Toolkit
 
 **Scan your MCP servers before you trust them. Audit what your agents actually did.**
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![CI](https://github.com/stevend-dotcom/aspex/actions/workflows/ci.yml/badge.svg)](https://github.com/stevend-dotcom/aspex/actions/workflows/ci.yml)
-[![MCP-scanned by Aspex](https://img.shields.io/badge/MCP--scanned-by%20Aspex-5B44C3)](https://github.com/stevend-dotcom/aspex)
+[![CI](https://github.com/aspex-security/aspex/actions/workflows/ci.yml/badge.svg)](https://github.com/aspex-security/aspex/actions/workflows/ci.yml)
+[![MCP-scanned by Aspex](https://img.shields.io/badge/MCP--scanned-by%20Aspex-5B44C3)](https://github.com/aspex-security/aspex)
 
 ```sh
-gh release download v0.1.0 --repo stevend-dotcom/aspex -p "install.sh" -O - | sh
+gh release download v0.1.0 --repo aspex-security/aspex -p "install.sh" -O - | sh
 ```
 
 **Offline. No account. No data leaves your machine. Ever.**
@@ -24,16 +24,16 @@ gh release download v0.1.0 --repo stevend-dotcom/aspex -p "install.sh" -O - | sh
 
 ## What is Aspex?
 
-Aspex is an open-source MCP security toolkit. It ships two CLI tools that cover the two most important questions in any MCP-powered workflow.
+Aspex is an open-source AI agent security toolkit. It ships two CLI tools that cover the two most important questions in any agent-powered workflow.
 
 | Tool | Question it answers |
 |---|---|
 | `aspex-scan` | Is the MCP server I just installed safe to run? |
 | `aspex-trace` | What did my agent actually do while I wasn't looking? |
 
-**aspex-scan** reads every MCP client config on the machine (Claude Desktop, Cursor, VS Code, Windsurf, Cline), connects to each server, enumerates tools and capabilities, and produces a scored risk report. It catches misconfigurations, dangerous capabilities, and credential leaks before an agent ever calls a tool.
+**aspex-scan** reads every MCP client config on the machine, connects to each server (stdio and HTTP/SSE), enumerates tools, resources, and prompts, and produces a scored risk report. It catches misconfigurations, dangerous capabilities, and credential leaks before an agent ever calls a tool.
 
-**aspex-trace** reads the native log files that MCP clients already write to disk. No proxy. No config change. No runtime dependency. It replays what happened, flags anomalous tool calls, and surfaces post-exploitation patterns: credential reads, persistence writes, outbound network calls.
+**aspex-trace** reads the native log files that Claude Desktop, Claude Code, Cursor, and Windsurf already write to disk. No proxy. No config change. No runtime dependency. It replays what happened, flags anomalous tool calls, and surfaces post-exploitation patterns: credential reads, persistence writes, outbound network calls.
 
 Both tools run fully offline. No account. No data sent anywhere.
 
@@ -51,12 +51,12 @@ There is no equivalent of `npm audit` for MCP. No unified view of what your agen
 
 > Scan your MCP setup before you trust it.
 
-Reads every MCP client config on the machine (Claude Desktop, Cursor, VS Code, Windsurf, Cline), connects to each server, enumerates tools and capabilities, and produces a scored risk report. Catches misconfigurations, dangerous capabilities, and credential leaks before an agent ever calls a tool.
+aspex-scan reads every MCP client config on the machine, connects to each server (stdio and HTTP/SSE), enumerates tools, resources, and prompts, and produces a scored risk report. Catches misconfigurations, dangerous capabilities, and credential leaks before an agent ever calls a tool.
 
 ### What it looks like
 
 ```
-  ◆  Aspex  v0.2.0
+  ◆  Aspex  v0.1.0
 
   ╭─────────────────────────────────────────────────────────────╮
   │   12 / 100  ██░░░░░░░░░░░░░░░░░░░░░░  HIGH RISK            │
@@ -86,7 +86,7 @@ Reads every MCP client config on the machine (Claude Desktop, Cursor, VS Code, W
   This scanned 1 machine. Fleet-wide coverage: https://onyx.security
 ```
 
-### What it catches (26 rules)
+### What it catches (150+ rules)
 
 | Category | Rules | Examples |
 |---|---|---|
@@ -100,19 +100,28 @@ Reads every MCP client config on the machine (Claude Desktop, Cursor, VS Code, W
 | **Recon** | MCP009, MCP024 | Process spawn, port scan, `list_processes` |
 | **Remote server** | MCP010, MCP021 | No auth token, plaintext HTTP |
 | **Attack surface** | MCP019, MCP025, MCP026 | No input schema, duplicate tool names, >30 tools |
+| **Container & orchestration** | MCP027–MCP035 | exec into containers, privileged deploy, cluster admin binding |
+| **Data exfiltration** | MCP036–MCP050 | Email send, outbound webhooks, cloud storage upload |
+| **Persistence** | MCP051–MCP070 | Registry writes, launchd/systemd daemons, init script modification |
+| **Surveillance (expanded)** | MCP071–MCP090 | Audio capture, video/camera access, location tracking |
+| **Defense evasion** | MCP091–MCP110 | Log clearing, AV/EDR bypass, timestomping |
+| **Supply chain expansion** | MCP111–MCP130 | Package manager abuse, build system hooks, dependency confusion |
 
 All findings map to **OWASP LLM Top 10 2025**, **MITRE ATLAS**, and **CWE**.
 
 ### Install
 
 ```sh
+# Homebrew (macOS / Linux)
+brew install aspex-security/tap/aspex
+
 # One line — macOS, Linux, Windows (WSL). Requires gh CLI (https://cli.github.com).
-gh release download v0.1.0 --repo stevend-dotcom/aspex -p "install.sh" -O - | sh
+gh release download v0.1.0 --repo aspex-security/aspex -p "install.sh" -O - | sh
 
 # Install to a custom directory
-INSTALL_DIR=~/.local/bin gh release download v0.1.0 --repo stevend-dotcom/aspex -p "install.sh" -O - | sh
+INSTALL_DIR=~/.local/bin gh release download v0.1.0 --repo aspex-security/aspex -p "install.sh" -O - | sh
 
-# Or download a binary directly: https://github.com/stevend-dotcom/aspex/releases
+# Or download a binary directly: https://github.com/aspex-security/aspex/releases
 ```
 
 ### Usage
@@ -131,7 +140,7 @@ Commands:
 
 Flags:
   --no-exec             Static only: parse configs, skip launching servers
-  --clients <list>      Comma-separated: claude,cursor,vscode,windsurf,cline
+  --clients <list>      Comma-separated: claude,claude-code,cursor,vscode,windsurf,cline,roo-cline,continue,zed
   --json                Machine-readable JSON output
   --sarif               SARIF output (for GitHub code scanning)
   --html <file>         Write a self-contained HTML report to file
@@ -166,7 +175,7 @@ Adds a hook that runs `--no-exec --fail-on high` on any staged MCP config file.
 
 ```yaml
 - name: Scan MCP configuration
-  uses: stevend-dotcom/aspex/.github/actions/aspex-scan-action@v0.2.0
+  uses: aspex-security/aspex/.github/actions/aspex-scan-action@v0.1.0
   with:
     fail-on: high
 ```
@@ -177,12 +186,12 @@ Adds a hook that runs `--no-exec --fail-on high` on any staged MCP config file.
 
 > Find out what your agent actually did.
 
-Reads the native log files that Claude Desktop, Claude Code CLI, Cursor, and other MCP clients already write to disk. Parses them into a unified, security-annotated audit trail. No proxy. No config change. No runtime dependency.
+Reads the native log files that Claude Desktop, Claude Code CLI, Cursor, and Windsurf already write to disk. Parses them into a unified, security-annotated audit trail. No proxy. No config change. No runtime dependency.
 
 ### What it looks like
 
 ```
-  ◆  Aspex  v0.2.0
+  ◆  Aspex  v0.1.0
 
   Clients: Claude Desktop, Claude Code, Cursor
   Sessions: 6 (last 24h)   Tool calls: 243 across 11 servers
@@ -207,7 +216,7 @@ Reads the native log files that Claude Desktop, Claude Code CLI, Cursor, and oth
 
 *That session happened at 2:17 AM. The agent read AWS credentials, made an outbound curl to an external host, then wrote a LaunchAgent plist. Textbook post-exploitation sequence. aspex-trace caught it from logs already on disk.*
 
-### What it catches (20 rules)
+### What it catches (85+ rules)
 
 | Category | Rules | Examples |
 |---|---|---|
@@ -220,6 +229,12 @@ Reads the native log files that Claude Desktop, Claude Code CLI, Cursor, and oth
 | **Supply chain** | AT009 | Package manifest modified |
 | **Infrastructure** | AT007, AT008 | Cloud metadata endpoint access, VCS internals |
 | **Anomalous patterns** | AT004, AT005, AT011 | High-volume data, off-hours activity, error bursts (stateful) |
+| **Container & orchestration** | AT021–AT030 | exec into containers, privileged deploy, cluster admin activity |
+| **Data exfiltration (expanded)** | AT031–AT050 | Email send via MCP, outbound webhooks, cloud storage upload |
+| **Persistence (expanded)** | AT051–AT065 | Registry writes, systemd/launchd daemon installs, init modifications |
+| **Surveillance (expanded)** | AT066–AT080 | Audio/video capture, location API access |
+| **Defense evasion** | AT081–AT095 | Log deletion, AV process termination |
+| **Supply chain expansion** | AT096–AT110 | Package manager invocations, build system modifications |
 
 Stateful rules (AT011 error burst, AT013 mass enumeration, AT015 cross-server chain) track state across the full session, not just individual events.
 
@@ -240,10 +255,13 @@ Deviations flagged: new tools called for the first time, off-hours activity, ove
 ### Install
 
 ```sh
-# One line — installs both aspex-scan and aspex-trace
-gh release download v0.1.0 --repo stevend-dotcom/aspex -p "install.sh" -O - | sh
+# Homebrew (macOS / Linux)
+brew install aspex-security/tap/aspex
 
-# Or download a binary directly: https://github.com/stevend-dotcom/aspex/releases
+# One line — installs both aspex-scan and aspex-trace
+gh release download v0.1.0 --repo aspex-security/aspex -p "install.sh" -O - | sh
+
+# Or download a binary directly: https://github.com/aspex-security/aspex/releases
 ```
 
 ### Usage
@@ -257,14 +275,13 @@ Commands:
   version              Print version
 
 Flags:
-  --client <name>      Filter to: claude, cursor
+  --client <name>      Filter to one client: claude, claude-code, cursor, windsurf
   --server <name>      Filter to one MCP server name
   --since <duration>   24h, 7d, 1h (default: 24h)
   --baseline <file>    Compare against a saved behavioral baseline
-  --follow             Tail mode: stream events as they arrive
   --json               Machine-readable JSON output
   --sarif              SARIF output for code scanning
-  --fail-on <sev>      Exit 1 at this severity (default: off)
+  --fail-on <sev>      Exit 1 at this severity (default: high)
   --no-color
 ```
 
@@ -272,7 +289,7 @@ Flags:
 
 ```yaml
 - name: Trace agent activity
-  uses: stevend-dotcom/aspex/.github/actions/aspex-trace-action@v0.2.0
+  uses: aspex-security/aspex/.github/actions/aspex-trace-action@v0.1.0
   with:
     since: 24h
     fail-on: critical
@@ -280,7 +297,7 @@ Flags:
 
 ---
 
-## Privacy and scope
+## Privacy
 
 Aspex is intentionally simple and intentionally limited.
 
@@ -292,17 +309,6 @@ Aspex is intentionally simple and intentionally limited.
 - Never reads env variable values from config files (key names only).
 - Point-in-time, single-machine by design.
 
-Fleet-wide continuous monitoring, policy enforcement, and attack-path correlation are what [Onyx Security](https://onyx.security) builds. Aspex is the free on-ramp.
-
----
-
-## Privacy and trust
-
-```sh
-MCP_SCAN_TELEMETRY=off       # already the default
-AGENT_TRACE_TELEMETRY=off    # already the default
-```
-
 The only network call either tool makes is downloading the binary at install time. After that: fully offline.
 
 Release binaries are signed with [cosign](https://github.com/sigstore/cosign) (keyless, Sigstore). SLSA provenance and SPDX SBOM are published with every release.
@@ -313,6 +319,8 @@ cosign verify-blob \
   --signature checksums.txt.sig \
   checksums.txt
 ```
+
+Fleet-wide continuous monitoring, policy enforcement, and attack-path correlation are what [Onyx Security](https://onyx.security) builds. Aspex is the free on-ramp.
 
 ---
 
@@ -335,26 +343,6 @@ The most impactful contributions are new rules and log format updates as clients
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add a rule, a trace anomaly, a new client, or a log format update.
 
 **Adding a rule takes about 15 minutes:** write a check function, add it to `EvalServer`, write a positive and negative test, add a doc page.
-
----
-
-## Roadmap
-
-**v0.2 (current)**
-- aspex-scan: VS Code, Windsurf, Cline discovery; HTTP/SSE transport; SARIF + HTML report; diff subcommand; watch mode; pre-commit hook; known-bad registry
-- aspex-trace: behavioral baseline (learn + compare); SARIF output; baseline deviation rules
-
-**v0.3**
-- VS Code extension with inline config warnings
-- Homebrew tap
-- VS Code + Windsurf log parsing in aspex-trace
-- `--session` replay in aspex-trace
-
-**v1.0**
-- Community-contributed rule catalog
-- Rule plugin interface for custom org rules
-- `aspex-scan badge` for server authors
-- CI policy file (`.mcp-policy.yml`)
 
 ---
 

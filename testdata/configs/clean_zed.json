@@ -1,0 +1,18 @@
+{
+  "context_servers": {
+    "postgres": {
+      "command": {
+        "path": "mcp-server-postgres",
+        "args": ["postgresql://localhost/mydb"]
+      },
+      "settings": {}
+    },
+    "filesystem": {
+      "command": {
+        "path": "mcp-server-filesystem",
+        "args": ["/home/user/projects"],
+        "env": {"LOG_LEVEL": "info"}
+      }
+    }
+  }
+}

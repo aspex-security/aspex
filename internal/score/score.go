@@ -1,4 +1,4 @@
-// Package score implements the mcp-scan scoring model.
+// Package score implements the aspex-scan scoring model.
 package score
 
 import "github.com/aspex-security/aspex/internal/rules"

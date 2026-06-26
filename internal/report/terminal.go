@@ -31,7 +31,7 @@ const (
 	clearLine    = "\r\033[K"
 )
 
-// ScanReport is the full data for a mcp-scan terminal render.
+// ScanReport is the full data for an aspex-scan terminal render.
 type ScanReport struct {
 	Version         string
 	ElapsedMS       int64
@@ -135,7 +135,7 @@ func sectionLine(label string, c colorFn, col string) string {
 	)
 }
 
-// PrintScanReport writes the mcp-scan terminal report to w.
+// PrintScanReport writes the aspex-scan terminal report to w.
 func PrintScanReport(w io.Writer, r ScanReport) {
 	c := newColorizer(r.NoColor)
 

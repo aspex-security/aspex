@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aspex — MCP Security Toolkit</title>
+<title>Aspex — AI Agent Security Toolkit</title>
 <style>
   :root {
     --purple: #5B44C3;
@@ -308,10 +308,11 @@
       <circle cx="95" cy="30" r="8" fill="none" stroke="#ef4444" stroke-width="1.2" opacity="0.6"/>
     </svg>
   </div>
-  <div class="logo-mark">Aspex &nbsp;·&nbsp; MCP Security Toolkit</div>
+  <div class="logo-mark">Aspex &nbsp;·&nbsp; AI Agent Security Toolkit</div>
   <h1>Look deeper.</h1>
   <p class="hero-sub">
-    Two free CLI tools that answer the questions every developer using MCP should be asking.
+    Two free CLI tools for the complete AI agent security lifecycle.
+    Scan your setup before agents run. Audit everything they did after.
     Fully offline. No account. No data sent anywhere.
   </p>
   <div class="cmd-pair">
@@ -338,7 +339,7 @@
   <div class="tool-col">
     <div class="tool-tag">Tool 1</div>
     <h2>aspex-scan</h2>
-    <p class="tagline">Reads your MCP client configs, connects to each server, enumerates all tools and capabilities, and produces a scored risk report.</p>
+    <p class="tagline">Reads your MCP client configs, connects to each server (stdio and HTTP/SSE), enumerates tools, resources, and prompts, and produces a scored risk report.</p>
 
     <div class="terminal">
       <div class="term-bar">
@@ -372,7 +373,7 @@ Scanned 3 clients  9 servers  64 tools  2.3s
   <div class="tool-col">
     <div class="tool-tag">Tool 2</div>
     <h2>aspex-trace</h2>
-    <p class="tagline">Reads the native logs that Claude Desktop, Claude Code CLI, and Cursor already write. Parses them into a security-annotated audit trail. No proxy. No config change.</p>
+    <p class="tagline">Reads the native logs that Claude Desktop, Claude Code CLI, and Cursor already write. Parses them into a security-annotated audit trail with 85+ rules. No proxy. No config change.</p>
 
     <div class="terminal">
       <div class="term-bar">
@@ -409,7 +410,7 @@ Sessions: 6  (last 24h)   Tool calls: 243
 <div class="rules-section">
   <div class="page">
     <div class="section-label">Rule catalog</div>
-    <h2>26 mcp-scan rules + 20 agent-trace rules</h2>
+    <h2>150+ aspex-scan rules · 85+ aspex-trace rules</h2>
     <p class="intro">Every finding maps to OWASP LLM Top 10 2025, MITRE ATLAS, and CWE. Rules are data-driven and community-extensible.</p>
 
     <div class="rule-grid">

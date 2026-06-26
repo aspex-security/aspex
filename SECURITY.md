@@ -31,7 +31,7 @@ We aim to acknowledge reports within 2 business days and to ship a fix within 14
 - `aspex-trace` reads MCP client log files from disk (read-only).
 - Neither tool modifies any file, sends any data to a remote endpoint, or persists state beyond the terminal session.
 
-### Risks of running mcp-scan
+### Risks of running aspex-scan
 
 **Launching third-party MCP servers is execution of third-party code.** This is the same thing your MCP client does when you use it. The risks and mitigations:
 

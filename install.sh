@@ -3,12 +3,12 @@
 # Requires: gh CLI (https://cli.github.com) or curl (public repo only).
 #
 # Usage:
-#   gh release download v0.1.0 --repo stevend-dotcom/aspex -p "install.sh" -O - | sh
+#   gh release download v0.1.0 --repo aspex-security/aspex -p "install.sh" -O - | sh
 #   VERSION=v0.1.0 INSTALL_DIR=~/.local/bin sh install.sh
 
 set -e
 
-REPO="${REPO:-stevend-dotcom/aspex}"
+REPO="${REPO:-aspex-security/aspex}"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 VERSION="${VERSION:-}"
 

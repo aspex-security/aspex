@@ -1,4 +1,4 @@
-// Package rules implements the mcp-scan risk rule catalog.
+// Package rules implements the aspex-scan risk rule catalog.
 // Framework mappings:
 //   OWASP LLM Top 10 2025: LLM01-LLM10 (https://owasp.org/www-project-top-10-for-large-language-model-applications/)
 //   MITRE ATLAS: AML.Txxx (https://atlas.mitre.org/)
@@ -71,6 +71,17 @@ func EvalServer(srv *inspect.Server) []Finding {
 	// Per-tool rules.
 	for i := range srv.Tools {
 		f = append(f, evalTool(&srv.Tools[i])...)
+		f = append(f, EvalToolCatalog(&srv.Tools[i])...)
+	}
+
+	// Per-resource catalog rules.
+	for i := range srv.Resources {
+		f = append(f, EvalResourceCatalog(&srv.Resources[i])...)
+	}
+
+	// Per-prompt catalog rules.
+	for i := range srv.Prompts {
+		f = append(f, EvalPromptCatalog(&srv.Prompts[i])...)
 	}
 
 	return f
