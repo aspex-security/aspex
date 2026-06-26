@@ -7,6 +7,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.3.2] — 2026-06-27
+
+### Fixed
+
+- `aspex` TUI layout was scrambled in Warp and other terminals — raw mode requires `\r\n` line endings, not bare `\n`
+
+---
+
 ## [0.3.1] — 2026-06-26
 
 ### Added
