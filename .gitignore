@@ -17,3 +17,5 @@ npm/agent-trace/bin/
 # local dev artifacts
 *.log
 *.pprof
+# but keep test fixtures
+!testdata/**/*.log
