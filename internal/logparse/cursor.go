@@ -77,19 +77,24 @@ func ParseCursorLogsDir(dir string, since time.Time) ([]Event, error) {
 // ParseCursorLogReader parses a Cursor MCP log from an io.Reader.
 func ParseCursorLogReader(r io.Reader, since time.Time) ([]Event, error) {
 	var events []Event
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			continue
+	reader := bufio.NewReaderSize(r, 64*1024)
+	for {
+		line, err := reader.ReadString('\n')
+		line = strings.TrimRight(line, "\r\n")
+		if line != "" {
+			ev, ok := parseCursorLine(line, since)
+			if ok {
+				events = append(events, ev)
+			}
 		}
-		ev, ok := parseCursorLine(line, since)
-		if ok {
-			events = append(events, ev)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return events, err
 		}
 	}
-	return events, scanner.Err()
+	return events, nil
 }
 
 func parseCursorLine(line string, since time.Time) (Event, bool) {

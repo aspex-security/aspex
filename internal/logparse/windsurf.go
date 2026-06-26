@@ -76,19 +76,24 @@ func ParseWindsurfLogsDir(dir string, since time.Time) ([]Event, error) {
 // The format is identical to Cursor's structured JSON log lines.
 func ParseWindsurfLogReader(r io.Reader, since time.Time) ([]Event, error) {
 	var events []Event
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
-			continue
+	reader := bufio.NewReaderSize(r, 64*1024)
+	for {
+		line, err := reader.ReadString('\n')
+		line = strings.TrimRight(line, "\r\n")
+		if line != "" {
+			// Reuse the Cursor line parser — same JSON schema.
+			ev, ok := parseCursorLine(line, since)
+			if ok {
+				ev.Client = "windsurf"
+				events = append(events, ev)
+			}
 		}
-		// Reuse the Cursor line parser — same JSON schema.
-		ev, ok := parseCursorLine(line, since)
-		if ok {
-			ev.Client = "windsurf"
-			events = append(events, ev)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return events, err
 		}
 	}
-	return events, scanner.Err()
+	return events, nil
 }
