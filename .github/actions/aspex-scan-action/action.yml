@@ -41,31 +41,58 @@ runs:
   steps:
     - name: Install aspex-scan
       shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
       run: |
-        VERSION="${{ inputs.version }}"
+        VERSION="$INPUT_VERSION"
         OS=$(uname -s | tr '[:upper:]' '[:lower:]')
         ARCH=$(uname -m)
         if [ "$ARCH" = "x86_64" ]; then ARCH="amd64"; fi
         if [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi
 
         if [ "$VERSION" = "latest" ]; then
-          VERSION=$(curl -s https://api.github.com/repos/aspex-security/aspex/releases/latest | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')
+          VERSION=$(gh release view --repo aspex-security/aspex --json tagName -q '.tagName' | sed 's/^v//')
         fi
 
-        URL="https://github.com/aspex-security/aspex/releases/download/v${VERSION}/aspex-scan_${OS}_${ARCH}.tar.gz"
-        curl -fsSL "$URL" | tar -xz -C /usr/local/bin
+        ASSET="aspex-scan_${OS}_${ARCH}.tar.gz"
+        URL="https://github.com/aspex-security/aspex/releases/download/v${VERSION}/${ASSET}"
+
+        # Download to a temp file, verify checksum, then install.
+        TMP=$(mktemp)
+        curl -fsSL "$URL" -o "$TMP"
+
+        CHECKSUMS_TMP=$(mktemp)
+        curl -fsSL "https://github.com/aspex-security/aspex/releases/download/v${VERSION}/checksums.txt" -o "$CHECKSUMS_TMP"
+        EXPECTED=$(grep " ${ASSET}$" "$CHECKSUMS_TMP" | awk '{print $1}')
+        ACTUAL=$(sha256sum "$TMP" | awk '{print $1}')
+        rm -f "$CHECKSUMS_TMP"
+        if [ "$ACTUAL" != "$EXPECTED" ]; then
+          echo "Checksum mismatch for ${ASSET}: expected=${EXPECTED} actual=${ACTUAL}"
+          rm -f "$TMP"
+          exit 1
+        fi
+
+        tar -xz -C /usr/local/bin -f "$TMP"
+        rm -f "$TMP"
         chmod +x /usr/local/bin/aspex-scan
 
     - name: Run aspex-scan
       id: scan
       shell: bash
+      # Pass all user-controlled inputs via environment variables, not direct
+      # interpolation, to prevent command injection via shell metacharacters.
+      env:
+        INPUT_NO_EXEC: ${{ inputs.no-exec }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
       run: |
-        ARGS="--json"
-        if [ "${{ inputs.no-exec }}" = "true" ]; then ARGS="$ARGS --no-exec"; fi
-        if [ -n "${{ inputs.config }}" ]; then ARGS="$ARGS --config ${{ inputs.config }}"; fi
+        # Use an array so each flag value is a distinct argument (no word-splitting).
+        ARGS=(--json)
+        if [ "$INPUT_NO_EXEC" = "true" ]; then ARGS+=(--no-exec); fi
+        if [ -n "$INPUT_CONFIG" ]; then ARGS+=(--config "$INPUT_CONFIG"); fi
 
         set +e
-        RESULT=$(aspex-scan $ARGS 2>&1)
+        RESULT=$(aspex-scan "${ARGS[@]}" 2>&1)
         EXIT=$?
         set -e
 
@@ -82,7 +109,7 @@ runs:
         echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
         echo "| $SCORE / 100 | $BAND |" >> "$GITHUB_STEP_SUMMARY"
 
-        if [ "$EXIT" -ne 0 ] && [ "${{ inputs.fail-on }}" != "none" ]; then
-          echo "Scan found findings at or above --fail-on=${{ inputs.fail-on }}."
+        if [ "$EXIT" -ne 0 ] && [ "$INPUT_FAIL_ON" != "none" ]; then
+          echo "Scan found findings at or above --fail-on=$INPUT_FAIL_ON."
           exit 1
         fi

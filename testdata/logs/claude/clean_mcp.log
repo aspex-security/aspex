@@ -1,0 +1,4 @@
+{"timestamp":"2026-06-25T09:00:00Z","level":"info","message":"[github-mcp] initialize","data":{}}
+{"timestamp":"2026-06-25T09:00:01Z","level":"info","message":"[github-mcp] tools/list","data":{}}
+{"timestamp":"2026-06-25T09:01:00Z","level":"info","message":"[github-mcp] tools/call","data":{"toolName":"list_issues","serverName":"github-mcp","arguments":{"repo":"my-repo"}}}
+{"timestamp":"2026-06-25T09:01:01Z","level":"info","message":"[github-mcp] tools/call","data":{"toolName":"get_file_contents","serverName":"github-mcp","arguments":{"path":"README.md"}}}

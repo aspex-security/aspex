@@ -28,7 +28,7 @@ go run ./cmd/aspex-scan --no-exec
 go run ./cmd/aspex-trace
 ```
 
-Requirements: Go 1.22 or later. No other dependencies needed for development.
+Requirements: Go 1.24 or later. No other dependencies needed for development.
 
 ---
 
@@ -182,4 +182,8 @@ If no fix exists yet, set `"fixedIn": ""`. CVE is optional.
 
 ## Reporting security vulnerabilities
 
-Please do not open a public issue for security vulnerabilities in this project. See [SECURITY.md](SECURITY.md).
+Please do not open a public GitHub issue for security vulnerabilities in this project. Email [steven.d@onyx.security](mailto:steven.d@onyx.security) instead. See [SECURITY.md](SECURITY.md) for the full policy.
+
+## Maintainer contact
+
+For questions not suited to a public issue, email [steven.d@onyx.security](mailto:steven.d@onyx.security).

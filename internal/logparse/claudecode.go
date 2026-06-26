@@ -3,6 +3,7 @@ package logparse
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -44,8 +45,11 @@ func ParseClaudeCodeProjectsDir(rootDir string, since time.Time) ([]Event, error
 			if err != nil {
 				continue
 			}
-			evs, _ := ParseClaudeCodeReader(fh, since)
+			evs, parseErr := ParseClaudeCodeReader(fh, since)
 			fh.Close()
+			if parseErr != nil {
+				fmt.Fprintf(os.Stderr, "aspex warning: parse %s: %v\n", filepath.Join(projectDir, f.Name()), parseErr)
+			}
 			events = append(events, evs...)
 		}
 	}
@@ -58,7 +62,7 @@ func ParseClaudeCodeProjectsDir(rootDir string, since time.Time) ([]Event, error
 func ParseClaudeCodeReader(r io.Reader, since time.Time) ([]Event, error) {
 	var events []Event
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 8*1024*1024), 8*1024*1024)
+	scanner.Buffer(make([]byte, 64*1024), 8*1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {

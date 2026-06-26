@@ -1,9 +1,13 @@
 package main
 
 import (
+	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -16,35 +20,88 @@ import (
 	"github.com/aspex-security/aspex/internal/version"
 )
 
+// errTraceExitOne is returned by checkTraceExitCode when --fail-on threshold is
+// met. main() converts it to os.Exit(1) after all defers have run.
+var errTraceExitOne = fmt.Errorf("exit:1")
+
 func main() {
 	if err := newRootCmd().Execute(); err != nil {
+		if err == errTraceExitOne {
+			os.Exit(1)
+		}
 		os.Exit(2)
 	}
 }
 
 type traceFlags struct {
-	client   string
-	server   string
-	since    string
-	jsonOut  bool
-	noColor  bool
-	failOn   string
-	follow   bool
-	sarifOut bool
-	baseline string
+	client        string
+	server        string
+	since         string
+	jsonOut       bool
+	noColor       bool
+	failOn        string
+	sarifOut      bool
+	baseline      string
+	suppressNoise bool
+	summary       bool
 }
+
+var supportedClients = []string{"claude", "claude-code", "cursor", "windsurf", "cline", "roo-cline"}
 
 func newRootCmd() *cobra.Command {
 	var tf traceFlags
 
 	root := &cobra.Command{
-		Use:   "aspex-trace",
-		Short: "Audit what your MCP agents actually did",
-		Long: `aspex-trace reads the native log files that Claude Desktop, Claude Code,
-Cursor, and other MCP clients already write to disk, parses them into a
-unified audit trail, and flags anomalous or sensitive tool call activity.
+		Use:   "aspex-trace [flags]",
+		Short: "Audit what your AI agents actually did",
+		Long: `aspex-trace — AI Agent Activity Auditor
 
-No proxy, no config modification, no data sent anywhere.`,
+Reads the logs that Claude Desktop, Claude Code, Cursor, Windsurf, Cline,
+Roo Code and other MCP clients already write to disk. Parses them into a
+unified audit trail and flags suspicious or sensitive tool call activity
+using 85+ detection rules.
+
+No proxy. No config changes. No data sent anywhere. Runs entirely offline.
+
+QUICK START
+  aspex-trace                        Scan the last 24 h of all agent activity
+  aspex-trace --since 7d             Scan the last 7 days
+  aspex-trace --client claude-code   Only Claude Code sessions
+  aspex-trace --suppress-noise       Hide low-signal alerts for coding sessions
+  aspex-trace --summary              Compact stats view, no per-event breakdown
+
+FILTERING
+  aspex-trace --server filesystem    Focus on one MCP server
+  aspex-trace --client cursor        Focus on one client (claude|claude-code|cursor|windsurf|cline|roo-cline)
+
+OUTPUT & INTEGRATION
+  aspex-trace --json                 Machine-readable JSON (pipe to jq, etc.)
+  aspex-trace --sarif                SARIF 2.1.0 for GitHub Advanced Security
+  aspex-trace --fail-on high         Exit 1 on HIGH or CRITICAL findings (CI)
+  aspex-trace --no-color             Plain text (for logging / scripts)
+
+SUBCOMMANDS
+  aspex-trace stats                  Activity dashboard without rule evaluation
+  aspex-trace session <id>           Forensic timeline for one session
+  aspex-trace export                 Export all events to CSV or JSONL
+  aspex-trace live                   Real-time monitoring — tails logs as they grow
+  aspex-trace baseline --learn       Learn normal behavior from recent logs
+
+BASELINES
+  aspex-trace baseline --learn --since 7d --output ~/my-baseline.json
+  aspex-trace --baseline ~/my-baseline.json   Flag deviations from baseline`,
+		Example: `  # Everyday audit
+  aspex-trace
+
+  # Investigate the last week, only Cursor sessions
+  aspex-trace --since 7d --client cursor
+
+  # CI gate — fail the build on any high-severity finding
+  aspex-trace --fail-on high --json | jq '.flagged | length'
+
+  # Build a normal-behavior baseline, then detect deviations
+  aspex-trace baseline --learn --since 7d
+  aspex-trace --baseline ~/.config/aspex/aspex-trace-baseline.json`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -52,31 +109,737 @@ No proxy, no config modification, no data sent anywhere.`,
 		},
 	}
 
-	root.Flags().StringVar(&tf.client, "client", "", "Filter to one client (claude, claude-code, cursor)")
-	root.Flags().StringVar(&tf.server, "server", "", "Filter to one MCP server name")
-	root.Flags().StringVar(&tf.since, "since", "24h", "How far back to look (e.g. 24h, 7d)")
-	root.Flags().BoolVar(&tf.jsonOut, "json", false, "Machine-readable JSON output")
-	root.Flags().BoolVar(&tf.noColor, "no-color", false, "Disable color output")
-	root.Flags().StringVar(&tf.failOn, "fail-on", "high", "Exit 1 if flagged events at/above severity (critical, high, medium, low)")
-	root.Flags().BoolVar(&tf.follow, "follow", false, "Tail mode: stream new events as they arrive (not yet implemented)")
-	root.Flags().BoolVar(&tf.sarifOut, "sarif", false, "Output SARIF 2.1.0 instead of default format")
-	root.Flags().StringVar(&tf.baseline, "baseline", "", "Path to baseline file; deviations are merged into findings")
+	root.Flags().StringVar(&tf.client, "client", "", "Limit to one client: "+strings.Join(supportedClients, "|"))
+	root.Flags().StringVar(&tf.server, "server", "", "Limit to one MCP server name (e.g. filesystem, github)")
+	root.Flags().StringVar(&tf.since, "since", "24h", "How far back to scan (e.g. 1h, 24h, 7d, 30d)")
+	root.Flags().BoolVar(&tf.jsonOut, "json", false, "JSON output — pipe to jq or feed into SIEM")
+	root.Flags().BoolVar(&tf.noColor, "no-color", false, "Plain-text output (useful in CI logs)")
+	root.Flags().StringVar(&tf.failOn, "fail-on", "high", "Exit 1 when findings reach this severity: critical|high|medium|low")
+	root.Flags().BoolVar(&tf.sarifOut, "sarif", false, "SARIF 2.1.0 output for GitHub Advanced Security / Semgrep")
+	root.Flags().StringVar(&tf.baseline, "baseline", "", "Compare against a saved baseline; flag deviations as additional findings")
+	root.Flags().BoolVar(&tf.suppressNoise, "suppress-noise", false, "Suppress expected alerts for coding-agent sessions (after-hours, etc.)")
+	root.Flags().BoolVar(&tf.summary, "summary", false, "Compact view: stats + finding count only, no per-event detail")
 
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newBaselineCmd())
+	root.AddCommand(newStatsCmd())
+	root.AddCommand(newSessionCmd())
+	root.AddCommand(newExportCmd())
+	root.AddCommand(newLiveCmd())
+	root.AddCommand(newCompletionCmd())
 
 	return root
 }
 
 func newVersionCmd() *cobra.Command {
-	return &cobra.Command{
+	var check bool
+	cmd := &cobra.Command{
 		Use:   "version",
-		Short: "Print version information",
+		Short: "Print version and build information",
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Printf("aspex-trace %s (built %s)\n", version.Version, version.BuildDate)
+			if check {
+				fmt.Print("Checking for updates... ")
+				latest := version.CheckLatest()
+				if latest != "" {
+					fmt.Printf("\nUpdate available: %s → %s\n", version.Version, latest)
+					fmt.Println("  brew upgrade aspex-security/tap/aspex")
+					fmt.Println("  npm update -g aspex-agent-trace")
+				} else {
+					fmt.Println("already up to date.")
+				}
+			}
+		},
+	}
+	cmd.Flags().BoolVar(&check, "check", false, "Check GitHub for a newer release")
+	return cmd
+}
+
+// ---------------------------------------------------------------------------
+// stats subcommand
+// ---------------------------------------------------------------------------
+
+func newStatsCmd() *cobra.Command {
+	var since, client string
+	var noColor bool
+	cmd := &cobra.Command{
+		Use:   "stats",
+		Short: "Show activity dashboard without running detection rules",
+		Long: `Print a concise activity summary for your AI agents: total events, per-client
+and per-server breakdowns, most-called tools, and an hourly heatmap.
+
+Unlike the default command, no detection rules are evaluated — this is purely
+informational and is much faster on large log sets.`,
+		Example: `  # Last 24 hours dashboard
+  aspex-trace stats
+
+  # 7-day breakdown for Cursor only
+  aspex-trace stats --since 7d --client cursor`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runStats(since, client, noColor)
+		},
+	}
+	cmd.Flags().StringVar(&since, "since", "24h", "How far back to look")
+	cmd.Flags().StringVar(&client, "client", "", "Filter to one client")
+	cmd.Flags().BoolVar(&noColor, "no-color", false, "Plain-text output")
+	return cmd
+}
+
+func runStats(since, clientFilter string, noColor bool) error {
+	sinceDur, err := parseSince(since)
+	if err != nil {
+		return fmt.Errorf("invalid --since value: %w", err)
+	}
+	_ = sinceDur
+	sinceTime := time.Now().Add(-sinceDur)
+
+	allEvents, _ := collectEvents(clientFilter, sinceTime)
+	act := report.ComputeActivity(allEvents)
+
+	c := colorFunc(noColor)
+	bold := "\033[1m"
+	dim := "\033[2m"
+	purple := "\033[35m"
+	cyan := "\033[36m"
+
+	fmt.Fprintf(os.Stdout, "\n  %s  %s  %s\n\n",
+		c(purple+bold, "◆"),
+		c(bold, "Agent Activity"),
+		c(dim, fmt.Sprintf("last %s · %d events", since, len(allEvents))),
+	)
+
+	// Per-client breakdown
+	clientCounts := map[string]int{}
+	serverCounts := map[string]int{}
+	toolCounts := map[string]int{}
+	for _, ev := range allEvents {
+		clientCounts[ev.Client]++
+		if ev.Server != "" {
+			serverCounts[ev.Server]++
+		}
+		if ev.Tool != "" {
+			toolCounts[ev.Tool]++
+		}
+	}
+
+	fmt.Fprintf(os.Stdout, "  %s\n", c(bold, "Clients"))
+	for _, cl := range sortedByCount(clientCounts) {
+		fmt.Fprintf(os.Stdout, "    %s %s %s\n",
+			c(cyan, fmt.Sprintf("%-18s", cl)),
+			bar(clientCounts[cl], len(allEvents), 20, noColor),
+			c(dim, fmt.Sprintf("%d", clientCounts[cl])),
+		)
+	}
+
+	fmt.Fprintf(os.Stdout, "\n  %s\n", c(bold, "Servers"))
+	for i, sv := range sortedByCount(serverCounts) {
+		if i >= 10 {
+			break
+		}
+		fmt.Fprintf(os.Stdout, "    %s %s %s\n",
+			c(cyan, fmt.Sprintf("%-18s", sv)),
+			bar(serverCounts[sv], len(allEvents), 20, noColor),
+			c(dim, fmt.Sprintf("%d", serverCounts[sv])),
+		)
+	}
+
+	fmt.Fprintf(os.Stdout, "\n  %s\n", c(bold, "Top Tools"))
+	for i, t := range sortedByCount(toolCounts) {
+		if i >= 8 {
+			break
+		}
+		fmt.Fprintf(os.Stdout, "    %s %s %s\n",
+			c(cyan, fmt.Sprintf("%-18s", t)),
+			bar(toolCounts[t], len(allEvents), 20, noColor),
+			c(dim, fmt.Sprintf("%d", toolCounts[t])),
+		)
+	}
+
+	// Top paths heatmap
+	if len(act.TopPaths) > 0 {
+		fmt.Fprintf(os.Stdout, "\n  %s\n", c(bold, "Active Paths"))
+		for i, p := range act.TopPaths {
+			if i >= 5 {
+				break
+			}
+			fmt.Fprintf(os.Stdout, "    %s %s\n",
+				c(dim, fmt.Sprintf("%-4d", p.Count)),
+				p.Name,
+			)
+		}
+	}
+	fmt.Fprintln(os.Stdout)
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// session subcommand (novel forensics capability)
+// ---------------------------------------------------------------------------
+
+func newSessionCmd() *cobra.Command {
+	var since, client, server string
+	var noColor, jsonOut bool
+	cmd := &cobra.Command{
+		Use:   "session [session-id]",
+		Short: "Reconstruct a forensic timeline for a single agent session",
+		Long: `Reconstruct a complete, chronologically-ordered timeline for one AI agent
+session. Shows every MCP tool call, the arguments passed, and all detection
+rule findings — in the order they happened.
+
+This is the single-session "what exactly did the agent do?" view. It is
+especially useful after an incident: given a session ID from the main report,
+you can drill down into the exact sequence of actions.
+
+If no session-id is provided, lists recent sessions so you can pick one.
+
+SESSION IDs are derived from the client, date, and server: client/YYYY-MM-DD/server
+or you can pass a substring and aspex-trace will fuzzy-match against recent sessions.`,
+		Example: `  # List recent sessions
+  aspex-trace session
+
+  # Forensic timeline for a specific session
+  aspex-trace session claude-code/2024-01-15/filesystem
+
+  # Any session matching "filesystem" in the last 7 days
+  aspex-trace session filesystem --since 7d
+
+  # JSON for pipeline processing
+  aspex-trace session filesystem --json`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			query := ""
+			if len(args) > 0 {
+				query = args[0]
+			}
+			return runSession(query, since, client, server, noColor, jsonOut)
+		},
+	}
+	cmd.Flags().StringVar(&since, "since", "7d", "How far back to look")
+	cmd.Flags().StringVar(&client, "client", "", "Filter to one client")
+	cmd.Flags().StringVar(&server, "server", "", "Filter to one server")
+	cmd.Flags().BoolVar(&noColor, "no-color", false, "Plain-text output")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	return cmd
+}
+
+type sessionSummary struct {
+	ID         string    `json:"id"`
+	Client     string    `json:"client"`
+	Server     string    `json:"server"`
+	StartTime  time.Time `json:"start_time"`
+	EventCount int       `json:"event_count"`
+}
+
+func buildSessionID(ev logparse.Event) string {
+	day := ev.Timestamp.Format("2006-01-02")
+	return ev.Client + "/" + day + "/" + ev.Server
+}
+
+func runSession(query, since, clientFilter, serverFilter string, noColor, jsonOut bool) error {
+	sinceDur, err := parseSince(since)
+	if err != nil {
+		return fmt.Errorf("invalid --since value: %w", err)
+	}
+	sinceTime := time.Now().Add(-sinceDur)
+
+	allEvents, _ := collectEvents(clientFilter, sinceTime)
+
+	// Group events into sessions keyed by client/day/server
+	sessionMap := map[string][]logparse.Event{}
+	for _, ev := range allEvents {
+		if ev.Server == "" {
+			continue
+		}
+		if serverFilter != "" && ev.Server != serverFilter {
+			continue
+		}
+		sid := buildSessionID(ev)
+		sessionMap[sid] = append(sessionMap[sid], ev)
+	}
+
+	// If no query, list sessions
+	if query == "" {
+		var sessions []sessionSummary
+		for sid, evs := range sessionMap {
+			if len(evs) == 0 {
+				continue
+			}
+			start := evs[0].Timestamp
+			for _, ev := range evs {
+				if !ev.Timestamp.IsZero() && ev.Timestamp.Before(start) {
+					start = ev.Timestamp
+				}
+			}
+			sessions = append(sessions, sessionSummary{
+				ID:         sid,
+				Client:     evs[0].Client,
+				Server:     evs[0].Server,
+				StartTime:  start,
+				EventCount: len(evs),
+			})
+		}
+		sort.Slice(sessions, func(i, j int) bool {
+			return sessions[i].StartTime.After(sessions[j].StartTime)
+		})
+
+		if jsonOut {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(sessions)
+		}
+
+		c := colorFunc(noColor)
+		bold := "\033[1m"
+		dim := "\033[2m"
+		purple := "\033[35m"
+		cyan := "\033[36m"
+
+		fmt.Fprintf(os.Stdout, "\n  %s  %s  %s\n\n",
+			c(purple+bold, "◆"),
+			c(bold, "Recent Sessions"),
+			c(dim, fmt.Sprintf("last %s · %d sessions", since, len(sessions))),
+		)
+		for i, s := range sessions {
+			if i >= 20 {
+				fmt.Fprintf(os.Stdout, "  %s\n", c(dim, fmt.Sprintf("  … and %d more", len(sessions)-20)))
+				break
+			}
+			fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
+				c(cyan, fmt.Sprintf("%-40s", s.ID)),
+				c(dim, s.StartTime.Format("Jan 02 15:04")),
+				c(dim, fmt.Sprintf("%d events", s.EventCount)),
+			)
+		}
+		fmt.Fprintf(os.Stdout, "\n  %s aspex-trace session <id>\n\n", c(dim, "→ drill into a session:"))
+		return nil
+	}
+
+	// Find sessions matching the query
+	var matchedSID string
+	var matchedEvents []logparse.Event
+	for sid, evs := range sessionMap {
+		if strings.Contains(sid, query) {
+			if len(evs) > len(matchedEvents) {
+				matchedSID = sid
+				matchedEvents = evs
+			}
+		}
+	}
+	if len(matchedEvents) == 0 {
+		return fmt.Errorf("no session matching %q found in the last %s", query, since)
+	}
+
+	// Sort chronologically
+	sort.Slice(matchedEvents, func(i, j int) bool {
+		return matchedEvents[i].Timestamp.Before(matchedEvents[j].Timestamp)
+	})
+
+	// Evaluate detection rules on these events
+	flagged := trace.AnalyzeEvents(matchedEvents)
+	findingsByEventIndex := map[int][]rules.Finding{}
+	for _, fe := range flagged {
+		for i, ev := range matchedEvents {
+			if ev.Timestamp.Equal(fe.Event.Timestamp) && ev.Tool == fe.Event.Tool {
+				findingsByEventIndex[i] = append(findingsByEventIndex[i], fe.Findings...)
+			}
+		}
+	}
+
+	if jsonOut {
+		type jsonEvent struct {
+			Index     int             `json:"index"`
+			Timestamp time.Time       `json:"timestamp"`
+			Client    string          `json:"client"`
+			Server    string          `json:"server"`
+			Tool      string          `json:"tool"`
+			Args      json.RawMessage `json:"args,omitempty"`
+			Findings  []rules.Finding `json:"findings,omitempty"`
+		}
+		type jsonSession struct {
+			ID         string      `json:"session_id"`
+			EventCount int         `json:"event_count"`
+			Events     []jsonEvent `json:"events"`
+		}
+		var evs []jsonEvent
+		for i, ev := range matchedEvents {
+			var rawArgs json.RawMessage
+			if ev.Args != nil {
+				rawArgs, _ = json.Marshal(ev.Args)
+			}
+			evs = append(evs, jsonEvent{
+				Index:     i,
+				Timestamp: ev.Timestamp,
+				Client:    ev.Client,
+				Server:    ev.Server,
+				Tool:      ev.Tool,
+				Args:      rawArgs,
+				Findings:  findingsByEventIndex[i],
+			})
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(jsonSession{
+			ID:         matchedSID,
+			EventCount: len(matchedEvents),
+			Events:     evs,
+		})
+	}
+
+	c := colorFunc(noColor)
+	bold := "\033[1m"
+	dim := "\033[2m"
+	purple := "\033[35m"
+	cyan := "\033[36m"
+	red := "\033[91m"
+	yellow := "\033[93m"
+
+	fmt.Fprintf(os.Stdout, "\n  %s  %s\n  %s %s\n\n",
+		c(purple+bold, "◆"),
+		c(bold, "Session Timeline: "+matchedSID),
+		c(dim, "events:"),
+		c(cyan, fmt.Sprintf("%d", len(matchedEvents))),
+	)
+
+	for i, ev := range matchedEvents {
+		ts := "—"
+		if !ev.Timestamp.IsZero() {
+			ts = ev.Timestamp.Format("15:04:05")
+		}
+		findings := findingsByEventIndex[i]
+		marker := c(dim, "│")
+		if len(findings) > 0 {
+			maxSev := findings[0].Severity
+			for _, f := range findings {
+				if f.Severity > maxSev {
+					maxSev = f.Severity
+				}
+			}
+			switch {
+			case maxSev >= rules.SeverityCritical:
+				marker = c(red+bold, "█")
+			case maxSev >= rules.SeverityHigh:
+				marker = c(red, "▶")
+			case maxSev >= rules.SeverityMedium:
+				marker = c(yellow, "▷")
+			}
+		}
+		fmt.Fprintf(os.Stdout, "  %s %s  %s  %s\n",
+			marker,
+			c(dim, ts),
+			c(bold, ev.Tool),
+			c(dim, ev.Server),
+		)
+		for _, f := range findings {
+			sevStr := strings.ToUpper(f.Severity.String()[:1])
+			fmt.Fprintf(os.Stdout, "       %s %s %s\n",
+				c(yellow, "["+sevStr+"]"),
+				c(bold, f.RuleID+":"),
+				f.Detail,
+			)
+		}
+	}
+	fmt.Fprintln(os.Stdout)
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// export subcommand
+// ---------------------------------------------------------------------------
+
+func newExportCmd() *cobra.Command {
+	var since, client, format, output string
+	cmd := &cobra.Command{
+		Use:   "export",
+		Short: "Export all agent events to CSV or JSONL for external analysis",
+		Long: `Export every parsed MCP tool call event to a flat file. Useful for feeding
+into a SIEM, running custom analysis in Python/R, or archiving audit logs.
+
+Formats:
+  csv    — spreadsheet-compatible, one row per event
+  jsonl  — one JSON object per line (NDJSON), easy to stream into jq`,
+		Example: `  # Export last 7 days to CSV
+  aspex-trace export --since 7d --format csv --output events.csv
+
+  # JSONL to stdout, pipe to jq
+  aspex-trace export --format jsonl | jq 'select(.severity=="critical")'
+
+  # Only Cursor events
+  aspex-trace export --client cursor --format csv`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runExport(since, client, format, output)
+		},
+	}
+	cmd.Flags().StringVar(&since, "since", "7d", "How far back to export")
+	cmd.Flags().StringVar(&client, "client", "", "Filter to one client")
+	cmd.Flags().StringVar(&format, "format", "jsonl", "Output format: csv|jsonl")
+	cmd.Flags().StringVar(&output, "output", "", "Write to file instead of stdout")
+	return cmd
+}
+
+func runExport(since, clientFilter, format, outputPath string) error {
+	sinceDur, err := parseSince(since)
+	if err != nil {
+		return fmt.Errorf("invalid --since value: %w", err)
+	}
+	sinceTime := time.Now().Add(-sinceDur)
+
+	allEvents, _ := collectEvents(clientFilter, sinceTime)
+
+	// Sort chronologically
+	sort.Slice(allEvents, func(i, j int) bool {
+		return allEvents[i].Timestamp.Before(allEvents[j].Timestamp)
+	})
+
+	flagged := trace.AnalyzeEvents(allEvents)
+	findingsMap := map[string][]rules.Finding{}
+	for _, fe := range flagged {
+		key := fe.Event.Timestamp.Format(time.RFC3339Nano) + "/" + fe.Event.Tool
+		findingsMap[key] = append(findingsMap[key], fe.Findings...)
+	}
+
+	out := os.Stdout
+	if outputPath != "" {
+		f, err := os.Create(outputPath)
+		if err != nil {
+			return fmt.Errorf("creating output file: %w", err)
+		}
+		defer f.Close()
+		out = f
+	}
+
+	switch format {
+	case "csv":
+		w := csv.NewWriter(out)
+		_ = w.Write([]string{"timestamp", "client", "server", "tool", "args", "rule_ids", "max_severity"})
+		for _, ev := range allEvents {
+			key := ev.Timestamp.Format(time.RFC3339Nano) + "/" + ev.Tool
+			findings := findingsMap[key]
+			ruleIDs := ""
+			maxSev := ""
+			if len(findings) > 0 {
+				ids := make([]string, len(findings))
+				maxS := findings[0].Severity
+				for i, f := range findings {
+					ids[i] = f.RuleID
+					if f.Severity > maxS {
+						maxS = f.Severity
+					}
+				}
+				ruleIDs = strings.Join(ids, " ")
+				maxSev = maxS.String()
+			}
+			argsStr := ""
+			if ev.Args != nil {
+				b, _ := json.Marshal(ev.Args)
+				argsStr = string(b)
+			}
+			_ = w.Write([]string{
+				ev.Timestamp.Format(time.RFC3339),
+				ev.Client,
+				ev.Server,
+				ev.Tool,
+				argsStr,
+				ruleIDs,
+				maxSev,
+			})
+		}
+		w.Flush()
+		return w.Error()
+
+	case "jsonl":
+		type jsonlEvent struct {
+			Timestamp  string          `json:"timestamp"`
+			Client     string          `json:"client"`
+			Server     string          `json:"server"`
+			Tool       string          `json:"tool"`
+			Args       json.RawMessage `json:"args,omitempty"`
+			RuleIDs    []string        `json:"rule_ids,omitempty"`
+			MaxSeverity string         `json:"max_severity,omitempty"`
+		}
+		enc := json.NewEncoder(out)
+		for _, ev := range allEvents {
+			key := ev.Timestamp.Format(time.RFC3339Nano) + "/" + ev.Tool
+			findings := findingsMap[key]
+			var ruleIDs []string
+			maxSev := ""
+			if len(findings) > 0 {
+				maxS := findings[0].Severity
+				for _, f := range findings {
+					ruleIDs = append(ruleIDs, f.RuleID)
+					if f.Severity > maxS {
+						maxS = f.Severity
+					}
+				}
+				maxSev = maxS.String()
+			}
+			var rawArgs json.RawMessage
+			if ev.Args != nil {
+				rawArgs, _ = json.Marshal(ev.Args)
+			}
+			if err := enc.Encode(jsonlEvent{
+				Timestamp:   ev.Timestamp.Format(time.RFC3339),
+				Client:      ev.Client,
+				Server:      ev.Server,
+				Tool:        ev.Tool,
+				Args:        rawArgs,
+				RuleIDs:     ruleIDs,
+				MaxSeverity: maxSev,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+
+	default:
+		return fmt.Errorf("unknown format %q — use csv or jsonl", format)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// live subcommand
+// ---------------------------------------------------------------------------
+
+func newLiveCmd() *cobra.Command {
+	var client, server string
+	var noColor bool
+	var interval int
+	cmd := &cobra.Command{
+		Use:   "live",
+		Short: "Real-time monitoring — tails agent logs and prints new findings as they arrive",
+		Long: `Poll agent logs every N seconds and print any new flagged events as they
+appear. Useful during an active session to watch for suspicious activity in
+real time.
+
+Press Ctrl-C to stop. Findings already shown are not repeated.`,
+		Example: `  # Watch all clients, refresh every 5 seconds
+  aspex-trace live
+
+  # Watch only Claude Code, refresh every 2 seconds
+  aspex-trace live --client claude-code --interval 2`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runLive(client, server, noColor, interval)
+		},
+	}
+	cmd.Flags().StringVar(&client, "client", "", "Filter to one client")
+	cmd.Flags().StringVar(&server, "server", "", "Filter to one server")
+	cmd.Flags().BoolVar(&noColor, "no-color", false, "Plain-text output")
+	cmd.Flags().IntVar(&interval, "interval", 5, "Polling interval in seconds")
+	return cmd
+}
+
+func runLive(clientFilter, serverFilter string, noColor bool, intervalSecs int) error {
+	c := colorFunc(noColor)
+	bold := "\033[1m"
+	dim := "\033[2m"
+	purple := "\033[35m"
+	red := "\033[91m"
+	yellow := "\033[93m"
+
+	fmt.Fprintf(os.Stdout, "\n  %s  %s  %s\n\n",
+		c(purple+bold, "◆"),
+		c(bold, "aspex-trace live"),
+		c(dim, fmt.Sprintf("polling every %ds · Ctrl-C to stop", intervalSecs)),
+	)
+
+	seen := map[string]bool{} // deduplicate by timestamp+tool+server
+	interval := time.Duration(intervalSecs) * time.Second
+
+	for {
+		sinceTime := time.Now().Add(-2 * interval) // small lookback to catch events between polls
+
+		allEvents, _ := collectEvents(clientFilter, sinceTime)
+
+		if serverFilter != "" {
+			filtered := allEvents[:0]
+			for _, ev := range allEvents {
+				if ev.Server == serverFilter {
+					filtered = append(filtered, ev)
+				}
+			}
+			allEvents = filtered
+		}
+
+		flagged := trace.AnalyzeEvents(allEvents)
+		for _, fe := range flagged {
+			key := fe.Event.Timestamp.Format(time.RFC3339Nano) + "/" + fe.Event.Tool + "/" + fe.Event.Server
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+
+			ts := fe.Event.Timestamp.Format("15:04:05")
+			for _, f := range fe.Findings {
+				sevColor := yellow
+				if f.Severity >= rules.SeverityCritical {
+					sevColor = red + bold
+				} else if f.Severity >= rules.SeverityHigh {
+					sevColor = red
+				}
+				fmt.Fprintf(os.Stdout, "  %s  %s  %s  %s  %s\n",
+					c(dim, ts),
+					c(sevColor, strings.ToUpper(f.Severity.String())),
+					c(bold, f.RuleID),
+					c(bold, fe.Event.Tool),
+					c(dim, fe.Event.Server),
+				)
+				fmt.Fprintf(os.Stdout, "     %s\n", f.Detail)
+			}
+		}
+
+		time.Sleep(interval)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// completion subcommand
+// ---------------------------------------------------------------------------
+
+func newCompletionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "completion [bash|zsh|fish|powershell]",
+		Short: "Generate shell completion script",
+		Long: `Generate a shell completion script for aspex-trace.
+
+Bash:
+  source <(aspex-trace completion bash)
+  # or: aspex-trace completion bash > /etc/bash_completion.d/aspex-trace
+
+Zsh:
+  aspex-trace completion zsh > "${fpath[1]}/_aspex-trace"
+
+Fish:
+  aspex-trace completion fish | source`,
+		ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},
+		Args:                  cobra.ExactArgs(1),
+		DisableFlagsInUseLine: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root := cmd.Root()
+			switch args[0] {
+			case "bash":
+				return root.GenBashCompletion(os.Stdout)
+			case "zsh":
+				return root.GenZshCompletion(os.Stdout)
+			case "fish":
+				return root.GenFishCompletion(os.Stdout, true)
+			case "powershell":
+				return root.GenPowerShellCompletionWithDesc(os.Stdout)
+			default:
+				return fmt.Errorf("unsupported shell: %s", args[0])
+			}
 		},
 	}
 }
+
+// ---------------------------------------------------------------------------
+// baseline subcommand
+// ---------------------------------------------------------------------------
 
 type baselineFlags struct {
 	learn  bool
@@ -98,9 +861,20 @@ func newBaselineCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "baseline",
-		Short: "Learn or manage behavioral baselines",
+		Short: "Learn normal agent behavior and detect deviations",
 		Long: `Learn normal MCP agent behavior from recent logs and save a baseline profile.
-The baseline can later be used with --baseline to detect deviations.`,
+
+The baseline captures which MCP servers are typically used, what tools are called,
+and at what frequency. Run aspex-trace with --baseline to surface anything that
+deviates from that normal pattern — new servers, unusual tools, or spikes in activity.`,
+		Example: `  # Learn from the last 7 days of activity
+  aspex-trace baseline --learn --since 7d
+
+  # Save to a custom location
+  aspex-trace baseline --learn --output ~/aspex-baseline.json
+
+  # Now use it to flag deviations
+  aspex-trace --baseline ~/aspex-baseline.json`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -111,7 +885,7 @@ The baseline can later be used with --baseline to detect deviations.`,
 	cmd.Flags().BoolVar(&bf.learn, "learn", false, "Learn a baseline from recent logs")
 	cmd.Flags().StringVar(&bf.output, "output", "", "Output file path (default: ~/.config/aspex/aspex-trace-baseline.json)")
 	cmd.Flags().StringVar(&bf.since, "since", "7d", "How far back to learn from (e.g. 24h, 7d)")
-	cmd.Flags().StringVar(&bf.client, "client", "", "Filter to one client (claude, cursor)")
+	cmd.Flags().StringVar(&bf.client, "client", "", "Filter to one client (claude, cursor, cline, …)")
 
 	return cmd
 }
@@ -125,47 +899,9 @@ func runBaseline(bf baselineFlags) error {
 	if err != nil {
 		return fmt.Errorf("invalid --since value: %w", err)
 	}
-	since := time.Now().Add(-sinceDur)
+	sinceTime := time.Now().Add(-sinceDur)
 
-	var allEvents []logparse.Event
-
-	clients := []string{"claude", "claude-code", "cursor", "windsurf"}
-	if bf.client != "" {
-		clients = []string{bf.client}
-	}
-
-	for _, cl := range clients {
-		var dirs []string
-		switch cl {
-		case "claude":
-			dirs = logparse.ClaudeLogPaths()
-		case "claude-code":
-			dirs = logparse.ClaudeCodeLogPaths()
-		case "cursor":
-			dirs = logparse.CursorLogPaths()
-		case "windsurf":
-			dirs = logparse.WindsurfLogPaths()
-		}
-		for _, dir := range dirs {
-			var evs []logparse.Event
-			var parseErr error
-			switch cl {
-			case "claude":
-				evs, parseErr = logparse.ParseClaudeLogsDir(dir, since)
-			case "claude-code":
-				evs, parseErr = logparse.ParseClaudeCodeProjectsDir(dir, since)
-			case "cursor":
-				evs, parseErr = logparse.ParseCursorLogsDir(dir, since)
-			case "windsurf":
-				evs, parseErr = logparse.ParseWindsurfLogsDir(dir, since)
-			}
-			if parseErr != nil {
-				fmt.Fprintf(os.Stderr, "warning: %s logs (%s): %v\n", cl, dir, parseErr)
-				continue
-			}
-			allEvents = append(allEvents, evs...)
-		}
-	}
+	allEvents, _ := collectEvents(bf.client, sinceTime)
 
 	clientLabel := bf.client
 	if clientLabel == "" {
@@ -179,7 +915,6 @@ func runBaseline(bf baselineFlags) error {
 		outPath = defaultBaselinePath()
 	}
 
-	// Ensure parent directory exists.
 	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
 		return fmt.Errorf("creating output directory: %w", err)
 	}
@@ -192,61 +927,18 @@ func runBaseline(bf baselineFlags) error {
 	return nil
 }
 
+// ---------------------------------------------------------------------------
+// runTrace (root command)
+// ---------------------------------------------------------------------------
+
 func runTrace(tf traceFlags) error {
 	sinceDur, err := parseSince(tf.since)
 	if err != nil {
 		return fmt.Errorf("invalid --since value: %w", err)
 	}
-	since := time.Now().Add(-sinceDur)
+	sinceTime := time.Now().Add(-sinceDur)
 
-	var allEvents []logparse.Event
-	var clientsFound []string
-	serverSet := map[string]struct{}{}
-
-	clients := []string{"claude", "claude-code", "cursor", "windsurf"}
-	if tf.client != "" {
-		clients = []string{tf.client}
-	}
-
-	for _, cl := range clients {
-		var dirs []string
-		switch cl {
-		case "claude":
-			dirs = logparse.ClaudeLogPaths()
-		case "claude-code":
-			dirs = logparse.ClaudeCodeLogPaths()
-		case "cursor":
-			dirs = logparse.CursorLogPaths()
-		case "windsurf":
-			dirs = logparse.WindsurfLogPaths()
-		}
-		found := false
-		for _, dir := range dirs {
-			var evs []logparse.Event
-			var parseErr error
-			switch cl {
-			case "claude":
-				evs, parseErr = logparse.ParseClaudeLogsDir(dir, since)
-			case "claude-code":
-				evs, parseErr = logparse.ParseClaudeCodeProjectsDir(dir, since)
-			case "cursor":
-				evs, parseErr = logparse.ParseCursorLogsDir(dir, since)
-			case "windsurf":
-				evs, parseErr = logparse.ParseWindsurfLogsDir(dir, since)
-			}
-			if parseErr != nil {
-				fmt.Fprintf(os.Stderr, "warning: %s logs (%s): %v\n", cl, dir, parseErr)
-				continue
-			}
-			if len(evs) > 0 {
-				found = true
-			}
-			allEvents = append(allEvents, evs...)
-		}
-		if found {
-			clientsFound = append(clientsFound, cl)
-		}
-	}
+	allEvents, clientsFound := collectEvents(tf.client, sinceTime)
 
 	// Apply server filter.
 	if tf.server != "" {
@@ -260,6 +952,7 @@ func runTrace(tf traceFlags) error {
 	}
 
 	// Collect server names.
+	serverSet := map[string]struct{}{}
 	for _, ev := range allEvents {
 		if ev.Server != "" {
 			serverSet[ev.Server] = struct{}{}
@@ -280,7 +973,6 @@ func runTrace(tf traceFlags) error {
 		} else {
 			deviations := baseline.Compare(b, allEvents)
 			for _, dev := range deviations {
-				// Find or create a synthetic FlaggedEvent for this deviation.
 				sev := deviationSeverity(dev.Severity)
 				finding := rules.Finding{
 					RuleID:   "baseline-" + dev.Kind,
@@ -288,8 +980,6 @@ func runTrace(tf traceFlags) error {
 					Severity: sev,
 					Detail:   dev.Detail,
 				}
-				// Attach the finding to the first matching event for this server,
-				// or create a synthetic FlaggedEvent.
 				merged := false
 				for i := range flagged {
 					if flagged[i].Event.Server == dev.ServerName {
@@ -299,7 +989,6 @@ func runTrace(tf traceFlags) error {
 					}
 				}
 				if !merged {
-					// Create a synthetic event reference for the deviation.
 					syntheticEvent := logparse.Event{
 						Server: dev.ServerName,
 						Client: b.ClientName,
@@ -311,6 +1000,19 @@ func runTrace(tf traceFlags) error {
 				}
 			}
 		}
+	}
+
+	// Suppress low-signal rules for known coding-agent clients.
+	codingAgents := map[string]bool{"claude-code": true, "cursor": true, "windsurf": true, "cline": true, "roo-cline": true}
+	allCodingAgents := len(clientsFound) > 0
+	for _, cl := range clientsFound {
+		if !codingAgents[cl] {
+			allCodingAgents = false
+			break
+		}
+	}
+	if tf.suppressNoise || allCodingAgents {
+		flagged = suppressCodingAgentNoise(flagged)
 	}
 
 	if tf.sarifOut {
@@ -329,13 +1031,99 @@ func runTrace(tf traceFlags) error {
 		Servers:     servers,
 		Clients:     clientsFound,
 		Flagged:     flagged,
+		Activity:    report.ComputeActivity(allEvents),
 		NoColor:     tf.noColor,
+		SummaryOnly: tf.summary,
 	}
 	report.PrintTraceReport(os.Stdout, r)
 	return checkTraceExitCode(tf.failOn, flagged)
 }
 
-// deviationSeverity maps a baseline severity string to a rules.Severity.
+// ---------------------------------------------------------------------------
+// shared helpers
+// ---------------------------------------------------------------------------
+
+// collectEvents loads events from all supported clients, optionally filtered.
+func collectEvents(clientFilter string, since time.Time) ([]logparse.Event, []string) {
+	clients := supportedClients
+	if clientFilter != "" {
+		clients = []string{clientFilter}
+	}
+
+	var allEvents []logparse.Event
+	var clientsFound []string
+
+	for _, cl := range clients {
+		var dirs []string
+		switch cl {
+		case "claude":
+			dirs = logparse.ClaudeLogPaths()
+		case "claude-code":
+			dirs = logparse.ClaudeCodeLogPaths()
+		case "cursor":
+			dirs = logparse.CursorLogPaths()
+		case "windsurf":
+			dirs = logparse.WindsurfLogPaths()
+		case "cline":
+			dirs = logparse.ClineLogPaths()
+		case "roo-cline":
+			dirs = logparse.RooCodeLogPaths()
+		}
+		found := false
+		for _, dir := range dirs {
+			var evs []logparse.Event
+			var parseErr error
+			switch cl {
+			case "claude":
+				evs, parseErr = logparse.ParseClaudeLogsDir(dir, since)
+			case "claude-code":
+				evs, parseErr = logparse.ParseClaudeCodeProjectsDir(dir, since)
+			case "cursor":
+				evs, parseErr = logparse.ParseCursorLogsDir(dir, since)
+			case "windsurf":
+				evs, parseErr = logparse.ParseWindsurfLogsDir(dir, since)
+			case "cline":
+				evs, parseErr = logparse.ParseClineTasksDir(dir, since)
+			case "roo-cline":
+				evs, parseErr = logparse.ParseRooCodeTasksDir(dir, since)
+			}
+			if parseErr != nil {
+				fmt.Fprintf(os.Stderr, "warning: %s logs (%s): %v\n", cl, dir, parseErr)
+				continue
+			}
+			if len(evs) > 0 {
+				found = true
+			}
+			allEvents = append(allEvents, evs...)
+		}
+		if found {
+			clientsFound = append(clientsFound, cl)
+		}
+	}
+	return allEvents, clientsFound
+}
+
+func suppressCodingAgentNoise(flagged []trace.FlaggedEvent) []trace.FlaggedEvent {
+	suppressRules := map[string]bool{
+		"AT005": true,
+		"AT004": true,
+	}
+	var out []trace.FlaggedEvent
+	for _, fe := range flagged {
+		var keep []rules.Finding
+		for _, f := range fe.Findings {
+			if !suppressRules[f.RuleID] {
+				keep = append(keep, f)
+			}
+		}
+		if len(keep) > 0 {
+			fe.Findings = keep
+			out = append(out, fe)
+		}
+	}
+	return out
+}
+
 func deviationSeverity(s string) rules.Severity {
 	switch s {
 	case "high":
@@ -350,7 +1138,6 @@ func deviationSeverity(s string) rules.Severity {
 }
 
 func parseSince(s string) (time.Duration, error) {
-	// Support "7d" shorthand as well as standard Go durations.
 	if len(s) > 1 && s[len(s)-1] == 'd' {
 		days := s[:len(s)-1]
 		var d int
@@ -381,7 +1168,7 @@ func checkTraceExitCode(failOn string, flagged []trace.FlaggedEvent) error {
 	for _, fe := range flagged {
 		for _, f := range fe.Findings {
 			if f.Severity >= threshold {
-				os.Exit(1)
+				return errTraceExitOne
 			}
 		}
 	}
@@ -400,4 +1187,54 @@ func parseTraceSeverity(s string) rules.Severity {
 		return rules.SeverityLow
 	}
 	return rules.SeverityHigh
+}
+
+// ---------------------------------------------------------------------------
+// display helpers
+// ---------------------------------------------------------------------------
+
+func colorFunc(noColor bool) func(string, string) string {
+	return func(col, text string) string {
+		if noColor {
+			return text
+		}
+		return col + text + "\033[0m"
+	}
+}
+
+func sortedByCount(m map[string]int) []string {
+	type kv struct {
+		k string
+		v int
+	}
+	var pairs []kv
+	for k, v := range m {
+		pairs = append(pairs, kv{k, v})
+	}
+	sort.Slice(pairs, func(i, j int) bool {
+		if pairs[i].v != pairs[j].v {
+			return pairs[i].v > pairs[j].v
+		}
+		return pairs[i].k < pairs[j].k
+	})
+	out := make([]string, len(pairs))
+	for i, p := range pairs {
+		out[i] = p.k
+	}
+	return out
+}
+
+func bar(val, total, width int, noColor bool) string {
+	if total == 0 {
+		return strings.Repeat(" ", width)
+	}
+	filled := (val * width) / total
+	if filled < 1 && val > 0 {
+		filled = 1
+	}
+	b := strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
+	if noColor {
+		return b
+	}
+	return "\033[36m" + b + "\033[0m"
 }

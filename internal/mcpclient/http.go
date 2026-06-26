@@ -27,8 +27,10 @@ func InspectHTTP(ctx context.Context, serverURL string) (*InspectResult, error) 
 	defer cancel()
 
 	c := &httpClient{
-		serverURL:  serverURL,
-		httpClient: &http.Client{},
+		serverURL: serverURL,
+		httpClient: &http.Client{
+			Timeout: initTimeout,
+		},
 	}
 
 	info, err := c.initialize(ctx)
@@ -100,8 +102,10 @@ func (c *httpClient) send(ctx context.Context, method string, params interface{}
 		return parseSSEResponse(resp.Body, id)
 	}
 
-	// Plain JSON response.
-	data, err := io.ReadAll(resp.Body)
+	// Plain JSON response — cap at 10 MB to prevent memory exhaustion from a
+	// malicious server returning an unbounded body.
+	const maxResponseBytes = 10 * 1024 * 1024
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
@@ -116,8 +120,10 @@ func (c *httpClient) send(ctx context.Context, method string, params interface{}
 }
 
 // parseSSEResponse reads an SSE stream and returns the first JSON-RPC result matching id.
+// The reader is capped at 10 MB to prevent memory exhaustion from a malicious server.
 func parseSSEResponse(r io.Reader, id int64) (json.RawMessage, error) {
-	scanner := bufio.NewScanner(r)
+	const maxSSEBytes = 10 * 1024 * 1024
+	scanner := bufio.NewScanner(io.LimitReader(r, maxSSEBytes))
 	for scanner.Scan() {
 		line := scanner.Text()
 		// Skip comments and empty lines.
@@ -159,7 +165,7 @@ func (c *httpClient) initialize(ctx context.Context) (ServerInfo, error) {
 		"protocolVersion": "2024-11-05",
 		"clientInfo": map[string]string{
 			"name":    "aspex-scan",
-			"version": "0.1.0",
+			"version": ClientVersion,
 		},
 		"capabilities": map[string]interface{}{},
 	}

@@ -139,7 +139,7 @@ func Save(b *Baseline, path string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0600)
 }
 
 // Load reads a baseline from a JSON file.

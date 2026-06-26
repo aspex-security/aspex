@@ -2,6 +2,7 @@ package logparse
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -46,7 +47,10 @@ func ParseWindsurfLogsDir(dir string, since time.Time) ([]Event, error) {
 		if e.IsDir() {
 			// Recurse one level — Windsurf sessions are in dated subdirectories.
 			subDir := filepath.Join(dir, e.Name())
-			subEvs, _ := ParseWindsurfLogsDir(subDir, since)
+			subEvs, subErr := ParseWindsurfLogsDir(subDir, since)
+			if subErr != nil {
+				fmt.Fprintf(os.Stderr, "aspex warning: scan %s: %v\n", subDir, subErr)
+			}
 			events = append(events, subEvs...)
 			continue
 		}
@@ -58,8 +62,11 @@ func ParseWindsurfLogsDir(dir string, since time.Time) ([]Event, error) {
 		if err != nil {
 			continue
 		}
-		evs, _ := ParseWindsurfLogReader(f, since)
+		evs, parseErr := ParseWindsurfLogReader(f, since)
 		f.Close()
+		if parseErr != nil {
+			fmt.Fprintf(os.Stderr, "aspex warning: parse %s: %v\n", filepath.Join(dir, name), parseErr)
+		}
 		events = append(events, evs...)
 	}
 	return events, nil
@@ -70,7 +77,7 @@ func ParseWindsurfLogsDir(dir string, since time.Time) ([]Event, error) {
 func ParseWindsurfLogReader(r io.Reader, since time.Time) ([]Event, error) {
 	var events []Event
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
