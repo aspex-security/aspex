@@ -5,6 +5,8 @@ bin/
 *.test
 *.out
 # compiled binaries in repo root
+/aspex-scan
+/aspex-trace
 /mcp-scan
 /agent-trace
 # npm binary wrappers
@@ -12,6 +14,7 @@ npm/mcp-scan/bin/
 npm/agent-trace/bin/
 # macOS metadata
 .DS_Store
+**/.DS_Store
 # claude session files
 .claude/
 # local dev artifacts

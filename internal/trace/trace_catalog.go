@@ -3,6 +3,7 @@
 package trace
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/aspex-security/aspex/internal/logparse"
@@ -10,15 +11,17 @@ import (
 )
 
 // traceCatalogRule fires when ANY toolNames substring matches the tool name (case-insensitive),
-// OR when ANY argPatterns substring is found in any argument value (case-insensitive).
+// OR when ANY argPatterns substring is found in any argument value (case-insensitive),
+// OR when ANY argRegexes pattern matches any argument value (case-insensitive, compiled once at init).
 type traceCatalogRule struct {
 	ruleID      string
 	name        string
 	sev         rules.Severity
 	fix         string
 	mapping     string
-	toolNames   []string // substring matches against tool name
-	argPatterns []string // substring matches against any argument value
+	toolNames   []string         // substring matches against tool name
+	argPatterns []string         // substring matches against any argument value
+	argRegexes  []*regexp.Regexp // compiled regex matches against any argument value
 }
 
 var traceCatalogRules = []traceCatalogRule{
@@ -127,9 +130,11 @@ var traceCatalogRules = []traceCatalogRule{
 		fix:     "Curl-piped-to-shell downloads and executes arbitrary remote code. Investigate immediately.",
 		mapping: "OWASP LLM06, CWE-78",
 		argPatterns: []string{
-			"| sh", "| bash", "| zsh", "| python",
-			"|sh", "|bash", "|zsh", "|python",
-			"curl | ", "wget | ",
+			"curl | sh", "curl | bash", "curl | zsh", "curl | python",
+			"curl |sh", "curl |bash", "curl |zsh", "curl |python",
+			"wget | sh", "wget | bash", "wget | zsh", "wget | python",
+			"wget |sh", "wget |bash", "wget |zsh", "wget |python",
+			"curl -s | ", "curl -sL | ", "curl --silent | ",
 		},
 	},
 	// AT029: Base64-encoded command in arguments
@@ -140,8 +145,10 @@ var traceCatalogRules = []traceCatalogRule{
 		fix:     "Base64-encoded commands are a common obfuscation technique. Decode and inspect the payload.",
 		mapping: "OWASP LLM06, CWE-78",
 		argPatterns: []string{
-			"base64 -d |", "base64 --decode |",
-			"echo * | base64", "| base64 -d",
+			"base64 -d | sh", "base64 -d | bash", "base64 -d | zsh", "base64 -d | python",
+			"base64 --decode | sh", "base64 --decode | bash",
+			"base64 -d|sh", "base64 -d|bash",
+			"echo * | base64",
 			"-encodedcommand ", "-enc ",
 		},
 	},
@@ -605,15 +612,17 @@ var traceCatalogRules = []traceCatalogRule{
 
 	// ── Sensitive data patterns in arguments ──────────────────────────────────
 
-	// AT069: High-entropy string (potential credential) in arguments
+	// AT069: AWS access key ID pattern in arguments.
+	// Requires the full format (prefix + 16 uppercase alphanumerics) to avoid
+	// false positives on words/paths that happen to contain the 4-char prefix.
 	{
 		ruleID:  "AT069",
 		name:    "AWS access key pattern in tool arguments",
 		sev:     rules.SeverityCritical,
 		fix:     "An AWS access key ID was found in tool arguments. If this is real, rotate it immediately.",
 		mapping: "OWASP LLM02, CWE-522",
-		argPatterns: []string{
-			"akia", "asia", "aida", "aroa", "aipa", // AWS key ID prefixes
+		argRegexes: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)(AKIA|ASIA|AIDA|AROA|AIPA)[A-Z0-9]{16}`),
 		},
 	},
 	// AT070: GitHub token in arguments
@@ -808,9 +817,11 @@ func EvalEventCatalog(ev *logparse.Event) []rules.Finding {
 	var f []rules.Finding
 	nameLower := strings.ToLower(ev.Tool)
 
-	// Collect all argument values for pattern matching.
+	// Collect non-content argument values for pattern matching.
+	// Content args (file bodies, edit strings) are excluded to prevent false positives
+	// when an agent writes source code that contains patterns like "| bash" as string literals.
 	var allArgs strings.Builder
-	for _, v := range ev.Args {
+	for _, v := range pathArgs(ev.Args) {
 		allArgs.WriteString(strings.ToLower(v))
 		allArgs.WriteByte('\n')
 	}
@@ -831,6 +842,15 @@ func EvalEventCatalog(ev *logparse.Event) []rules.Finding {
 			for _, pat := range rule.argPatterns {
 				if strings.Contains(argsStr, strings.ToLower(pat)) {
 					detail = "Tool '" + ev.Tool + "' arguments contain pattern '" + pat + "'."
+					matched = true
+					break
+				}
+			}
+		}
+		if !matched {
+			for _, re := range rule.argRegexes {
+				if re.MatchString(argsStr) {
+					detail = "Tool '" + ev.Tool + "' arguments match pattern '" + re.String() + "'."
 					matched = true
 					break
 				}

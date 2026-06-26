@@ -11,7 +11,7 @@
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Email: [security@onyx.security](mailto:security@onyx.security)
+Email: [steven.d@onyx.security](mailto:steven.d@onyx.security)
 
 Please include:
 - A description of the vulnerability and its potential impact.
@@ -49,14 +49,13 @@ Use `--no-exec` if you do not trust the servers in your config. This flag skips 
 - Never read env variable values from config files (only key names are inspected for patterns like `_SECRET`, `_TOKEN`, `_KEY`).
 - Never send findings, configs, file paths, tool names, or any scan data to any remote endpoint.
 - Never modify MCP client configs or log files.
-- No telemetry unless explicitly opted in via `MCP_SCAN_TELEMETRY=on` (off by default). Even then, only anonymous aggregate counters are sent, never finding details or file paths.
+- No telemetry. Both tools are fully offline; no data is ever sent anywhere.
 
 ### Supply chain
 
 Release binaries are built with CGO disabled and reproducible build flags. Every release includes:
 
 - cosign signature (keyless, Sigstore): `checksums.txt.pem` + `checksums.txt.sig`
-- SLSA provenance (`provenance.intoto.jsonl`)
 - SPDX SBOM (`sbom.spdx.json`)
 
 Verify a release binary:
@@ -77,14 +76,12 @@ sha256sum --check --ignore-missing checksums.txt
 Go module dependencies are pinned in `go.sum` and audited by:
 
 - `govulncheck` in CI on every push and PR.
-- Dependabot automatic PR creation for dependency updates.
 
 ### CI/CD
 
 The release pipeline runs in GitHub Actions with the following controls:
 
 - OIDC-based cosign signing (no long-lived signing keys stored anywhere).
-- Signed release provenance via the `slsa-github-generator` action.
 - NPM publish gated on the same signed release artifacts.
 
 ---

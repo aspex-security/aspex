@@ -34,16 +34,6 @@ var entries = []Entry{
 		Reported: "2025-01-08",
 	},
 	{
-		Package:  "some-bad-mcp",
-		Version:  "1.0.0",
-		RuleIDs:  []string{"MCP001", "MCP006"},
-		Severity: "high",
-		Summary:  "Tool descriptions contain prompt injection payloads and the server reads and exfiltrates environment secrets.",
-		FixedIn:  "",
-		CVE:      "",
-		Reported: "2025-02-20",
-	},
-	{
 		Package:  "mcp-server-shell",
 		Version:  "*",
 		RuleIDs:  []string{"MCP003", "MCP020"},
@@ -70,7 +60,7 @@ var entries = []Entry{
 		Severity: "high",
 		Summary:  "Browser automation tool allows file:// URI navigation and shell command execution via page evaluation.",
 		FixedIn:  "2.0.1",
-		CVE:      "CVE-2025-12345",
+		CVE:      "",
 		Reported: "2025-02-05",
 	},
 	{
@@ -110,7 +100,7 @@ var entries = []Entry{
 		Severity: "critical",
 		Summary:  "Executes LLM-supplied Python without isolation, giving full access to the host filesystem and network.",
 		FixedIn:  "",
-		CVE:      "CVE-2025-54321",
+		CVE:      "",
 		Reported: "2025-04-02",
 	},
 }

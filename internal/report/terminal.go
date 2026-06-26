@@ -4,14 +4,34 @@ package report
 import (
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/aspex-security/aspex/internal/inspect"
 	"github.com/aspex-security/aspex/internal/rules"
 	"github.com/aspex-security/aspex/internal/score"
 )
+
+// ansiEscapeRe matches ANSI/VT control sequences that a malicious MCP server
+// could embed in tool names or descriptions to manipulate terminal display.
+var ansiEscapeRe = regexp.MustCompile(`\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])`)
+
+// SanitizeForTerminal strips ANSI escape sequences and non-printable control
+// characters from any string before rendering to the terminal. Exported so
+// callers outside the report package (e.g. watch mode) can sanitize filesystem
+// paths before printing.
+func SanitizeForTerminal(s string) string {
+	s = ansiEscapeRe.ReplaceAllString(s, "")
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) && r != '\t' && r != '\n' {
+			return -1
+		}
+		return r
+	}, s)
+}
 
 // ANSI escape codes.
 const (
@@ -238,8 +258,8 @@ func PrintScanReport(w io.Writer, r ScanReport) {
 		for _, sr := range oks {
 			fmt.Fprintf(w, "  %s  %-28s  %s  %s\n",
 				c(colorBrGreen, "○"),
-				sr.srv.Entry.Name,
-				c(colorDim, sr.srv.Entry.Client),
+				SanitizeForTerminal(sr.srv.Entry.Name),
+				c(colorDim, SanitizeForTerminal(sr.srv.Entry.Client)),
 				c(colorBrGreen+colorDim, "100 / 100"),
 			)
 		}
@@ -303,9 +323,9 @@ func printServerBlock(w io.Writer, c colorFn, col string, srv *inspect.Server, s
 	}
 	fmt.Fprintf(w, "  %s  %s%s%s  %s  %s\n",
 		c(col, "◉"),
-		c(colorBold, srv.Entry.Name),
+		c(colorBold, SanitizeForTerminal(srv.Entry.Name)),
 		strings.Repeat(" ", namePad),
-		c(colorDim, srv.Entry.Client),
+		c(colorDim, SanitizeForTerminal(srv.Entry.Client)),
 		c(colorDim, "·"),
 		c(col+colorBold, scoreStr),
 	)
@@ -328,19 +348,18 @@ func printFinding(w io.Writer, c colorFn, f rules.Finding) {
 	fmt.Fprintf(w, "     %s  %s  %s\n",
 		c(sevCol+colorBold, sevLabel),
 		c(colorPurple, f.RuleID),
-		c(colorBold, f.Name),
+		c(colorBold, SanitizeForTerminal(f.Name)),
 	)
 	if f.Detail != "" {
-		// Wrap detail at 58 chars.
-		for _, line := range wrapText(f.Detail, 58) {
+		for _, line := range wrapText(SanitizeForTerminal(f.Detail), 58) {
 			fmt.Fprintf(w, "     %s %s\n", c(colorDim, "│"), c(colorDim, line))
 		}
 	}
 	if f.Mapping != "" {
-		fmt.Fprintf(w, "     %s %s\n", c(colorDim, "│"), c(colorDim+colorPurple, f.Mapping))
+		fmt.Fprintf(w, "     %s %s\n", c(colorDim, "│"), c(colorDim+colorPurple, SanitizeForTerminal(f.Mapping)))
 	}
 	if f.Fix != "" {
-		fmt.Fprintf(w, "     %s %s %s\n", c(colorDim, "╰"), c(colorCyan, "fix:"), f.Fix)
+		fmt.Fprintf(w, "     %s %s %s\n", c(colorDim, "╰"), c(colorCyan, "fix:"), SanitizeForTerminal(f.Fix))
 	}
 	fmt.Fprintln(w)
 }

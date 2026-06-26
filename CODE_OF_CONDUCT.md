@@ -36,7 +36,7 @@ This code of conduct applies in all project spaces: GitHub issues, pull requests
 
 ## Enforcement
 
-Violations may be reported to [conduct@onyx.security](mailto:conduct@onyx.security). All reports will be reviewed and investigated. The project maintainers will respond in the way they judge appropriate given the circumstances, up to and including permanent removal from the project.
+Violations may be reported to [steven.d@onyx.security](mailto:steven.d@onyx.security). All reports will be reviewed and investigated. The project maintainers will respond in the way they judge appropriate given the circumstances, up to and including permanent removal from the project.
 
 Maintainers who do not follow or enforce this code of conduct may face temporary or permanent consequences as determined by other project leads.
 

@@ -2,8 +2,6 @@ package inspect
 
 import (
 	"context"
-	"os"
-	"strings"
 
 	"github.com/aspex-security/aspex/internal/discover"
 	"github.com/aspex-security/aspex/internal/mcpclient"
@@ -39,10 +37,6 @@ func InspectServer(ctx context.Context, entry discover.ServerEntry, opts Options
 	}
 
 	cmd := entry.Command
-	if !strings.Contains(cmd, string(os.PathSeparator)) {
-		// Relative command; rely on PATH.
-	}
-
 	result, err := mcpclient.InspectStdio(ctx, cmd, entry.Args)
 	if err != nil {
 		srv.InspectErr = err

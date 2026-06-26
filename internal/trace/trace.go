@@ -55,7 +55,7 @@ func AnalyzeEvents(events []logparse.Event) []FlaggedEvent {
 		findings = append(findings, checkAT009PackageManifestWrite(ev)...)
 		findings = append(findings, checkAT010BrowserOrKeychainAccess(ev)...)
 		findings = append(findings, checkAT012LateralMovement(ev)...)
-		findings = append(findings, checkAT013PersistenceWrite(ev, state)...)
+		findings = append(findings, checkAT014PersistenceWrite(ev, state)...)
 		findings = append(findings, checkAT014ArbitraryCodeExecution(ev)...)
 		findings = append(findings, checkAT016EnvVarDump(ev)...)
 		findings = append(findings, checkAT017DatabaseDump(ev)...)
@@ -101,7 +101,7 @@ func checkAT001SensitivePath(ev *logparse.Event) []rules.Finding {
 	if ev.Event != logparse.EventToolsCall && ev.Event != logparse.EventResourceRead {
 		return nil
 	}
-	for _, arg := range ev.Args {
+	for _, arg := range pathArgs(ev.Args) {
 		lower := strings.ToLower(arg)
 		for _, pat := range sensitivePaths {
 			if strings.Contains(lower, strings.ToLower(pat)) {
@@ -171,8 +171,8 @@ func checkAT003ShellExec(ev *logparse.Event) []rules.Finding {
 	if ev.Event != logparse.EventToolsCall {
 		return nil
 	}
-	// Built-in Claude Code tools (Bash, Read, Edit, etc.) are not MCP shell tools.
-	if ev.Server == "claude-code" {
+	// Built-in Claude Code tools and first-party preview server are not MCP shell tools.
+	if ev.Server == "claude-code" || ev.Server == "Claude_Preview" {
 		return nil
 	}
 	nameLower := strings.ToLower(ev.Tool)
@@ -201,8 +201,10 @@ func checkAT004HighVolumeDataRead(ev *logparse.Event) []rules.Finding {
 		return nil
 	}
 	total := 0
-	for _, v := range ev.Args {
-		total += len(v)
+	for k, v := range ev.Args {
+		if !contentArgKeys[strings.ToLower(k)] {
+			total += len(v)
+		}
 	}
 	if total > largeArgThreshold {
 		return []rules.Finding{{
@@ -301,8 +303,20 @@ var cloudMetadataIndicators = []string{
 	"169.254.170.2",
 }
 
+// writeToolNames are tools that write file content; their content args should not be
+// scanned for URL/pattern matches to avoid flagging code that contains example payloads.
+var writeToolNames = map[string]bool{
+	"write": true, "edit": true, "multiedit": true,
+	"write_file": true, "edit_file": true, "append_file": true,
+	"workflow": true, // workflow script is code content, not a network target
+}
+
 func checkAT007CloudMetadataAccess(ev *logparse.Event) []rules.Finding {
 	if ev.Event != logparse.EventToolsCall {
+		return nil
+	}
+	// Write/Edit tools are writing file content, not making network calls.
+	if writeToolNames[strings.ToLower(ev.Tool)] {
 		return nil
 	}
 	for _, arg := range ev.Args {
@@ -335,7 +349,7 @@ func checkAT008VCSInternalAccess(ev *logparse.Event) []rules.Finding {
 	if ev.Event != logparse.EventToolsCall && ev.Event != logparse.EventResourceRead {
 		return nil
 	}
-	for _, arg := range ev.Args {
+	for _, arg := range pathArgs(ev.Args) {
 		lower := strings.ToLower(arg)
 		for _, p := range vcsInternalPaths {
 			if strings.Contains(lower, strings.ToLower(p)) {
@@ -429,7 +443,7 @@ func checkAT010BrowserOrKeychainAccess(ev *logparse.Event) []rules.Finding {
 			}}
 		}
 	}
-	for _, arg := range ev.Args {
+	for _, arg := range pathArgs(ev.Args) {
 		lower := strings.ToLower(arg)
 		for _, p := range browserKeychainPaths {
 			if strings.Contains(lower, strings.ToLower(p)) {
@@ -511,11 +525,14 @@ func checkAT012LateralMovement(ev *logparse.Event) []rules.Finding {
 	if ev.Event != logparse.EventToolsCall && ev.Event != logparse.EventResourceRead {
 		return nil
 	}
-	for _, arg := range ev.Args {
+	for _, arg := range pathArgs(ev.Args) {
 		// Normalize path separators for comparison.
 		normalized := strings.ReplaceAll(arg, "\\", "/")
-		// Skip if the path is under the current user's own home directory.
-		if currentUserHome != "" && strings.HasPrefix(normalized, strings.ReplaceAll(currentUserHome, "\\", "/")) {
+		normalizedHome := strings.ReplaceAll(currentUserHome, "\\", "/")
+		// Skip if the current user's home directory appears anywhere in the arg.
+		// Using Contains rather than HasPrefix because args may be shell commands
+		// (e.g. "cd /Users/alice/repo && git ...") not bare paths.
+		if currentUserHome != "" && strings.Contains(normalized, normalizedHome) {
 			continue
 		}
 		for _, pat := range otherUserPatterns {
@@ -592,7 +609,7 @@ var persistencePaths = []string{
 	"~/.config/autostart",
 }
 
-func checkAT013PersistenceWrite(ev *logparse.Event, _ *SessionState) []rules.Finding {
+func checkAT014PersistenceWrite(ev *logparse.Event, _ *SessionState) []rules.Finding {
 	if ev.Event != logparse.EventToolsCall {
 		return nil
 	}
@@ -759,8 +776,8 @@ func checkAT017DatabaseDump(ev *logparse.Event) []rules.Finding {
 			}}
 		}
 	}
-	// Also flag raw SQL queries.
-	for _, arg := range ev.Args {
+	// Also flag raw SQL queries (skip file content args).
+	for _, arg := range pathArgs(ev.Args) {
 		lower := strings.ToLower(arg)
 		if (strings.Contains(lower, "select ") && strings.Contains(lower, " from ")) &&
 			(strings.Contains(lower, "select *") || strings.Contains(lower, "select count")) {
@@ -844,6 +861,10 @@ func checkAT020ScreenCapture(ev *logparse.Event) []rules.Finding {
 	if ev.Event != logparse.EventToolsCall {
 		return nil
 	}
+	// First-party preview server screenshots are developer-initiated UI verification.
+	if ev.Server == "Claude_Preview" {
+		return nil
+	}
 	toolLower := strings.ToLower(ev.Tool)
 	for _, n := range screenCaptureTools {
 		if toolLower == n || strings.Contains(toolLower, n) {
@@ -867,6 +888,45 @@ func checkEvalCatalog(ev *logparse.Event) []rules.Finding {
 }
 
 // ---- helpers -----------------------------------------------------------------
+
+// contentArgKeys are argument keys whose values are file content, not paths or commands.
+// Rules that scan for path/command patterns should skip these to avoid false positives
+// when an agent writes source code that happens to contain sensitive-looking strings.
+var contentArgKeys = map[string]bool{
+	"content":    true,
+	"new_string": true,
+	"old_string": true,
+	"text":       true,
+	"body":       true,
+	"data":       true,
+	"questions":  true, // structured UI option content (AskUserQuestion)
+	"prompt":     true, // agent prompt content
+	"message":    true,
+	"script":     true, // workflow script body
+	"input":      true,
+	"output":     true,
+}
+
+// pathArgs returns only the arg values whose keys suggest a file path (not content).
+// Used by rules that scan for sensitive path patterns.
+// Also excludes shell commands that contain heredoc markers, since the heredoc body
+// is embedded file content and should not be scanned for path/credential patterns.
+func pathArgs(args map[string]string) []string {
+	var out []string
+	for k, v := range args {
+		kl := strings.ToLower(k)
+		if contentArgKeys[kl] {
+			continue
+		}
+		// Shell command args that embed heredoc content — skip the whole value
+		// to avoid flagging example strings/docs written via "cat << EOF".
+		if kl == "command" && strings.Contains(v, "<<") {
+			continue
+		}
+		out = append(out, v)
+	}
+	return out
+}
 
 func itoa(n int) string {
 	s := ""
