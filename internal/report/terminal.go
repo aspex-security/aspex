@@ -292,6 +292,44 @@ func PrintScanReport(w io.Writer, r ScanReport) {
 	if r.HTMLPath != "" || r.LogPath != "" {
 		fmt.Fprintln(w)
 	}
+	// No servers found — show helpful first-run guidance.
+	if len(r.Servers) == 0 {
+		fmt.Fprintf(w, "  %s  No MCP servers found in any client config.\n\n",
+			c(colorBrYellow, "→"),
+		)
+		fmt.Fprintf(w, "  %s\n", c(colorDim, "Get started:"))
+		fmt.Fprintf(w, "  %s  Scan a server by command:   %s\n",
+			c(colorDim, "·"),
+			c(colorCyan, `aspex-scan inspect "npx -y @modelcontextprotocol/server-filesystem ~"`),
+		)
+		fmt.Fprintf(w, "  %s  Check a package name:       %s\n",
+			c(colorDim, "·"),
+			c(colorCyan, "aspex-scan verify @some-org/mcp-server"),
+		)
+		fmt.Fprintf(w, "  %s  See your full MCP surface:  %s\n\n",
+			c(colorDim, "·"),
+			c(colorCyan, "aspex-scan inventory"),
+		)
+		return
+	}
+
+	// Next-step hints based on findings.
+	if r.Overall.Score == 100 {
+		fmt.Fprintf(w, "  %s All servers passed. Next: check for cross-server attack paths with %s\n\n",
+			c(colorBrGreen, "✓"),
+			c(colorCyan, "aspex-scan attack-paths"),
+		)
+	} else if r.Overall.Critical > 0 || r.Overall.High > 0 {
+		fmt.Fprintf(w, "  %s  Deep-inspect a server:   %s\n",
+			c(colorDim, "→"),
+			c(colorCyan, "aspex-scan inspect <server-name>"),
+		)
+		fmt.Fprintf(w, "  %s  Check cross-server risk: %s\n\n",
+			c(colorDim, "→"),
+			c(colorCyan, "aspex-scan attack-paths"),
+		)
+	}
+
 	fmt.Fprintf(w, "  %s\n", c(colorDim, "This scanned 1 machine."))
 	fmt.Fprintf(w, "  %s %s\n\n",
 		c(colorDim, "Continuous fleet-wide monitoring and enforcement by Onyx Security:"),

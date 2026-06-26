@@ -5,14 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/aspex-security/aspex/internal/baseline"
+	"github.com/aspex-security/aspex/internal/killchain"
 	"github.com/aspex-security/aspex/internal/logparse"
 	"github.com/aspex-security/aspex/internal/report"
 	"github.com/aspex-security/aspex/internal/rules"
@@ -120,12 +123,22 @@ BASELINES
 	root.Flags().BoolVar(&tf.suppressNoise, "suppress-noise", false, "Suppress expected alerts for coding-agent sessions (after-hours, etc.)")
 	root.Flags().BoolVar(&tf.summary, "summary", false, "Compact view: stats + finding count only, no per-event detail")
 
+	root.PersistentFlags().BoolP("version", "v", false, "Print version and exit")
+	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if v, _ := cmd.Flags().GetBool("version"); v {
+			fmt.Printf("aspex-trace %s (built %s)\n", version.Version, version.BuildDate)
+			os.Exit(0)
+		}
+		return nil
+	}
+
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newBaselineCmd())
 	root.AddCommand(newStatsCmd())
 	root.AddCommand(newSessionCmd())
 	root.AddCommand(newExportCmd())
 	root.AddCommand(newLiveCmd())
+	root.AddCommand(newKillChainCmd())
 	root.AddCommand(newCompletionCmd())
 
 	return root
@@ -741,6 +754,7 @@ func runLive(clientFilter, serverFilter string, noColor bool, intervalSecs int) 
 	purple := "\033[35m"
 	red := "\033[91m"
 	yellow := "\033[93m"
+	green := "\033[92m"
 
 	fmt.Fprintf(os.Stdout, "\n  %s  %s  %s\n\n",
 		c(purple+bold, "◆"),
@@ -748,53 +762,280 @@ func runLive(clientFilter, serverFilter string, noColor bool, intervalSecs int) 
 		c(dim, fmt.Sprintf("polling every %ds · Ctrl-C to stop", intervalSecs)),
 	)
 
-	seen := map[string]bool{} // deduplicate by timestamp+tool+server
+	// Handle Ctrl-C cleanly.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	done := make(chan struct{})
+	go func() {
+		<-sigCh
+		close(done)
+	}()
+
+	seen := map[string]bool{}
 	interval := time.Duration(intervalSecs) * time.Second
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	findingCount := 0
 
 	for {
-		sinceTime := time.Now().Add(-2 * interval) // small lookback to catch events between polls
-
-		allEvents, _ := collectEvents(clientFilter, sinceTime)
-
-		if serverFilter != "" {
-			filtered := allEvents[:0]
-			for _, ev := range allEvents {
-				if ev.Server == serverFilter {
-					filtered = append(filtered, ev)
-				}
-			}
-			allEvents = filtered
-		}
-
-		flagged := trace.AnalyzeEvents(allEvents)
-		for _, fe := range flagged {
-			key := fe.Event.Timestamp.Format(time.RFC3339Nano) + "/" + fe.Event.Tool + "/" + fe.Event.Server
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-
-			ts := fe.Event.Timestamp.Format("15:04:05")
-			for _, f := range fe.Findings {
-				sevColor := yellow
-				if f.Severity >= rules.SeverityCritical {
-					sevColor = red + bold
-				} else if f.Severity >= rules.SeverityHigh {
-					sevColor = red
-				}
-				fmt.Fprintf(os.Stdout, "  %s  %s  %s  %s  %s\n",
-					c(dim, ts),
-					c(sevColor, strings.ToUpper(f.Severity.String())),
-					c(bold, f.RuleID),
-					c(bold, fe.Event.Tool),
-					c(dim, fe.Event.Server),
+		select {
+		case <-done:
+			fmt.Fprintf(os.Stdout, "\n  %s  Stopped. %s %d finding(s) in this session.\n\n",
+				c(dim, "◇"),
+				c(dim, "→"),
+				findingCount,
+			)
+			if findingCount > 0 {
+				fmt.Fprintf(os.Stdout, "  %s Run %s for a full analysis.\n\n",
+					c(dim, "→"),
+					c(bold, "aspex-trace --since 1h"),
 				)
-				fmt.Fprintf(os.Stdout, "     %s\n", f.Detail)
+			} else {
+				fmt.Fprintf(os.Stdout, "  %s %s\n\n",
+					c(green, "✓"),
+					c(dim, "No anomalies detected while watching."),
+				)
+			}
+			return nil
+
+		case <-ticker.C:
+			sinceTime := time.Now().Add(-2 * interval)
+			allEvents, _ := collectEvents(clientFilter, sinceTime)
+
+			if serverFilter != "" {
+				filtered := allEvents[:0]
+				for _, ev := range allEvents {
+					if ev.Server == serverFilter {
+						filtered = append(filtered, ev)
+					}
+				}
+				allEvents = filtered
+			}
+
+			flagged := trace.AnalyzeEvents(allEvents)
+			for _, fe := range flagged {
+				key := fe.Event.Timestamp.Format(time.RFC3339Nano) + "/" + fe.Event.Tool + "/" + fe.Event.Server
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+
+				ts := fe.Event.Timestamp.Format("15:04:05")
+				for _, f := range fe.Findings {
+					sevColor := yellow
+					if f.Severity >= rules.SeverityCritical {
+						sevColor = red + bold
+					} else if f.Severity >= rules.SeverityHigh {
+						sevColor = red
+					}
+					fmt.Fprintf(os.Stdout, "  %s  %s  %s  %s  %s\n",
+						c(dim, ts),
+						c(sevColor, strings.ToUpper(f.Severity.String())),
+						c(bold, f.RuleID),
+						c(bold, fe.Event.Tool),
+						c(dim, fe.Event.Server),
+					)
+					fmt.Fprintf(os.Stdout, "     %s\n", f.Detail)
+					findingCount++
+				}
 			}
 		}
-
-		time.Sleep(interval)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// killchain subcommand
+// ---------------------------------------------------------------------------
+
+func newKillChainCmd() *cobra.Command {
+	var since, client string
+	var noColor, jsonOut bool
+	cmd := &cobra.Command{
+		Use:   "killchain",
+		Short: "Reconstruct multi-step attack kill chains from agent event logs",
+		Long: `Analyze agent event logs for multi-event sequences that together form a
+complete attack kill chain — not just individual suspicious events, but the
+orchestrated sequence that proves an attack was attempted or succeeded.
+
+Patterns detected:
+  Credential Exfiltration   sensitive file read → outbound network call (< 5 min)
+  Persistence Establishment shell exec → write to startup location
+  Recon to Credential Theft enumeration / recon → credential file access
+  Cross-Server Data Chain   credential read via server A → outbound call via server B
+  Prompt Injection Signature server becomes active with high-risk calls in unexpected context
+
+This is the difference between "something looked suspicious" and "here is the
+evidence that an attack happened."`,
+		Example: `  # Detect kill chains in the last 7 days
+  aspex-trace killchain --since 7d
+
+  # JSON output for SIEM ingest
+  aspex-trace killchain --json
+
+  # Only Cursor sessions
+  aspex-trace killchain --client cursor`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runKillChain(since, client, noColor, jsonOut)
+		},
+	}
+	cmd.Flags().StringVar(&since, "since", "7d", "How far back to analyze")
+	cmd.Flags().StringVar(&client, "client", "", "Filter to one client")
+	cmd.Flags().BoolVar(&noColor, "no-color", false, "Plain-text output")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	return cmd
+}
+
+func runKillChain(since, clientFilter string, noColor, jsonOut bool) error {
+	sinceDur, err := parseSince(since)
+	if err != nil {
+		return fmt.Errorf("invalid --since value: %w", err)
+	}
+	sinceTime := time.Now().Add(-sinceDur)
+
+	allEvents, _ := collectEvents(clientFilter, sinceTime)
+	flagged := trace.AnalyzeEvents(allEvents)
+	chains := killchain.Analyze(allEvents, flagged)
+
+	if jsonOut {
+		type jsonStep struct {
+			Timestamp string   `json:"timestamp"`
+			Tool      string   `json:"tool"`
+			Server    string   `json:"server"`
+			RuleIDs   []string `json:"rule_ids"`
+			Detail    string   `json:"detail"`
+		}
+		type jsonChain struct {
+			Name        string     `json:"name"`
+			Severity    string     `json:"severity"`
+			Description string     `json:"description"`
+			MITRETactic string     `json:"mitre_tactic"`
+			MITRERef    string     `json:"mitre_ref"`
+			WindowStart string     `json:"window_start"`
+			WindowEnd   string     `json:"window_end"`
+			Client      string     `json:"client"`
+			Server      string     `json:"server"`
+			Steps       []jsonStep `json:"steps"`
+		}
+		type jsonOut struct {
+			Version     string      `json:"version"`
+			Since       string      `json:"since"`
+			TotalEvents int         `json:"total_events"`
+			Chains      []jsonChain `json:"chains"`
+		}
+		var jChains []jsonChain
+		for _, ch := range chains {
+			var steps []jsonStep
+			for _, s := range ch.Steps {
+				steps = append(steps, jsonStep{
+					Timestamp: s.Timestamp.Format(time.RFC3339),
+					Tool:      s.Tool,
+					Server:    s.Server,
+					RuleIDs:   s.RuleIDs,
+					Detail:    s.Detail,
+				})
+			}
+			jChains = append(jChains, jsonChain{
+				Name:        ch.Name,
+				Severity:    ch.Severity,
+				Description: ch.Description,
+				MITRETactic: ch.MITRETactic,
+				MITRERef:    ch.MITRERef,
+				WindowStart: ch.WindowStart.Format(time.RFC3339),
+				WindowEnd:   ch.WindowEnd.Format(time.RFC3339),
+				Client:      ch.Client,
+				Server:      ch.Server,
+				Steps:       steps,
+			})
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(jsonOut{
+			Version:     version.Version,
+			Since:       since,
+			TotalEvents: len(allEvents),
+			Chains:      jChains,
+		})
+	}
+
+	c := colorFunc(noColor)
+	bold := "\033[1m"
+	dim := "\033[2m"
+	purple := "\033[35m"
+	red := "\033[91m"
+	yellow := "\033[93m"
+	cyan := "\033[36m"
+	green := "\033[92m"
+
+	fmt.Fprintf(os.Stdout, "\n  %s  %s  %s\n\n",
+		c(purple+bold, "◆"),
+		c(bold, "Kill Chain Analysis"),
+		c(dim, fmt.Sprintf("last %s · %d events analyzed", since, len(allEvents))),
+	)
+
+	if len(chains) == 0 {
+		fmt.Fprintf(os.Stdout, "  %s  No multi-step attack patterns detected.\n\n",
+			c(green, "✓"),
+		)
+		fmt.Fprintf(os.Stdout, "  %s %d events analyzed. Individual findings: run %s\n\n",
+			c(dim, "→"),
+			len(allEvents),
+			c(bold, "aspex-trace --since "+since),
+		)
+		return nil
+	}
+
+	sevColor := func(s string) string {
+		switch s {
+		case "critical":
+			return red + bold
+		case "high":
+			return yellow + bold
+		}
+		return dim
+	}
+
+	for _, ch := range chains {
+		ts := ""
+		if !ch.WindowStart.IsZero() {
+			ts = ch.WindowStart.Format("Jan 02 15:04:05")
+		}
+		fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
+			c(sevColor(ch.Severity), strings.ToUpper(ch.Severity)),
+			c(bold, ch.Name),
+			c(dim, "· "+ts),
+		)
+		fmt.Fprintf(os.Stdout, "     %s\n", ch.Description)
+		fmt.Fprintf(os.Stdout, "     %s %s\n",
+			c(dim, "tactic:"),
+			c(cyan, ch.MITRETactic+" ("+ch.MITRERef+")"),
+		)
+		for i, step := range ch.Steps {
+			connector := "├"
+			if i == len(ch.Steps)-1 {
+				connector = "╰"
+			}
+			stepTs := ""
+			if !step.Timestamp.IsZero() {
+				stepTs = step.Timestamp.Format("15:04:05") + "  "
+			}
+			fmt.Fprintf(os.Stdout, "     %s %s%s  %s\n",
+				c(dim, connector),
+				c(dim, stepTs),
+				c(bold, step.Tool),
+				c(dim, step.Detail),
+			)
+		}
+		fmt.Fprintln(os.Stdout)
+	}
+
+	fmt.Fprintf(os.Stdout, "  %s %d kill chain(s) detected. Run %s to drill into a session.\n\n",
+		c(dim, "─"),
+		len(chains),
+		c(bold, "aspex-trace session"),
+	)
+	return nil
 }
 
 // ---------------------------------------------------------------------------

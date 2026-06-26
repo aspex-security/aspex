@@ -143,6 +143,21 @@ func PrintTraceReport(w io.Writer, r TraceReport) {
 	fmt.Fprintf(w, "  Sessions found:  %d  (last %s)\n", r.Sessions, r.Since)
 	fmt.Fprintf(w, "  Tool calls:      %d across %d server(s)\n\n", r.TotalEvents, len(r.Servers))
 
+	// No logs found — first-run guidance.
+	if r.TotalEvents == 0 {
+		fmt.Fprintf(w, "  %s  No agent activity found in the last %s.\n\n",
+			c(colorBrYellow, "→"), r.Since,
+		)
+		fmt.Fprintf(w, "  %s\n", c(colorDim, "This could mean:"))
+		fmt.Fprintf(w, "  %s  No supported AI agent has run on this machine yet\n", c(colorDim, "·"))
+		fmt.Fprintf(w, "  %s  Logs are older than --since (try %s)\n",
+			c(colorDim, "·"), c(colorCyan, "aspex-trace --since 30d"))
+		fmt.Fprintf(w, "  %s  Try a specific client: %s\n\n",
+			c(colorDim, "·"), c(colorCyan, "aspex-trace --client cursor"))
+		fmt.Fprintf(w, "  Supported clients: claude · claude-code · cursor · windsurf · cline · roo-cline\n\n")
+		return
+	}
+
 	printActivityBlock(w, r, c)
 
 	if len(r.Flagged) == 0 {
@@ -179,7 +194,22 @@ func PrintTraceReport(w io.Writer, r TraceReport) {
 		}
 	}
 
+	// Contextual next steps.
 	fmt.Fprintf(w, "  %s\n", strings.Repeat("-", 48))
+	if len(r.Flagged) > 0 {
+		fmt.Fprintf(w, "  %s Drill into a session:       %s\n",
+			c(colorDim, "→"), c(colorCyan, "aspex-trace session"))
+		fmt.Fprintf(w, "  %s Look for attack patterns:   %s\n",
+			c(colorDim, "→"), c(colorCyan, "aspex-trace killchain --since "+r.Since.String()))
+		fmt.Fprintf(w, "  %s Export for SIEM:            %s\n\n",
+			c(colorDim, "→"), c(colorCyan, "aspex-trace export --format jsonl"))
+	} else {
+		fmt.Fprintf(w, "  %s Broader analysis:  %s · %s\n\n",
+			c(colorDim, "→"),
+			c(colorCyan, "aspex-trace --since 7d"),
+			c(colorCyan, "aspex-trace stats"),
+		)
+	}
 	fmt.Fprintf(w, "  %sThis traced 1 machine. See continuous agent activity across your%s\n", c(colorDim, ""), c(colorReset, ""))
 	fmt.Fprintf(w, "  %sorg: https://onyx.security  (this tool is and will remain free)%s\n\n", c(colorDim, ""), c(colorReset, ""))
 }
