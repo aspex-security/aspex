@@ -17,11 +17,12 @@ import (
 	"github.com/aspex-security/aspex/internal/hook"
 	"github.com/aspex-security/aspex/internal/inspect"
 	"github.com/aspex-security/aspex/internal/mcpclient"
+	"github.com/aspex-security/aspex/internal/phantom"
+	"github.com/aspex-security/aspex/internal/redteam"
 	"github.com/aspex-security/aspex/internal/registry"
 	"github.com/aspex-security/aspex/internal/report"
 	"github.com/aspex-security/aspex/internal/rules"
 	"github.com/aspex-security/aspex/internal/score"
-	"github.com/aspex-security/aspex/internal/phantom"
 	"github.com/aspex-security/aspex/internal/shadow"
 	"github.com/aspex-security/aspex/internal/version"
 	"github.com/aspex-security/aspex/internal/watch"
@@ -51,6 +52,7 @@ type globalFlags struct {
 	sarifFile  string
 	htmlFile   string
 	watchMode  bool
+	explain    bool
 }
 
 func newRootCmd() *cobra.Command {
@@ -132,6 +134,7 @@ COMPARING OVER TIME
 	root.PersistentFlags().StringVar(&gf.sarifFile, "sarif-output", "", "Write SARIF 2.1.0 to a file")
 	root.PersistentFlags().StringVar(&gf.htmlFile, "html", "", "Save a shareable HTML report to this path")
 	root.PersistentFlags().BoolVar(&gf.watchMode, "watch", false, "Auto-rescan when MCP config files change")
+	root.PersistentFlags().BoolVar(&gf.explain, "explain", false, "Show why each finding is a risk, how it could be exploited, and how to fix it")
 
 	root.AddCommand(newInspectCmd(&gf))
 	root.AddCommand(newVersionCmd())
@@ -143,6 +146,7 @@ COMPARING OVER TIME
 	root.AddCommand(newAttackPathsCmd(&gf))
 	root.AddCommand(newShadowCmd(&gf))
 	root.AddCommand(newPhantomCmd(&gf))
+	root.AddCommand(newRedTeamCmd(&gf))
 	root.AddCommand(newCompletionCmd())
 
 	return root
@@ -964,6 +968,7 @@ func newInspectCmd(gf *globalFlags) *cobra.Command {
 				Scores:    []score.ServerScore{sc},
 				Overall:   overall,
 				NoColor:   gf.noColor,
+				Explain:   gf.explain,
 			}
 			report.PrintScanReport(os.Stdout, r)
 			return checkExitCode(gf.failOn, overall)
@@ -1111,6 +1116,278 @@ func newVerifyCmd() *cobra.Command {
 	}
 }
 
+func newRedTeamCmd(gf *globalFlags) *cobra.Command {
+	var (
+		serverFlag  string
+		timeoutSecs int
+		jsonOut     bool
+		categories  []string
+	)
+	cmd := &cobra.Command{
+		Use:   "redteam",
+		Short: "Actively probe MCP servers with adversarial payloads",
+		Long: `Red team mode calls live MCP tools with adversarial inputs and analyzes
+responses for signs of prompt injection success, path traversal, SSRF,
+error disclosure, and prompt leakage. This goes beyond static analysis
+to provide empirical vulnerability evidence.`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runRedTeam(gf, serverFlag, timeoutSecs, jsonOut, categories)
+		},
+	}
+	cmd.Flags().StringVar(&serverFlag, "server", "", "Test only this server (by name)")
+	cmd.Flags().IntVar(&timeoutSecs, "timeout", 10, "Timeout per probe in seconds")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	cmd.Flags().StringSliceVar(&categories, "categories", nil, "Limit to these probe categories (prompt-injection,path-traversal,ssrf,command-injection,error-disclosure,prompt-leakage)")
+	return cmd
+}
+
+func runRedTeam(gf *globalFlags, serverFlag string, timeoutSecs int, jsonOut bool, categories []string) error {
+	servers, _ := discover.DiscoverAll(gf.clients)
+	if len(servers) == 0 {
+		fmt.Fprintln(os.Stdout, "  No MCP servers found.")
+		return nil
+	}
+
+	// Filter by --server flag.
+	if serverFlag != "" {
+		var filtered []discover.ServerEntry
+		for _, s := range servers {
+			if s.Name == serverFlag {
+				filtered = append(filtered, s)
+			}
+		}
+		servers = filtered
+		if len(servers) == 0 {
+			return fmt.Errorf("no server named %q found", serverFlag)
+		}
+	}
+
+	// Build category filter set.
+	catFilter := map[redteam.ProbeCategory]bool{}
+	for _, c := range categories {
+		catFilter[redteam.ProbeCategory(c)] = true
+	}
+
+	c := func(col, text string) string {
+		if gf.noColor || jsonOut || gf.jsonOut {
+			return text
+		}
+		return col + text + "\033[0m"
+	}
+	bold := "\033[1m"
+	dim := "\033[2m"
+	purple := "\033[35m"
+	red := "\033[91m"
+	green := "\033[92m"
+	yellow := "\033[93m"
+
+	if !jsonOut && !gf.jsonOut {
+		fmt.Fprintf(os.Stdout, "\n  %s  %s\n  %s %d server(s) · timeout %ds per probe\n\n",
+			c(purple+bold, "◆"),
+			c(bold, "Red Team Probe"),
+			c(dim, "→"),
+			len(servers),
+			timeoutSecs,
+		)
+	}
+
+	type jsonVuln struct {
+		Server   string   `json:"server"`
+		Tool     string   `json:"tool"`
+		Probe    string   `json:"probe"`
+		Category string   `json:"category"`
+		Severity string   `json:"severity"`
+		Detected []string `json:"detected"`
+		Response string   `json:"response,omitempty"`
+	}
+	type jsonServerResult struct {
+		Name       string     `json:"name"`
+		Client     string     `json:"client"`
+		ToolCount  int        `json:"tool_count"`
+		ProbeCount int        `json:"probe_count"`
+		Error      string     `json:"error,omitempty"`
+	}
+
+	var allVulns []jsonVuln
+	var jsonServers []jsonServerResult
+	totalProbes := 0
+	totalVulns := 0
+
+	ctx := context.Background()
+
+	for _, entry := range servers {
+		if !jsonOut && !gf.jsonOut {
+			fmt.Fprintf(os.Stdout, "  %s %s\r",
+				c(dim, "probing"),
+				c(bold, entry.Name),
+			)
+		}
+
+		// Inspect to get tools list.
+		opts := inspect.Options{NoExec: gf.noExec}
+		srv := inspect.InspectServer(ctx, entry, opts)
+
+		if srv.StaticOnly && !gf.noExec {
+			if !jsonOut && !gf.jsonOut {
+				fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
+					c(yellow, "~"),
+					c(bold, entry.Name),
+					c(dim, "static-only (use --no-exec=false to probe)"),
+				)
+			}
+			jsonServers = append(jsonServers, jsonServerResult{
+				Name:   entry.Name,
+				Client: entry.Client,
+				Error:  "static-only server skipped",
+			})
+			continue
+		}
+
+		if len(srv.Tools) == 0 {
+			if !jsonOut && !gf.jsonOut {
+				fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
+					c(dim, "-"),
+					c(bold, entry.Name),
+					c(dim, "no tools found"),
+				)
+			}
+			jsonServers = append(jsonServers, jsonServerResult{
+				Name:   entry.Name,
+				Client: entry.Client,
+			})
+			continue
+		}
+
+		serverProbes := 0
+		serverVulns := 0
+
+		for _, tool := range srv.Tools {
+			probes := redteam.ProbesForTool(tool)
+
+			// Filter by category if requested.
+			if len(catFilter) > 0 {
+				var filtered []redteam.Probe
+				for _, p := range probes {
+					if catFilter[p.Category] {
+						filtered = append(filtered, p)
+					}
+				}
+				probes = filtered
+			}
+
+			if len(probes) == 0 {
+				continue
+			}
+
+			probeCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSecs)*time.Second)
+			results := redteam.RunProbes(probeCtx, entry, tool, probes)
+			cancel()
+
+			serverProbes += len(results)
+			totalProbes += len(results)
+
+			var toolVulns []redteam.ProbeResult
+			for _, r := range results {
+				if r.Vulnerable() {
+					toolVulns = append(toolVulns, r)
+					serverVulns++
+					totalVulns++
+					allVulns = append(allVulns, jsonVuln{
+						Server:   entry.Name,
+						Tool:     tool.Name,
+						Probe:    r.Probe.Name,
+						Category: string(r.Probe.Category),
+						Severity: r.Severity,
+						Detected: r.Triggered,
+						Response: truncate(r.Response, 500),
+					})
+				}
+			}
+
+			if !jsonOut && !gf.jsonOut {
+				if len(toolVulns) > 0 {
+					fmt.Fprintf(os.Stdout, "    %s  %s  %s\n",
+						c(red+bold, "VULNERABLE"),
+						c(bold, tool.Name),
+						c(dim, fmt.Sprintf("%d/%d probes triggered", len(toolVulns), len(results))),
+					)
+					for _, vr := range toolVulns {
+						fmt.Fprintf(os.Stdout, "       %s %s %s\n",
+							c(red, "▸"),
+							c(bold, vr.Probe.Name),
+							c(dim, "("+strings.Join(vr.Triggered, ", ")+")"),
+						)
+					}
+				}
+			}
+		}
+
+		if !jsonOut && !gf.jsonOut {
+			if serverVulns == 0 {
+				fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
+					c(green, "✓"),
+					c(bold, entry.Name),
+					c(dim, fmt.Sprintf("CLEAN · %d probes · %d tools", serverProbes, len(srv.Tools))),
+				)
+			} else {
+				fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
+					c(red+bold, "!"),
+					c(bold, entry.Name),
+					c(dim, fmt.Sprintf("%d vulnerable finding(s) · %d probes · %d tools", serverVulns, serverProbes, len(srv.Tools))),
+				)
+			}
+		}
+
+		jsonServers = append(jsonServers, jsonServerResult{
+			Name:       entry.Name,
+			Client:     entry.Client,
+			ToolCount:  len(srv.Tools),
+			ProbeCount: serverProbes,
+		})
+	}
+
+	if jsonOut || gf.jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(map[string]interface{}{
+			"version": version.Version,
+			"servers": jsonServers,
+			"vulnerabilities": allVulns,
+			"summary": map[string]int{
+				"servers":         len(servers),
+				"tools_probed":    len(jsonServers),
+				"total_probes":    totalProbes,
+				"vulnerabilities": totalVulns,
+			},
+		})
+	}
+
+	fmt.Fprintf(os.Stdout, "\n  %s ", c(dim, "─"))
+	if totalVulns == 0 {
+		fmt.Fprintf(os.Stdout, "%s No vulnerabilities triggered across %d probe(s).\n\n",
+			c(green, "✓"),
+			totalProbes,
+		)
+	} else {
+		fmt.Fprintf(os.Stdout, "%s %d vulnerability finding(s) across %d probe(s). Review results above.\n\n",
+			c(red+bold, fmt.Sprintf("%d", totalVulns)),
+			totalVulns,
+			totalProbes,
+		)
+	}
+
+	return nil
+}
+
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "…"
+}
+
 func runScan(gf globalFlags) error {
 	start := time.Now()
 
@@ -1240,6 +1517,7 @@ func runScan(gf globalFlags) error {
 		NoColor:         gf.noColor,
 		HTMLPath:        absHTML,
 		LogPath:         logPath,
+		Explain:         gf.explain,
 	}
 	report.PrintScanReport(os.Stdout, r)
 	return checkExitCode(gf.failOn, overall)

@@ -62,6 +62,7 @@ type ScanReport struct {
 	NoColor         bool
 	HTMLPath        string // path to HTML report if one was written
 	LogPath         string // path to JSON log if one was written
+	Explain         bool   // show advisory details (why/exploit/impact/fix) per finding
 }
 
 // Spinner shows an animated progress indicator on stderr during scanning.
@@ -127,6 +128,18 @@ var writerStderr io.Writer = io.Discard
 // SetSpinnerOutput sets the writer the spinner writes to (should be os.Stderr).
 func SetSpinnerOutput(w io.Writer) {
 	writerStderr = w
+}
+
+// categoryBar renders a compact bar for a category score out of maxWidth chars.
+func categoryBar(score, maxWidth int) string {
+	filled := (score * maxWidth) / 100
+	if filled < 0 {
+		filled = 0
+	}
+	if filled > maxWidth {
+		filled = maxWidth
+	}
+	return strings.Repeat("█", filled) + strings.Repeat("░", maxWidth-filled)
 }
 
 // scoreBar renders a health-bar where filled blocks represent the score.
@@ -225,6 +238,31 @@ func PrintScanReport(w io.Writer, r ScanReport) {
 	fmt.Fprintf(w, "  %s\n\n", c(colorDim, "╰─────────────────────────────────────────────────────────────╯"))
 	_ = elapsed
 
+	// Category breakdown.
+	if len(r.Scores) > 0 {
+		bd := score.ScoreBreakdown(r.Scores)
+		fmt.Fprintf(w, "  %s\n", c(colorDim+colorBold, "Security categories"))
+		for _, cs := range bd.Categories {
+			gradeCol := colorBrGreen
+			if cs.Score < 80 {
+				gradeCol = colorBrYellow
+			}
+			if cs.Score < 60 {
+				gradeCol = colorRed
+			}
+			bar := categoryBar(cs.Score, 20)
+			fmt.Fprintf(w, "  %-20s %s%s%s  %s  %s\n",
+				c(colorDim, string(cs.Category)),
+				c(gradeCol, bar),
+				c(colorReset, ""),
+				"",
+				c(gradeCol+colorBold, cs.Grade),
+				c(colorDim, cs.Driver),
+			)
+		}
+		fmt.Fprintln(w)
+	}
+
 	// Group servers by worst severity.
 	var criticals, highs, mediums, oks []serverResult
 	for i, srv := range r.Servers {
@@ -248,9 +286,9 @@ func PrintScanReport(w io.Writer, r ScanReport) {
 		}
 	}
 
-	printServerSection(w, c, "CRITICAL", colorBrRed, criticals)
-	printServerSection(w, c, "HIGH", colorBrYellow, highs)
-	printServerSection(w, c, "MEDIUM", colorYellow, mediums)
+	printServerSection(w, c, "CRITICAL", colorBrRed, criticals, r.Explain)
+	printServerSection(w, c, "HIGH", colorBrYellow, highs, r.Explain)
+	printServerSection(w, c, "MEDIUM", colorYellow, mediums, r.Explain)
 
 	// OK servers: compact list.
 	if len(oks) > 0 {
@@ -342,17 +380,17 @@ type serverResult struct {
 	sc  score.ServerScore
 }
 
-func printServerSection(w io.Writer, c colorFn, label, col string, servers []serverResult) {
+func printServerSection(w io.Writer, c colorFn, label, col string, servers []serverResult, explain bool) {
 	if len(servers) == 0 {
 		return
 	}
 	fmt.Fprintf(w, "%s\n\n", sectionLine(label, c, col))
 	for _, sr := range servers {
-		printServerBlock(w, c, col, sr.srv, sr.sc)
+		printServerBlock(w, c, col, sr.srv, sr.sc, explain)
 	}
 }
 
-func printServerBlock(w io.Writer, c colorFn, col string, srv *inspect.Server, sc score.ServerScore) {
+func printServerBlock(w io.Writer, c colorFn, col string, srv *inspect.Server, sc score.ServerScore, explain bool) {
 	// Server name line.
 	scoreStr := fmt.Sprintf("%d / 100", sc.Score)
 	namePad := 42 - len(srv.Entry.Name) - len(srv.Entry.Client)
@@ -375,11 +413,11 @@ func printServerBlock(w io.Writer, c colorFn, col string, srv *inspect.Server, s
 
 	fmt.Fprintln(w)
 	for _, f := range sc.Findings {
-		printFinding(w, c, f)
+		printFinding(w, c, f, explain)
 	}
 }
 
-func printFinding(w io.Writer, c colorFn, f rules.Finding) {
+func printFinding(w io.Writer, c colorFn, f rules.Finding, explain bool) {
 	sevCol := findingSeverityColor(f.Severity)
 	sevLabel := fmt.Sprintf("%-8s", f.Severity.String())
 
@@ -399,6 +437,22 @@ func printFinding(w io.Writer, c colorFn, f rules.Finding) {
 	if f.Fix != "" {
 		fmt.Fprintf(w, "     %s %s %s\n", c(colorDim, "╰"), c(colorCyan, "fix:"), SanitizeForTerminal(f.Fix))
 	}
+
+	if explain {
+		if adv, ok := rules.AdvisoryFor(f.RuleID); ok {
+			fmt.Fprintf(w, "     %s %-11s %s\n", c(colorDim, "│"), c(colorBrYellow, "WHY"), c(colorDim, SanitizeForTerminal(adv.Why)))
+			for i, line := range wrapText(SanitizeForTerminal(adv.Exploit), 58) {
+				if i == 0 {
+					fmt.Fprintf(w, "     %s %-11s %s\n", c(colorDim, "│"), c(colorBrYellow, "EXPLOIT"), c(colorDim, line))
+				} else {
+					fmt.Fprintf(w, "     %s %-11s %s\n", c(colorDim, "│"), "", c(colorDim, line))
+				}
+			}
+			fmt.Fprintf(w, "     %s %-11s %s\n", c(colorDim, "│"), c(colorBrYellow, "IMPACT"), c(colorDim, SanitizeForTerminal(adv.Impact)))
+			fmt.Fprintf(w, "     %s %-11s %s\n", c(colorDim, "╰"), c(colorBrYellow, "CONFIDENCE"), c(colorDim, adv.Confidence))
+		}
+	}
+
 	fmt.Fprintln(w)
 }
 
