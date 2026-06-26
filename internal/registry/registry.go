@@ -4,7 +4,7 @@ package registry
 type Entry struct {
 	Package  string   // npm package name e.g. "@some/mcp-server"
 	Version  string   // affected version or "*" for all
-	RuleIDs  []string // which mcp-scan rules triggered
+	RuleIDs  []string // which aspex-scan rules triggered
 	Severity string   // "critical", "high", "medium", "low"
 	Summary  string   // one sentence description
 	FixedIn  string   // version that fixed it, or "" if unfixed

@@ -4,8 +4,8 @@ Thank you for taking the time to contribute. This project is maintained by [Onyx
 
 The highest-value contributions are:
 
-1. **New mcp-scan rules** -- new patterns that catch real-world misconfigurations or malicious MCP server behaviors.
-2. **New agent-trace anomaly rules** -- new patterns that flag suspicious agent activity in logs.
+1. **New aspex-scan rules** -- new patterns that catch real-world misconfigurations or malicious MCP server behaviors.
+2. **New aspex-trace anomaly rules** -- new patterns that flag suspicious agent activity in logs.
 3. **Log format updates** -- when a supported client ships a new version that changes its log format.
 4. **New client support** -- config discovery or log parsing for a newly popular MCP client.
 5. **Known-bad registry entries** -- documented findings on publicly available npm MCP packages.
@@ -21,18 +21,18 @@ cd aspex
 go mod download
 go test ./...
 
-# Run mcp-scan in static mode against your own config
-go run ./cmd/mcp-scan --no-exec
+# Run aspex-scan in static mode against your own config
+go run ./cmd/aspex-scan --no-exec
 
-# Run agent-trace against your local logs
-go run ./cmd/agent-trace
+# Run aspex-trace against your local logs
+go run ./cmd/aspex-trace
 ```
 
 Requirements: Go 1.22 or later. No other dependencies needed for development.
 
 ---
 
-## Adding an mcp-scan rule
+## Adding an aspex-scan rule
 
 Each rule is a deterministic check that takes a server or tool as input and returns zero or more `Finding` values. Rules must be offline (no network calls), side-effect free, and deterministic.
 
@@ -86,7 +86,7 @@ rules.Finding{
 
 ---
 
-## Adding an agent-trace anomaly rule
+## Adding an aspex-trace anomaly rule
 
 Trace rules operate on `logparse.Event` values. Stateful rules can also update `*SessionState` to track patterns across multiple events.
 
@@ -102,7 +102,7 @@ Stateful rules that track window-based patterns (error bursts, enumeration count
 
 ---
 
-## Adding a new MCP client (mcp-scan discovery)
+## Adding a new MCP client (aspex-scan discovery)
 
 1. Add a client constant to [`internal/discover/discover.go`](internal/discover/discover.go).
 2. Add a `clientConfigPaths` case with OS-specific paths.
@@ -115,11 +115,11 @@ Config parsers must never read env variable values, only key names. Env values s
 
 ---
 
-## Adding a new MCP client (agent-trace log parsing)
+## Adding a new MCP client (aspex-trace log parsing)
 
 1. Create a parser file in [`internal/logparse/`](internal/logparse/) (e.g., `vscode.go`).
 2. Export `ParseXxxLogReader(r io.Reader, since time.Time) ([]Event, error)` and `XxxLogPaths() []string`.
-3. Wire it into [`cmd/agent-trace/main.go`](cmd/agent-trace/main.go).
+3. Wire it into [`cmd/aspex-trace/main.go`](cmd/aspex-trace/main.go).
 4. Document the log format in [`docs/log-formats.md`](docs/log-formats.md) with the tested client version pinned.
 5. Add fixture log files in [`testdata/logs/<client>/`](testdata/logs/).
 

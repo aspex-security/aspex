@@ -10,7 +10,7 @@ const { pipeline } = require("stream");
 const VERSION = require("./package.json").version;
 const REPO = "aspex-security/aspex";
 const BIN_DIR = path.join(__dirname, "bin");
-const BIN_NAME = process.platform === "win32" ? "onyx-agent-trace.exe" : "onyx-agent-trace";
+const BIN_NAME = process.platform === "win32" ? "aspex-trace.exe" : "aspex-trace";
 const BIN_PATH = path.join(BIN_DIR, BIN_NAME);
 
 function platformTarget() {
@@ -32,7 +32,7 @@ function platformTarget() {
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
     const follow = (u) => {
-      https.get(u, { headers: { "User-Agent": "onyx-agent-trace-installer" } }, (res) => {
+      https.get(u, { headers: { "User-Agent": "aspex-trace-installer" } }, (res) => {
         if (res.statusCode === 301 || res.statusCode === 302) {
           return follow(res.headers.location);
         }
@@ -50,13 +50,13 @@ function downloadFile(url, dest) {
 async function install() {
   const target = platformTarget();
   const ext = process.platform === "win32" ? ".zip" : ".tar.gz";
-  const assetName = `onyx-agent-trace_${target}${ext}`;
+  const assetName = `aspex-trace_${target}${ext}`;
   const url = `https://github.com/${REPO}/releases/download/v${VERSION}/${assetName}`;
 
   if (!fs.existsSync(BIN_DIR)) fs.mkdirSync(BIN_DIR, { recursive: true });
 
   const archivePath = path.join(BIN_DIR, assetName);
-  console.log(`Downloading onyx-agent-trace v${VERSION} for ${target}...`);
+  console.log(`Downloading aspex-trace v${VERSION} for ${target}...`);
 
   try {
     await downloadFile(url, archivePath);
@@ -74,7 +74,8 @@ async function install() {
 
   fs.unlinkSync(archivePath);
 
-  const extracted = path.join(BIN_DIR, process.platform === "win32" ? "onyx-agent-trace.exe" : "onyx-agent-trace");
+  // The binary extracted from the archive is named aspex-trace (or aspex-trace.exe on Windows).
+  const extracted = path.join(BIN_DIR, BIN_NAME);
   if (extracted !== BIN_PATH) {
     fs.renameSync(extracted, BIN_PATH);
   }
@@ -83,7 +84,7 @@ async function install() {
     fs.chmodSync(BIN_PATH, 0o755);
   }
 
-  console.log("onyx-agent-trace installed successfully.");
+  console.log("aspex-trace installed successfully.");
 }
 
 install().catch((e) => {

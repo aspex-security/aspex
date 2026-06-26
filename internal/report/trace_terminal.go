@@ -10,7 +10,7 @@ import (
 	"github.com/aspex-security/aspex/internal/trace"
 )
 
-// TraceReport is the data for an agent-trace terminal render.
+// TraceReport is the data for an aspex-trace terminal render.
 type TraceReport struct {
 	Version     string
 	Since       time.Duration
@@ -22,7 +22,7 @@ type TraceReport struct {
 	NoColor     bool
 }
 
-// PrintTraceReport writes the agent-trace terminal report to w.
+// PrintTraceReport writes the aspex-trace terminal report to w.
 func PrintTraceReport(w io.Writer, r TraceReport) {
 	c := newColorizer(r.NoColor)
 

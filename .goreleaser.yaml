@@ -69,6 +69,38 @@ archives:
       - LICENSE
       - README.md
 
+  - id: aspex-combined
+    builds: [mcp-scan, agent-trace]
+    name_template: "aspex_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+
+brews:
+  - name: aspex
+    ids: [aspex-combined]
+    repository:
+      owner: aspex-security
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "Brew formula update for aspex version {{ .Tag }}"
+    homepage: "https://github.com/aspex-security/aspex"
+    description: "AI Agent Security Toolkit: scan MCP servers and audit agent activity"
+    license: "Apache-2.0"
+    skip_upload: auto
+    install: |
+      bin.install "aspex-scan"
+      bin.install "aspex-trace"
+    test: |
+      system "#{bin}/aspex-scan version"
+      system "#{bin}/aspex-trace version"
+
 checksum:
   name_template: "checksums.txt"
   algorithm: sha256

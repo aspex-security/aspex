@@ -129,7 +129,7 @@ func runBaseline(bf baselineFlags) error {
 
 	var allEvents []logparse.Event
 
-	clients := []string{"claude", "claude-code", "cursor"}
+	clients := []string{"claude", "claude-code", "cursor", "windsurf"}
 	if bf.client != "" {
 		clients = []string{bf.client}
 	}
@@ -143,6 +143,8 @@ func runBaseline(bf baselineFlags) error {
 			dirs = logparse.ClaudeCodeLogPaths()
 		case "cursor":
 			dirs = logparse.CursorLogPaths()
+		case "windsurf":
+			dirs = logparse.WindsurfLogPaths()
 		}
 		for _, dir := range dirs {
 			var evs []logparse.Event
@@ -154,6 +156,8 @@ func runBaseline(bf baselineFlags) error {
 				evs, parseErr = logparse.ParseClaudeCodeProjectsDir(dir, since)
 			case "cursor":
 				evs, parseErr = logparse.ParseCursorLogsDir(dir, since)
+			case "windsurf":
+				evs, parseErr = logparse.ParseWindsurfLogsDir(dir, since)
 			}
 			if parseErr != nil {
 				fmt.Fprintf(os.Stderr, "warning: %s logs (%s): %v\n", cl, dir, parseErr)
@@ -199,7 +203,7 @@ func runTrace(tf traceFlags) error {
 	var clientsFound []string
 	serverSet := map[string]struct{}{}
 
-	clients := []string{"claude", "claude-code", "cursor"}
+	clients := []string{"claude", "claude-code", "cursor", "windsurf"}
 	if tf.client != "" {
 		clients = []string{tf.client}
 	}
@@ -213,6 +217,8 @@ func runTrace(tf traceFlags) error {
 			dirs = logparse.ClaudeCodeLogPaths()
 		case "cursor":
 			dirs = logparse.CursorLogPaths()
+		case "windsurf":
+			dirs = logparse.WindsurfLogPaths()
 		}
 		found := false
 		for _, dir := range dirs {
@@ -225,6 +231,8 @@ func runTrace(tf traceFlags) error {
 				evs, parseErr = logparse.ParseClaudeCodeProjectsDir(dir, since)
 			case "cursor":
 				evs, parseErr = logparse.ParseCursorLogsDir(dir, since)
+			case "windsurf":
+				evs, parseErr = logparse.ParseWindsurfLogsDir(dir, since)
 			}
 			if parseErr != nil {
 				fmt.Fprintf(os.Stderr, "warning: %s logs (%s): %v\n", cl, dir, parseErr)

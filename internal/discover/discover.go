@@ -16,6 +16,9 @@ const (
 	ClientVSCode        = "vscode"
 	ClientWindsurf      = "windsurf"
 	ClientCline         = "cline"
+	ClientRooCline      = "roo-cline"  // Roo Code (fork of Cline), ext ID: RooVSCode.roo-cline
+	ClientContinue      = "continue"   // Continue.dev
+	ClientZed           = "zed"        // Zed editor context servers
 )
 
 // ServerEntry represents one MCP server entry from a client config.
@@ -85,12 +88,46 @@ func clientConfigPaths(client string) []string {
 		if runtime.GOOS == "darwin" {
 			return []string{filepath.Join(home, "Library", "Application Support", "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings", "cline_mcp_settings.json")}
 		}
-		// Linux
 		configHome := os.Getenv("XDG_CONFIG_HOME")
 		if configHome == "" {
 			configHome = filepath.Join(home, ".config")
 		}
 		return []string{filepath.Join(configHome, "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings", "cline_mcp_settings.json")}
+
+	case ClientRooCline:
+		// Roo Code (formerly Roo-Cline) uses the same JSON format as Cline.
+		// Extension ID: RooVSCode.roo-cline
+		if runtime.GOOS == "windows" {
+			appdata := os.Getenv("APPDATA")
+			return []string{filepath.Join(appdata, "Code", "User", "globalStorage", "RooVSCode.roo-cline", "settings", "cline_mcp_settings.json")}
+		}
+		if runtime.GOOS == "darwin" {
+			return []string{filepath.Join(home, "Library", "Application Support", "Code", "User", "globalStorage", "RooVSCode.roo-cline", "settings", "cline_mcp_settings.json")}
+		}
+		configHome := os.Getenv("XDG_CONFIG_HOME")
+		if configHome == "" {
+			configHome = filepath.Join(home, ".config")
+		}
+		return []string{filepath.Join(configHome, "Code", "User", "globalStorage", "RooVSCode.roo-cline", "settings", "cline_mcp_settings.json")}
+
+	case ClientContinue:
+		// Continue.dev stores MCP servers in ~/.continue/config.json (mcpServers array).
+		return []string{filepath.Join(home, ".continue", "config.json")}
+
+	case ClientZed:
+		// Zed editor stores context servers (MCP) in ~/.config/zed/settings.json.
+		if runtime.GOOS == "windows" {
+			appdata := os.Getenv("APPDATA")
+			return []string{filepath.Join(appdata, "Zed", "settings.json")}
+		}
+		if runtime.GOOS == "darwin" {
+			return []string{filepath.Join(home, "Library", "Application Support", "Zed", "settings.json")}
+		}
+		configHome := os.Getenv("XDG_CONFIG_HOME")
+		if configHome == "" {
+			configHome = filepath.Join(home, ".config")
+		}
+		return []string{filepath.Join(configHome, "zed", "settings.json")}
 	}
 	return nil
 }
@@ -102,6 +139,9 @@ var AllClients = []string{
 	ClientVSCode,
 	ClientWindsurf,
 	ClientCline,
+	ClientRooCline,
+	ClientContinue,
+	ClientZed,
 }
 
 // DiscoverAll reads all known client configs and returns every server entry found.
@@ -179,7 +219,7 @@ type windsurfMCPConfig struct {
 	} `json:"mcpServers"`
 }
 
-// clineMCPSettings is the shape of cline_mcp_settings.json.
+// clineMCPSettings is the shape of cline_mcp_settings.json (used by Cline and Roo-Cline).
 type clineMCPSettings struct {
 	MCPServers map[string]struct {
 		Command  string            `json:"command"`
@@ -188,6 +228,34 @@ type clineMCPSettings struct {
 		URL      string            `json:"url"`
 		Disabled bool              `json:"disabled"`
 	} `json:"mcpServers"`
+}
+
+// continueMCPServer is one entry in Continue.dev's mcpServers array.
+type continueMCPServer struct {
+	Name    string            `json:"name"`
+	Command string            `json:"command"`
+	Args    []string          `json:"args"`
+	Env     map[string]string `json:"env"`
+	URL     string            `json:"url"`
+}
+
+// continueConfig is the shape of ~/.continue/config.json relevant to MCP.
+type continueConfig struct {
+	MCPServers []continueMCPServer `json:"mcpServers"`
+}
+
+// zedContextServerCommand is Zed's nested command spec for a context server.
+type zedContextServerCommand struct {
+	Path string   `json:"path"`
+	Args []string `json:"args"`
+	Env  map[string]string `json:"env"`
+}
+
+// zedSettings is the shape of ~/.config/zed/settings.json relevant to MCP context servers.
+type zedSettings struct {
+	ContextServers map[string]struct {
+		Command zedContextServerCommand `json:"command"`
+	} `json:"context_servers"`
 }
 
 // ParseConfigFile parses a single config file and returns server entries.
@@ -212,8 +280,13 @@ func ParseConfigFile(client, path string) ([]ServerEntry, error) {
 		return parseWindsurf(path, data)
 	case ClientCline:
 		return parseCline(path, data)
+	case ClientRooCline:
+		return parseRooCline(path, data)
+	case ClientContinue:
+		return parseContinue(path, data)
+	case ClientZed:
+		return parseZed(path, data)
 	default:
-		// Client not yet supported for parsing; silently skip.
 		return nil, nil
 	}
 }
@@ -318,6 +391,73 @@ func parseCline(path string, data []byte) ([]ServerEntry, error) {
 			EnvKeys:    envKeys(s.Env),
 			URL:        s.URL,
 			Disabled:   s.Disabled,
+		})
+	}
+	return entries, nil
+}
+
+func parseRooCline(path string, data []byte) ([]ServerEntry, error) {
+	// Roo-Cline uses the identical JSON format as Cline.
+	var cfg clineMCPSettings
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("invalid JSON: %w", err)
+	}
+	var entries []ServerEntry
+	for name, s := range cfg.MCPServers {
+		entries = append(entries, ServerEntry{
+			Name:       name,
+			Client:     ClientRooCline,
+			ConfigPath: path,
+			Command:    s.Command,
+			Args:       s.Args,
+			EnvKeys:    envKeys(s.Env),
+			URL:        s.URL,
+			Disabled:   s.Disabled,
+		})
+	}
+	return entries, nil
+}
+
+func parseContinue(path string, data []byte) ([]ServerEntry, error) {
+	// Continue.dev uses an array (not map) for mcpServers.
+	var cfg continueConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("invalid JSON: %w", err)
+	}
+	var entries []ServerEntry
+	for _, s := range cfg.MCPServers {
+		name := s.Name
+		if name == "" {
+			name = s.Command
+		}
+		entries = append(entries, ServerEntry{
+			Name:       name,
+			Client:     ClientContinue,
+			ConfigPath: path,
+			Command:    s.Command,
+			Args:       s.Args,
+			EnvKeys:    envKeys(s.Env),
+			URL:        s.URL,
+		})
+	}
+	return entries, nil
+}
+
+func parseZed(path string, data []byte) ([]ServerEntry, error) {
+	// Zed uses "context_servers" (their MCP wrapper terminology).
+	var cfg zedSettings
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("invalid JSON: %w", err)
+	}
+	var entries []ServerEntry
+	for name, s := range cfg.ContextServers {
+		entries = append(entries, ServerEntry{
+			Name:       name,
+			Client:     ClientZed,
+			ConfigPath: path,
+			Command:    s.Command.Path,
+			Args:       s.Command.Args,
+			EnvKeys:    envKeys(s.Command.Env),
 		})
 	}
 	return entries, nil
