@@ -7,6 +7,32 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.3.0] — 2026-06-26
+
+### Added
+
+**aspex-scan — `--explain` flag**
+- Every HIGH and CRITICAL finding now renders a structured security advisory when `--explain` is passed: **WHY** the pattern is dangerous, a concrete **EXPLOIT** scenario, the worst-case **IMPACT**, and a **CONFIDENCE** level
+- Covers all 38 CRITICAL and HIGH rules in the catalog (`internal/rules/advisories.go`)
+- Transforms the tool from "here's a rule ID" into "here's why an attacker would care and exactly what to change"
+
+**aspex-scan — `redteam` command**
+- Actively calls live MCP tools with adversarial payloads and analyzes responses for exploitation evidence
+- Five probe categories: `prompt-injection` (8 payloads + detectors), `path-traversal` (4 payloads), `ssrf` (4 payloads including AWS/GCP metadata endpoints), `error-disclosure` (null/oversized/malformed inputs), `prompt-leakage` (system prompt extraction)
+- Probes are auto-selected per tool based on parameter names and JSON schema: URL parameters get SSRF probes, path parameters get traversal probes, every tool gets error disclosure and leakage probes
+- Flags: `--server` (filter by name), `--timeout` (default 10s), `--categories`, `--json`
+
+**aspex-scan — category security score breakdown**
+- Main scan output now shows a per-category breakdown below the health bar: Prompt Security · Tool Security · Data Protection · Supply Chain · Network Security · Access Control
+- Each category shows a mini bar chart, letter grade (A+ through F), and the primary driver finding
+- Computed from existing rule results — zero extra scanning cost
+
+### Fixed
+
+- `bufio.Scanner` replaced with `bufio.Reader.ReadString` in all four log parsers (claude, claude-code, cursor, windsurf) — eliminates `token too long` errors when Claude Code session transcripts contain lines exceeding the 8 MB scanner limit
+
+---
+
 ## [0.2.0] — 2026-06-26
 
 ### Added
