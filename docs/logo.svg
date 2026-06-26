@@ -1,0 +1,16 @@
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <!-- Radar rings -->
+  <circle cx="60" cy="60" r="52" fill="none" stroke="#7c5cfc" stroke-width="1" opacity="0.2"/>
+  <circle cx="60" cy="60" r="38" fill="none" stroke="#7c5cfc" stroke-width="1" opacity="0.35"/>
+  <circle cx="60" cy="60" r="24" fill="none" stroke="#7c5cfc" stroke-width="1.5" opacity="0.55"/>
+  <!-- Sweep wedge -->
+  <path d="M60,60 L112,8 A52,52 0 0,1 112,112 Z" fill="#7c5cfc" fill-opacity="0.1"/>
+  <!-- Sweep leading edge -->
+  <line x1="60" y1="60" x2="112" y2="8" stroke="#a48dfd" stroke-width="2"/>
+  <!-- Center dot -->
+  <circle cx="60" cy="60" r="4" fill="#a48dfd"/>
+  <circle cx="60" cy="60" r="9" fill="none" stroke="#a48dfd" stroke-width="1.5" opacity="0.5"/>
+  <!-- Threat blip -->
+  <circle cx="95" cy="30" r="4" fill="#ef4444"/>
+  <circle cx="95" cy="30" r="8" fill="none" stroke="#ef4444" stroke-width="1.2" opacity="0.6"/>
+</svg>

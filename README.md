@@ -1,37 +1,50 @@
 <div align="center">
 
-```
-  ◆  A S P E X
-```
+<img src="docs/logo.svg" width="88" height="88" alt="Aspex logo"/>
 
-**Two CLI tools that answer the questions every MCP user should be asking.**
+# Aspex
 
-*"Is the MCP server I just installed safe to run?"*
-*"What did my agent actually do while I wasn't looking?"*
+### MCP Security Toolkit
+
+**Scan your MCP servers before you trust them. Audit what your agents actually did.**
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![CI](https://github.com/aspex-security/aspex/actions/workflows/ci.yml/badge.svg)](https://github.com/aspex-security/aspex/actions/workflows/ci.yml)
-[![MCP-scanned by Aspex](https://img.shields.io/badge/MCP--scanned-by%20Aspex-5B44C3)](https://github.com/aspex-security/aspex)
+[![CI](https://github.com/stevend-dotcom/aspex/actions/workflows/ci.yml/badge.svg)](https://github.com/stevend-dotcom/aspex/actions/workflows/ci.yml)
+[![MCP-scanned by Aspex](https://img.shields.io/badge/MCP--scanned-by%20Aspex-5B44C3)](https://github.com/stevend-dotcom/aspex)
 
-```
-npx @aspex/scan        # audit before you run
-npx @aspex/trace     # see what ran after
+```sh
+npx @aspex/scan    # inspect every MCP server on this machine
+npx @aspex/trace   # replay what your agent actually did
 ```
 
-**Offline. No account. No data sent anywhere. Ever.**
+**Offline. No account. No data leaves your machine. Ever.**
 
 </div>
 
 ---
 
+## What is Aspex?
+
+Aspex is an open-source MCP security toolkit. It ships two CLI tools that cover the two most important questions in any MCP-powered workflow.
+
+| Tool | Question it answers |
+|---|---|
+| `aspex-scan` | Is the MCP server I just installed safe to run? |
+| `aspex-trace` | What did my agent actually do while I wasn't looking? |
+
+**aspex-scan** reads every MCP client config on the machine (Claude Desktop, Cursor, VS Code, Windsurf, Cline), connects to each server, enumerates tools and capabilities, and produces a scored risk report. It catches misconfigurations, dangerous capabilities, and credential leaks before an agent ever calls a tool.
+
+**aspex-trace** reads the native log files that MCP clients already write to disk. No proxy. No config change. No runtime dependency. It replays what happened, flags anomalous tool calls, and surfaces post-exploitation patterns: credential reads, persistence writes, outbound network calls.
+
+Both tools run fully offline. No account. No data sent anywhere.
+
 ## The problem
 
 You wired an MCP server into Claude Desktop or Cursor. You copy-pasted the config from a README, or maybe a blog post. The agent now has access to your filesystem, your GitHub, your browser.
 
-Do you know what that server is actually capable of?
-Do you know what it did the last time your agent ran?
+Do you know what that server is actually capable of? Do you know what it did the last time your agent ran?
 
-Most developers don't. That is the gap these tools close.
+There is no equivalent of `npm audit` for MCP. No unified view of what your agents did. No security layer between "I installed a server" and "it has shell access to my machine." Aspex is that layer.
 
 ---
 
@@ -274,23 +287,19 @@ Flags:
 
 ---
 
-## Why these tools exist
+## Privacy and scope
 
-MCP is the fastest-growing attack surface in developer tooling. Developers wire agents into their filesystem, their GitHub, their databases, their browser, often by copy-pasting a config block from a README without reading it.
+Aspex is intentionally simple and intentionally limited.
 
-There is no equivalent of `npm audit` for MCP. No unified view of what your agents did. No security layer between "I installed a server" and "it has shell access to my laptop."
+**What it does not do:**
 
-These tools are that layer. They are intentionally simple: read configs, read logs, flag what is dangerous, explain why, get out of the way.
+- Never sends configs, findings, file paths, or tool names anywhere.
+- Never proxies or intercepts live traffic.
+- Never calls `tools/call` on any MCP server.
+- Never reads env variable values from config files (key names only).
+- Point-in-time, single-machine by design.
 
-**What they do not do:**
-
-- Never send your configs, findings, file paths, or tool names anywhere.
-- Never proxy or intercept live traffic.
-- Never call `tools/call` on any MCP server.
-- Never read env variable values from config files (key names only).
-- Point-in-time, single-machine tools by design.
-
-Fleet-wide continuous monitoring, policy enforcement, and attack-path correlation are what [Onyx Security](https://onyx.security) builds. These tools are the free on-ramp, not the product.
+Fleet-wide continuous monitoring, policy enforcement, and attack-path correlation are what [Onyx Security](https://onyx.security) builds. Aspex is the free on-ramp.
 
 ---
 
