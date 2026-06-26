@@ -82,10 +82,10 @@ var htmlFuncs = template.FuncMap{
 			return "rgba(107,114,128,0.10)"
 		}
 	},
-	// gaugeAngle fills the arc with the *risk* level (100-score),
-	// so a score of 12 renders as an 88% red arc -- immediately alarming.
+	// gaugeAngle fills the arc proportional to the score (health-bar model).
+	// 12/100 = small colored arc, 100/100 = full circle. Empty = dangerous, full = safe.
 	"gaugeAngle": func(score int) int {
-		return ((100 - score) * 360) / 100
+		return (score * 360) / 100
 	},
 	"totalFindings": func(scan JSONScanOutput) int {
 		n := 0
