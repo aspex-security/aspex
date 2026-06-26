@@ -1,4 +1,5 @@
 dist/
+/install.sh.bak
 bin/
 *.exe
 *.test
