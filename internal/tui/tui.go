@@ -294,7 +294,9 @@ func render(version string, sel int, inSub bool, subSel int) {
 		b.WriteString(fmt.Sprintf("  %s↑↓ move   Enter run   ← back   Q quit%s\n", dim, reset))
 	}
 
-	fmt.Print(b.String())
+	// In raw terminal mode \n only moves down; \r\n is required to also
+	// return to column 0. Replace all newlines before printing.
+	fmt.Print(strings.ReplaceAll(b.String(), "\n", "\r\n"))
 }
 
 func renderTopItem(item Item, selected bool) string {
