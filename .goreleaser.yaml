@@ -10,7 +10,7 @@ before:
 builds:
   - id: mcp-scan
     binary: aspex-scan
-    main: ./cmd/mcp-scan
+    main: ./cmd/aspex-scan
     env:
       - CGO_ENABLED=0
     goos:
@@ -30,7 +30,7 @@ builds:
 
   - id: agent-trace
     binary: aspex-trace
-    main: ./cmd/agent-trace
+    main: ./cmd/aspex-trace
     env:
       - CGO_ENABLED=0
     goos:

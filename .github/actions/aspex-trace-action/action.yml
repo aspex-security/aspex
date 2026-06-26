@@ -53,7 +53,7 @@ runs:
         curl -fsSL "$URL" | tar -xz -C /usr/local/bin
         chmod +x /usr/local/bin/aspex-trace
 
-    - name: Run agent-trace
+    - name: Run aspex-trace
       id: trace
       shell: bash
       run: |

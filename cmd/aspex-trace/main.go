@@ -88,9 +88,9 @@ type baselineFlags struct {
 func defaultBaselinePath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "agent-trace-baseline.json"
+		return "aspex-trace-baseline.json"
 	}
-	return filepath.Join(home, ".config", "aspex", "agent-trace-baseline.json")
+	return filepath.Join(home, ".config", "aspex", "aspex-trace-baseline.json")
 }
 
 func newBaselineCmd() *cobra.Command {
@@ -109,7 +109,7 @@ The baseline can later be used with --baseline to detect deviations.`,
 	}
 
 	cmd.Flags().BoolVar(&bf.learn, "learn", false, "Learn a baseline from recent logs")
-	cmd.Flags().StringVar(&bf.output, "output", "", "Output file path (default: ~/.config/aspex/agent-trace-baseline.json)")
+	cmd.Flags().StringVar(&bf.output, "output", "", "Output file path (default: ~/.config/aspex/aspex-trace-baseline.json)")
 	cmd.Flags().StringVar(&bf.since, "since", "7d", "How far back to learn from (e.g. 24h, 7d)")
 	cmd.Flags().StringVar(&bf.client, "client", "", "Filter to one client (claude, cursor)")
 

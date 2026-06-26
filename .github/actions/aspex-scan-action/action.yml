@@ -56,7 +56,7 @@ runs:
         curl -fsSL "$URL" | tar -xz -C /usr/local/bin
         chmod +x /usr/local/bin/aspex-scan
 
-    - name: Run mcp-scan
+    - name: Run aspex-scan
       id: scan
       shell: bash
       run: |
