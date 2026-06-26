@@ -177,14 +177,14 @@ Adds a hook that runs `--no-exec --fail-on high` on any staged MCP config file.
 
 > Find out what your agent actually did.
 
-Reads the native log files that Claude Desktop, Cursor, and other MCP clients already write to disk. Parses them into a unified, security-annotated audit trail. No proxy. No config change. No runtime dependency.
+Reads the native log files that Claude Desktop, Claude Code CLI, Cursor, and other MCP clients already write to disk. Parses them into a unified, security-annotated audit trail. No proxy. No config change. No runtime dependency.
 
 ### What it looks like
 
 ```
   ◆  Aspex  v0.2.0
 
-  Clients: Claude Desktop, Cursor
+  Clients: Claude Desktop, Claude Code, Cursor
   Sessions: 6 (last 24h)   Tool calls: 243 across 11 servers
 
   CRITICAL

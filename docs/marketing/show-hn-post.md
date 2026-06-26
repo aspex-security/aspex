@@ -14,13 +14,13 @@ I've been building security tooling for AI/agent infrastructure at Onyx, and two
 
 So I built two small offline CLI tools to close both gaps.
 
-**aspex-scan** reads your MCP client configs (Claude Desktop, Cursor, VS Code, Windsurf), connects to each server, enumerates tools, and produces a scored risk report. It checks for 26 things: prompt injection in tool descriptions, shell execution capability, secrets in plaintext env blocks, browser cookie/keychain access, cloud metadata endpoint references (169.254.169.254), persistence mechanisms (cron, LaunchAgent, rc files), unpinned @latest sources, and more. Everything maps to OWASP LLM Top 10, MITRE ATLAS, and CWE.
+**aspex-scan** reads your MCP client configs (Claude Desktop, Claude Code, Cursor, VS Code, Windsurf), connects to each server, enumerates tools, and produces a scored risk report. It checks for 26 things: prompt injection in tool descriptions, shell execution capability, secrets in plaintext env blocks, browser cookie/keychain access, cloud metadata endpoint references (169.254.169.254), persistence mechanisms (cron, LaunchAgent, rc files), unpinned @latest sources, and more. Everything maps to OWASP LLM Top 10, MITRE ATLAS, and CWE.
 
 ```
 npx @aspex/scan
 ```
 
-**aspex-trace** reads the native log files that Claude Desktop and Cursor already write to disk and parses them into a security-annotated audit trail. No proxy, no config change. It checks for 20 anomaly patterns: sensitive path access (.env, .ssh, .aws/credentials), outbound network calls, shell execution, cross-server data chains, persistence writes, off-hours activity, and more.
+**aspex-trace** reads the native log files that Claude Desktop, Claude Code, and Cursor already write to disk and parses them into a security-annotated audit trail. No proxy, no config change. It checks for 20 anomaly patterns: sensitive path access (.env, .ssh, .aws/credentials), outbound network calls, shell execution, cross-server data chains, persistence writes, off-hours activity, and more.
 
 ```
 npx @aspex/trace

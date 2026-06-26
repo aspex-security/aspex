@@ -2,7 +2,6 @@ package logparse
 
 import (
 	"bufio"
-	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,33 +10,27 @@ import (
 	"time"
 )
 
-// claudeLogEntry represents a single JSON line from Claude Desktop MCP logs.
-type claudeLogEntry struct {
-	Level     string          `json:"level"`
-	Message   string          `json:"message"`
-	Timestamp string          `json:"timestamp"`
-	Data      json.RawMessage `json:"data,omitempty"`
-}
-
-// ClaudeLogPaths returns the MCP log paths for Claude Desktop on the current OS.
+// ClaudeLogPaths returns MCP log paths for Claude Desktop.
 func ClaudeLogPaths() []string {
 	home, _ := os.UserHomeDir()
-	if runtime.GOOS == "windows" {
-		appdata := os.Getenv("APPDATA")
-		return []string{filepath.Join(appdata, "Claude", "Logs")}
-	}
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "windows":
+		return []string{filepath.Join(os.Getenv("APPDATA"), "Claude", "Logs")}
+	case "darwin":
 		return []string{filepath.Join(home, "Library", "Logs", "Claude")}
+	default:
+		configHome := os.Getenv("XDG_CONFIG_HOME")
+		if configHome == "" {
+			configHome = filepath.Join(home, ".config")
+		}
+		return []string{filepath.Join(configHome, "Claude", "logs")}
 	}
-	// Linux
-	configHome := os.Getenv("XDG_CONFIG_HOME")
-	if configHome == "" {
-		configHome = filepath.Join(home, ".config")
-	}
-	return []string{filepath.Join(configHome, "Claude", "logs")}
 }
 
 // ParseClaudeLogsDir reads all mcp*.log files under dir and returns parsed events.
+// Claude Desktop writes plain-text logs in the format:
+//
+//	TIMESTAMP [level] [ServerName] Message from client: {"method":"tools/call",...}
 func ParseClaudeLogsDir(dir string, since time.Time) ([]Event, error) {
 	entries, err := os.ReadDir(dir)
 	if os.IsNotExist(err) {
@@ -66,18 +59,18 @@ func ParseClaudeLogsDir(dir string, since time.Time) ([]Event, error) {
 	return events, nil
 }
 
-// ParseClaudeLogReader parses a Claude Desktop MCP log from an io.Reader.
-// Tested against Claude Desktop v0.10.x log format.
+// ParseClaudeLogReader parses Claude Desktop MCP logs.
+// Format: `2026-04-29T10:35:35.449Z [info] [ServerName] Message from client: {...json...}`
 func ParseClaudeLogReader(r io.Reader, since time.Time) ([]Event, error) {
 	var events []Event
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 4*1024*1024), 4*1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
 			continue
 		}
-		ev, ok := parseClaudeLine(line, since)
+		ev, ok := parseClaudeTextLine(line, since)
 		if ok {
 			events = append(events, ev)
 		}
@@ -85,78 +78,48 @@ func ParseClaudeLogReader(r io.Reader, since time.Time) ([]Event, error) {
 	return events, scanner.Err()
 }
 
-func parseClaudeLine(line string, since time.Time) (Event, bool) {
-	var entry claudeLogEntry
-	if err := json.Unmarshal([]byte(line), &entry); err != nil {
+// parseClaudeTextLine parses one line of the Claude Desktop plain-text log format.
+func parseClaudeTextLine(line string, since time.Time) (Event, bool) {
+	spaceIdx := strings.Index(line, " ")
+	if spaceIdx < 0 {
 		return Event{}, false
 	}
-	ts, err := time.Parse(time.RFC3339Nano, entry.Timestamp)
+	ts, err := time.Parse(time.RFC3339Nano, line[:spaceIdx])
 	if err != nil {
-		ts = time.Time{}
+		return Event{}, false
 	}
 	if !since.IsZero() && ts.Before(since) {
 		return Event{}, false
 	}
 
-	ev := Event{
-		Timestamp: ts,
-		Client:    "claude",
-		Raw:       line,
-	}
+	rest := line[spaceIdx+1:]
+	server := extractBracketedName(rest)
 
-	msg := entry.Message
-	switch {
-	case strings.Contains(msg, "initialize"):
+	clientMsgIdx := strings.Index(rest, "Message from client: ")
+	if clientMsgIdx < 0 {
+		return Event{}, false
+	}
+	jsonStr := rest[clientMsgIdx+len("Message from client: "):]
+
+	ev := Event{Timestamp: ts, Client: "claude", Server: server, Raw: line}
+
+	method, toolName, args := parseJSONRPCMethod(jsonStr)
+	switch method {
+	case "initialize":
 		ev.Event = EventInitialize
-	case strings.Contains(msg, "tools/list"):
+	case "tools/list":
 		ev.Event = EventToolsList
-	case strings.Contains(msg, "tools/call"):
+	case "tools/call":
 		ev.Event = EventToolsCall
-		parseClaudeToolCall(&ev, entry.Data)
-	case strings.Contains(msg, "resources/read"):
+		ev.Tool = toolName
+		ev.Args = args
+	case "resources/read":
 		ev.Event = EventResourceRead
-	case strings.Contains(msg, "prompts/get"):
+	case "prompts/get":
 		ev.Event = EventPromptsGet
-	case strings.Contains(msg, "error") || entry.Level == "error":
-		ev.Event = EventError
-	case strings.Contains(msg, "exit") || strings.Contains(msg, "closed"):
-		ev.Event = EventServerExit
 	default:
 		return Event{}, false
 	}
 
-	// Extract server name from message heuristic: "[server-name]" or "server: name".
-	if name := extractBracketedName(msg); name != "" {
-		ev.Server = name
-	}
-
 	return ev, true
-}
-
-func parseClaudeToolCall(ev *Event, data json.RawMessage) {
-	if data == nil {
-		return
-	}
-	var d struct {
-		ToolName  string            `json:"toolName"`
-		Arguments map[string]string `json:"arguments"`
-		ServerName string           `json:"serverName"`
-	}
-	if err := json.Unmarshal(data, &d); err != nil {
-		return
-	}
-	ev.Tool = d.ToolName
-	ev.Args = d.Arguments
-	if d.ServerName != "" {
-		ev.Server = d.ServerName
-	}
-}
-
-func extractBracketedName(s string) string {
-	start := strings.Index(s, "[")
-	end := strings.Index(s, "]")
-	if start >= 0 && end > start {
-		return s[start+1 : end]
-	}
-	return ""
 }

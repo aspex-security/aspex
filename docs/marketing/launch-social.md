@@ -81,7 +81,7 @@ Until now.
 
 We just open-sourced two security CLI tools built specifically for MCP:
 
-aspex-scan scans your MCP client configs (Claude Desktop, Cursor, VS Code, Windsurf), connects to each server, and produces a scored risk report. It checks for 26 things: prompt injection in tool descriptions, shell execution capability, API keys in plaintext config, browser cookie access, persistence mechanisms, cloud metadata endpoint references, and more. Everything maps to OWASP LLM Top 10 and MITRE ATLAS.
+aspex-scan scans your MCP client configs (Claude Desktop, Claude Code, Cursor, VS Code, Windsurf), connects to each server, and produces a scored risk report. It checks for 26 things: prompt injection in tool descriptions, shell execution capability, API keys in plaintext config, browser cookie access, persistence mechanisms, cloud metadata endpoint references, and more. Everything maps to OWASP LLM Top 10 and MITRE ATLAS.
 
 aspex-trace reads the logs your MCP clients already write to disk and parses them into a security-annotated audit trail. No proxy, no config change. It catches sensitive file access (.env, .ssh, .aws/credentials), outbound network calls, cross-server data chains, persistence writes, and off-hours activity.
 
@@ -125,7 +125,7 @@ Reads your MCP client configs, connects to each server, enumerates tools, produc
 ```npx @aspex/scan```
 
 **aspex-trace** -- traces after it ran
-Reads the native logs Claude Desktop and Cursor already write. No proxy, no config change. Flags sensitive file access, outbound network calls, cross-server data chains, persistence writes.
+Reads the native logs Claude Desktop, Claude Code, and Cursor already write. No proxy, no config change. Flags sensitive file access, outbound network calls, cross-server data chains, persistence writes.
 
 ```npx @aspex/trace```
 
@@ -145,11 +145,11 @@ Happy to answer questions about the rule logic or threat model.
 ```
 Hi all -- we just open-sourced two MCP security tools that might be useful to people here.
 
-Background: MCP is becoming the default way AI agents get tools. Developers are wiring servers into Claude Desktop, Cursor, VS Code with near-zero security review. The attack surface is real: prompt injection in tool descriptions, shell execution capability, secrets in plaintext configs, credential theft tools, persistence mechanisms.
+Background: MCP is becoming the default way AI agents get tools. Developers are wiring servers into Claude Desktop, Claude Code, Cursor, VS Code with near-zero security review. The attack surface is real: prompt injection in tool descriptions, shell execution capability, secrets in plaintext configs, credential theft tools, persistence mechanisms.
 
 aspex-scan is a CLI scanner that reads MCP client configs, connects to each server, enumerates tools, and scores them against 26 rules mapped to OWASP LLM Top 10 2025, MITRE ATLAS, and CWE.
 
-aspex-trace is a CLI auditor that reads native client logs (Claude Desktop, Cursor) and produces a security-annotated event trail with 20 anomaly detection rules, including stateful detections (error bursts, cross-server data chains, mass file enumeration).
+aspex-trace is a CLI auditor that reads native client logs (Claude Desktop, Claude Code, Cursor) and produces a security-annotated event trail with 20 anomaly detection rules, including stateful detections (error bursts, cross-server data chains, mass file enumeration).
 
 Both are offline by default, cosign-signed, Apache-2.0.
 
