@@ -109,11 +109,10 @@ func SetSpinnerOutput(w io.Writer) {
 	writerStderr = w
 }
 
-// scoreBar renders a visual bar where filled blocks represent the danger level
-// (100 - score), so a score of 12 shows a nearly full red bar. Higher fill = more risk.
+// scoreBar renders a health-bar where filled blocks represent the score.
+// 12/100 = tiny sliver, 100/100 = full bar. Empty = dangerous, full = safe.
 func scoreBar(score int, width int, c colorFn, band string) string {
-	danger := 100 - score
-	filled := (danger * width) / 100
+	filled := (score * width) / 100
 	if filled > width {
 		filled = width
 	}
@@ -164,7 +163,7 @@ func PrintScanReport(w io.Writer, r ScanReport) {
 		c(colorDim, "│"),
 		c(bandCol+colorBold, fmt.Sprintf("%3d / 100", r.Overall.Score)),
 		bar,
-		c(bandCol+colorBold, r.Overall.Band),
+		c(bandCol+colorBold, r.Overall.Band)+" "+c(colorDim, "(100 = safe)"),
 		c(colorDim, "│"),
 	)
 	meta := fmt.Sprintf("  %d servers · %d tools · %d findings · %ds elapsed", len(r.Servers), toolCount, totalFindings, r.ElapsedMS/1000)
