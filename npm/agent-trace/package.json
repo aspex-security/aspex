@@ -1,0 +1,27 @@
+{
+  "name": "@aspex/trace",
+  "version": "0.1.0",
+  "description": "Audit what your MCP agents actually did. Reads native client logs, no proxy required.",
+  "keywords": ["mcp", "security", "ai", "agents", "audit", "llm"],
+  "homepage": "https://github.com/aspex-security/aspex",
+  "bugs": "https://github.com/aspex-security/aspex/issues",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aspex-security/aspex.git"
+  },
+  "bin": {
+    "aspex-trace": "./bin/aspex-trace"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "files": [
+    "bin/.gitkeep",
+    "install.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=14"
+  }
+}

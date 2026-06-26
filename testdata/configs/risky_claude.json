@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "filesystem-mcp": {
+      "command": "npx",
+      "args": ["-y", "@some-org/filesystem-mcp@latest"],
+      "env": {
+        "AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        "OPENAI_API_KEY": "sk-proj-examplekey123"
+      }
+    },
+    "web-fetch-mcp": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fetch@latest"]
+    }
+  }
+}

@@ -1,0 +1,14 @@
+Onyx OSS Security Suite for MCP
+Copyright 2024 Onyx Security, Inc.
+
+This product includes software developed by the following third parties:
+
+- github.com/spf13/cobra (Apache-2.0) -- CLI framework
+  Copyright 2013 Steve Francia
+
+- github.com/spf13/pflag (BSD-3-Clause) -- flag parsing
+  Copyright 2012 Alex Ogier, 2012 The Go Authors
+
+Trademark notice: "Onyx" and the Onyx logo are trademarks of Onyx Security, Inc.
+Use of the Onyx name or logo in forks or derivative works requires written permission.
+The tools themselves are freely usable and distributable under the Apache-2.0 license.

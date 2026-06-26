@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "time-mcp": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-time@1.0.3"]
+    },
+    "github-mcp": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github@1.2.1"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_redacted"
+      }
+    }
+  }
+}

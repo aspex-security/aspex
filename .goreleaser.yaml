@@ -1,0 +1,122 @@
+version: 2
+
+project_name: aspex
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: mcp-scan
+    binary: aspex-scan
+    main: ./cmd/mcp-scan
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X github.com/aspex-security/aspex/internal/version.Version={{.Version}}
+      - -X github.com/aspex-security/aspex/internal/version.BuildDate={{.Date}}
+
+  - id: agent-trace
+    binary: aspex-trace
+    main: ./cmd/agent-trace
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X github.com/aspex-security/aspex/internal/version.Version={{.Version}}
+      - -X github.com/aspex-security/aspex/internal/version.BuildDate={{.Date}}
+
+archives:
+  - id: mcp-scan
+    builds: [mcp-scan]
+    name_template: "aspex-scan_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+
+  - id: agent-trace
+    builds: [agent-trace]
+    name_template: "aspex-trace_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+signs:
+  - cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - --output-certificate=${certificate}
+      - --output-signature=${signature}
+      - ${artifact}
+      - --yes
+    artifacts: checksum
+    output: true
+
+sboms:
+  - artifacts: archive
+    documents:
+      - "${artifact}.spdx.json"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-dev"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: aspex-security
+    name: aspex
+  draft: true
+  prerelease: auto
+  name_template: "v{{.Version}}"
+  footer: |
+    ## Verify the release
+
+    All release binaries are signed with cosign. To verify:
+
+    ```
+    cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig checksums.txt
+    ```
+
+    **Full Changelog**: https://github.com/aspex-security/aspex/compare/{{.PreviousTag}}...{{.Tag}}

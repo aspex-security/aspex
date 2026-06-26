@@ -1,0 +1,88 @@
+name: "Onyx MCP Scan"
+description: "Scan MCP server configurations for security risks and upload SARIF results."
+author: "Onyx Security"
+
+branding:
+  icon: shield
+  color: purple
+
+inputs:
+  version:
+    description: "Version of aspex-scan to use"
+    required: false
+    default: "latest"
+  config:
+    description: "Path to a specific MCP config file to scan"
+    required: false
+    default: ""
+  fail-on:
+    description: "Fail the action if findings at or above this severity are found (critical, high, medium, low)"
+    required: false
+    default: "high"
+  no-exec:
+    description: "Static analysis only; do not launch MCP servers"
+    required: false
+    default: "false"
+  upload-sarif:
+    description: "Upload SARIF results to GitHub code scanning"
+    required: false
+    default: "true"
+
+outputs:
+  score:
+    description: "Overall setup score (0-100)"
+    value: ${{ steps.scan.outputs.score }}
+  band:
+    description: "Risk band (HEALTHY, NEEDS REVIEW, AT RISK, HIGH RISK)"
+    value: ${{ steps.scan.outputs.band }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install aspex-scan
+      shell: bash
+      run: |
+        VERSION="${{ inputs.version }}"
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        ARCH=$(uname -m)
+        if [ "$ARCH" = "x86_64" ]; then ARCH="amd64"; fi
+        if [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi
+
+        if [ "$VERSION" = "latest" ]; then
+          VERSION=$(curl -s https://api.github.com/repos/aspex-security/aspex/releases/latest | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')
+        fi
+
+        URL="https://github.com/aspex-security/aspex/releases/download/v${VERSION}/aspex-scan_${OS}_${ARCH}.tar.gz"
+        curl -fsSL "$URL" | tar -xz -C /usr/local/bin
+        chmod +x /usr/local/bin/aspex-scan
+
+    - name: Run mcp-scan
+      id: scan
+      shell: bash
+      run: |
+        ARGS="--json"
+        if [ "${{ inputs.no-exec }}" = "true" ]; then ARGS="$ARGS --no-exec"; fi
+        if [ -n "${{ inputs.config }}" ]; then ARGS="$ARGS --config ${{ inputs.config }}"; fi
+
+        set +e
+        RESULT=$(aspex-scan $ARGS 2>&1)
+        EXIT=$?
+        set -e
+
+        echo "$RESULT" > scan-result.json
+
+        SCORE=$(echo "$RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['overall']['Score'])" 2>/dev/null || echo "0")
+        BAND=$(echo "$RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['overall']['Band'])" 2>/dev/null || echo "UNKNOWN")
+
+        echo "score=$SCORE" >> "$GITHUB_OUTPUT"
+        echo "band=$BAND" >> "$GITHUB_OUTPUT"
+
+        echo "### Onyx MCP Scan Results" >> "$GITHUB_STEP_SUMMARY"
+        echo "| Score | Band |" >> "$GITHUB_STEP_SUMMARY"
+        echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+        echo "| $SCORE / 100 | $BAND |" >> "$GITHUB_STEP_SUMMARY"
+
+        if [ "$EXIT" -ne 0 ] && [ "${{ inputs.fail-on }}" != "none" ]; then
+          echo "Scan found findings at or above --fail-on=${{ inputs.fail-on }}."
+          exit 1
+        fi
