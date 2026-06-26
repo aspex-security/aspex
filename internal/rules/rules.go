@@ -53,6 +53,14 @@ type Finding struct {
 	Mapping string
 }
 
+// Advisory holds educational context for a rule finding, surfaced when --explain is passed.
+type Advisory struct {
+	Why        string // why this is a risk (1–2 sentences)
+	Exploit    string // how an attacker would realistically exploit it (concrete scenario)
+	Impact     string // what the worst-case impact is
+	Confidence string // "high" | "medium" | "low" — how sure we are this is truly malicious
+}
+
 // EvalServer runs all applicable rules against a server and returns any findings.
 func EvalServer(srv *inspect.Server) []Finding {
 	var f []Finding
