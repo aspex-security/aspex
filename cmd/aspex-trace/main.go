@@ -16,6 +16,7 @@ import (
 
 	"github.com/aspex-security/aspex/internal/baseline"
 	"github.com/aspex-security/aspex/internal/killchain"
+	"github.com/aspex-security/aspex/internal/provenance"
 	"github.com/aspex-security/aspex/internal/logparse"
 	"github.com/aspex-security/aspex/internal/report"
 	"github.com/aspex-security/aspex/internal/rules"
@@ -139,6 +140,7 @@ BASELINES
 	root.AddCommand(newExportCmd())
 	root.AddCommand(newLiveCmd())
 	root.AddCommand(newKillChainCmd())
+	root.AddCommand(newProvenanceCmd())
 	root.AddCommand(newCompletionCmd())
 
 	return root
@@ -841,6 +843,227 @@ func runLive(clientFilter, serverFilter string, noColor bool, intervalSecs int) 
 			}
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// provenance subcommand
+// ---------------------------------------------------------------------------
+
+func newProvenanceCmd() *cobra.Command {
+	var since, client string
+	var noColor, jsonOut bool
+	cmd := &cobra.Command{
+		Use:   "provenance",
+		Short: "Trace the likely source of suspicious tool calls back to ingested content",
+		Long: `For every high-severity finding, identify the content-ingestion event that
+most likely delivered the injected instruction.
+
+When an AI agent reads a file or fetches a URL and then immediately executes
+a suspicious command or exfiltrates data, the content it consumed is the
+most probable source of the injected instruction. This command makes that
+link explicit — turning "something suspicious happened" into "the agent read
+X, then did Y: here is the likely injection vector."
+
+Ingestion events tracked:
+  file_read     read_file, get_file_contents, read_multiple_files, …
+  web_fetch     fetch, http_get, web_fetch, http_request, …
+  browser_load  browser_navigate, navigate_to, open_url, …
+  resource_read get_resource, load_resource, use_prompt, …
+
+Confidence levels:
+  HIGH    < 30 seconds and ≤ 3 events between ingestion and suspicious call
+  MEDIUM  < 2 minutes and ≤ 8 events
+  LOW     within the lookback window (10 minutes / 20 events)`,
+		Example: `  # Trace injection sources in the last 7 days
+  aspex-trace provenance --since 7d
+
+  # JSON for SIEM ingest or custom analysis
+  aspex-trace provenance --json
+
+  # Focus on a specific client
+  aspex-trace provenance --client cursor --since 30d`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runProvenance(since, client, noColor, jsonOut)
+		},
+	}
+	cmd.Flags().StringVar(&since, "since", "7d", "How far back to analyze")
+	cmd.Flags().StringVar(&client, "client", "", "Filter to one client")
+	cmd.Flags().BoolVar(&noColor, "no-color", false, "Plain-text output")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	return cmd
+}
+
+func runProvenance(since, clientFilter string, noColor, jsonOut bool) error {
+	sinceDur, err := parseSince(since)
+	if err != nil {
+		return fmt.Errorf("invalid --since value: %w", err)
+	}
+	sinceTime := time.Now().Add(-sinceDur)
+
+	allEvents, _ := collectEvents(clientFilter, sinceTime)
+	flagged := trace.AnalyzeEvents(allEvents)
+	report := provenance.Analyze(allEvents, flagged)
+
+	if jsonOut {
+		type jsonFinding struct {
+			RuleID   string `json:"rule_id"`
+			Name     string `json:"name"`
+			Severity string `json:"severity"`
+			Detail   string `json:"detail"`
+		}
+		type jsonAttr struct {
+			SuspiciousTimestamp string        `json:"suspicious_timestamp"`
+			SuspiciousTool      string        `json:"suspicious_tool"`
+			SuspiciousServer    string        `json:"suspicious_server"`
+			Findings            []jsonFinding `json:"findings"`
+			IngestionTimestamp  string        `json:"ingestion_timestamp"`
+			IngestionTool       string        `json:"ingestion_tool"`
+			IngestionKind       string        `json:"ingestion_kind"`
+			IngestionSource     string        `json:"ingestion_source"`
+			DeltaSeconds        float64       `json:"delta_seconds"`
+			EventsApart         int           `json:"events_apart"`
+			Confidence          string        `json:"confidence"`
+			Explanation         string        `json:"explanation"`
+		}
+		type jsonReport struct {
+			Version        string     `json:"version"`
+			Since          string     `json:"since"`
+			TotalEvents    int        `json:"total_events"`
+			TotalFlagged   int        `json:"total_flagged"`
+			WithProvenance int        `json:"with_provenance"`
+			Attributions   []jsonAttr `json:"attributions"`
+		}
+		var attrs []jsonAttr
+		for _, a := range report.Attributions {
+			var jf []jsonFinding
+			for _, f := range a.Findings {
+				jf = append(jf, jsonFinding{
+					RuleID:   f.RuleID,
+					Name:     f.Name,
+					Severity: f.Severity.String(),
+					Detail:   f.Detail,
+				})
+			}
+			attrs = append(attrs, jsonAttr{
+				SuspiciousTimestamp: a.SuspiciousEvent.Timestamp.Format(time.RFC3339),
+				SuspiciousTool:      a.SuspiciousEvent.Tool,
+				SuspiciousServer:    a.SuspiciousEvent.Server,
+				Findings:            jf,
+				IngestionTimestamp:  a.IngestionEvent.Timestamp.Format(time.RFC3339),
+				IngestionTool:       a.IngestionEvent.Tool,
+				IngestionKind:       a.IngestionKind,
+				IngestionSource:     a.IngestionSource,
+				DeltaSeconds:        a.Delta.Seconds(),
+				EventsApart:         a.EventsApart,
+				Confidence:          a.Confidence,
+				Explanation:         a.Explanation,
+			})
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(jsonReport{
+			Version:        version.Version,
+			Since:          since,
+			TotalEvents:    report.TotalEvents,
+			TotalFlagged:   report.TotalFlagged,
+			WithProvenance: report.WithProvenance,
+			Attributions:   attrs,
+		})
+	}
+
+	c := colorFunc(noColor)
+	bold := "\033[1m"
+	dim := "\033[2m"
+	purple := "\033[35m"
+	red := "\033[91m"
+	yellow := "\033[93m"
+	cyan := "\033[36m"
+	green := "\033[92m"
+
+	fmt.Fprintf(os.Stdout, "\n  %s  %s  %s\n\n",
+		c(purple+bold, "◆"),
+		c(bold, "Instruction Provenance"),
+		c(dim, fmt.Sprintf("last %s · %d events · %d findings · %d with provenance",
+			since, report.TotalEvents, report.TotalFlagged, report.WithProvenance)),
+	)
+
+	if len(report.Attributions) == 0 {
+		fmt.Fprintf(os.Stdout, "  %s  No suspicious calls preceded by content ingestion.\n\n",
+			c(green, "✓"),
+		)
+		if report.TotalFlagged > 0 {
+			fmt.Fprintf(os.Stdout, "  %s %d findings exist but none follow an identifiable ingestion event.\n",
+				c(dim, "→"),
+				report.TotalFlagged,
+			)
+			fmt.Fprintf(os.Stdout, "  %s They may have been triggered by direct user instruction.\n\n",
+				c(dim, " "),
+			)
+		}
+		return nil
+	}
+
+	confColor := func(conf string) string {
+		switch conf {
+		case "high":
+			return red + bold
+		case "medium":
+			return yellow + bold
+		default:
+			return dim
+		}
+	}
+
+	for _, attr := range report.Attributions {
+		ts := attr.SuspiciousEvent.Timestamp.Format("Jan 02 15:04:05")
+		fmt.Fprintf(os.Stdout, "  %s  %s %s  %s\n",
+			c(confColor(attr.Confidence), strings.ToUpper(attr.Confidence)+" CONFIDENCE"),
+			c(bold, attr.SuspiciousEvent.Tool),
+			c(dim, "via "+attr.SuspiciousEvent.Server),
+			c(dim, ts),
+		)
+
+		// Show top findings.
+		for _, f := range attr.Findings {
+			if f.Severity >= rules.SeverityHigh {
+				fmt.Fprintf(os.Stdout, "     %s %s  %s\n",
+					c(yellow, f.RuleID+":"),
+					c(bold, f.Name),
+					c(dim, f.Detail),
+				)
+			}
+		}
+
+		// The provenance link.
+		deltaStr := attr.Delta.Truncate(time.Second).String()
+		ingestTs := attr.IngestionEvent.Timestamp.Format("15:04:05")
+		fmt.Fprintf(os.Stdout, "\n     %s  %s %s\n",
+			c(dim, "⬆ injection source"),
+			c(cyan, attr.IngestionKind),
+			c(dim, "@ "+ingestTs),
+		)
+		fmt.Fprintf(os.Stdout, "        %s %s %s %s\n",
+			c(dim, "tool:"),
+			c(bold, attr.IngestionEvent.Tool),
+			c(dim, "· source:"),
+			c(cyan, attr.IngestionSource),
+		)
+		fmt.Fprintf(os.Stdout, "        %s %s earlier · %d event(s) apart\n",
+			c(dim, "→"),
+			c(dim, deltaStr),
+			attr.EventsApart,
+		)
+		fmt.Fprintf(os.Stdout, "        %s\n\n", c(dim, attr.Explanation))
+	}
+
+	fmt.Fprintf(os.Stdout, "  %s %d attribution(s). Run %s to drill into a session.\n\n",
+		c(dim, "─"),
+		len(report.Attributions),
+		c(bold, "aspex-trace session"),
+	)
+	return nil
 }
 
 // ---------------------------------------------------------------------------
