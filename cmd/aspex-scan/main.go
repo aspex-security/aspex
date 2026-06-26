@@ -21,6 +21,7 @@ import (
 	"github.com/aspex-security/aspex/internal/report"
 	"github.com/aspex-security/aspex/internal/rules"
 	"github.com/aspex-security/aspex/internal/score"
+	"github.com/aspex-security/aspex/internal/shadow"
 	"github.com/aspex-security/aspex/internal/version"
 	"github.com/aspex-security/aspex/internal/watch"
 )
@@ -112,6 +113,15 @@ COMPARING OVER TIME
 		},
 	}
 
+	root.PersistentFlags().BoolP("version", "v", false, "Print version and exit")
+	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if v, _ := cmd.Flags().GetBool("version"); v {
+			fmt.Printf("aspex-scan %s (built %s)\n", version.Version, version.BuildDate)
+			os.Exit(0)
+		}
+		return nil
+	}
+
 	root.PersistentFlags().BoolVar(&gf.noExec, "no-exec", false, "Static analysis only; skip launching MCP servers")
 	root.PersistentFlags().BoolVar(&gf.jsonOut, "json", false, "JSON output — pipe to jq or feed into SIEM")
 	root.PersistentFlags().BoolVar(&gf.noColor, "no-color", false, "Plain-text output (useful in CI logs)")
@@ -130,6 +140,7 @@ COMPARING OVER TIME
 	root.AddCommand(newVerifyCmd())
 	root.AddCommand(newInventoryCmd(&gf))
 	root.AddCommand(newAttackPathsCmd(&gf))
+	root.AddCommand(newShadowCmd(&gf))
 	root.AddCommand(newCompletionCmd())
 
 	return root
@@ -528,6 +539,181 @@ Fish:
 			}
 		},
 	}
+}
+
+func newShadowCmd(gf *globalFlags) *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:   "shadow",
+		Short: "Detect tool name collisions across MCP servers (shadow attack surface)",
+		Long: `Scan for tool name shadowing — a class of attack where a malicious or
+misconfigured MCP server registers tool names that collide with tools on a
+legitimate server.
+
+When two servers both expose a tool called "read_file", the AI agent's routing
+is ambiguous. An attacker can deliberately register common high-value names
+(read_file, execute_command, write_file) to intercept calls meant for a
+trusted server, forge responses, or silently execute alongside it.
+
+Risk levels:
+  CRITICAL  HTTP/SSE server shadows a high-value local tool (remote attacker wins)
+  HIGH      Local tool name collision on a high-capability tool
+  MEDIUM    Two local servers share a low-capability tool name`,
+		Example: `  # Detect all shadowing in your current MCP setup
+  aspex-scan shadow
+
+  # JSON output for CI or custom tooling
+  aspex-scan shadow --json
+
+  # Only check Claude Desktop
+  aspex-scan --clients claude shadow`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runShadow(gf, jsonOut)
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	return cmd
+}
+
+func runShadow(gf *globalFlags, jsonOut bool) error {
+	servers, _ := discover.DiscoverAll(gf.clients)
+	ctx := context.Background()
+	opts := inspect.Options{NoExec: gf.noExec}
+
+	var inspected []*inspect.Server
+	for _, entry := range servers {
+		inspected = append(inspected, inspect.InspectServer(ctx, entry, opts))
+	}
+
+	report := shadow.Analyze(inspected)
+
+	if jsonOut || gf.jsonOut {
+		type jsonSide struct {
+			Server    string `json:"server"`
+			Client    string `json:"client"`
+			Transport string `json:"transport"`
+		}
+		type jsonCollision struct {
+			ToolName string     `json:"tool_name"`
+			Risk     string     `json:"risk"`
+			Reason   string     `json:"reason"`
+			Servers  []jsonSide `json:"servers"`
+		}
+		type jsonReport struct {
+			Version         string          `json:"version"`
+			TotalServers    int             `json:"total_servers"`
+			TotalTools      int             `json:"total_tools"`
+			UniqueToolNames int             `json:"unique_tool_names"`
+			Collisions      []jsonCollision `json:"collisions"`
+		}
+		var cols []jsonCollision
+		for _, col := range report.Collisions {
+			var sides []jsonSide
+			for _, s := range col.Servers {
+				sides = append(sides, jsonSide{Server: s.ServerName, Client: s.Client, Transport: s.Transport})
+			}
+			cols = append(cols, jsonCollision{
+				ToolName: col.ToolName,
+				Risk:     col.Risk,
+				Reason:   col.Reason,
+				Servers:  sides,
+			})
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(jsonReport{
+			Version:         version.Version,
+			TotalServers:    report.TotalServers,
+			TotalTools:      report.TotalTools,
+			UniqueToolNames: report.UniqueToolNames,
+			Collisions:      cols,
+		})
+	}
+
+	c := func(col, text string) string {
+		if gf.noColor {
+			return text
+		}
+		return col + text + "\033[0m"
+	}
+	bold := "\033[1m"
+	dim := "\033[2m"
+	purple := "\033[35m"
+	red := "\033[91m"
+	yellow := "\033[93m"
+	cyan := "\033[36m"
+
+	fmt.Fprintf(os.Stdout, "\n  %s  %s\n  %s %d servers · %d tools · %d unique names\n\n",
+		c(purple+bold, "◆"),
+		c(bold, "Tool Name Shadow Analysis"),
+		c(dim, "→"),
+		report.TotalServers,
+		report.TotalTools,
+		report.UniqueToolNames,
+	)
+
+	if len(report.Collisions) == 0 {
+		fmt.Fprintf(os.Stdout, "  %s  No tool name collisions found — every tool name is unique across your servers.\n\n",
+			c("\033[92m", "✓"),
+		)
+		fmt.Fprintf(os.Stdout, "  %s Run %s regularly as you add new MCP servers.\n\n",
+			c(dim, "→"),
+			c(cyan, "aspex-scan shadow"),
+		)
+		return nil
+	}
+
+	sevColor := func(s string) string {
+		switch s {
+		case "critical":
+			return red + bold
+		case "high":
+			return yellow + bold
+		}
+		return dim
+	}
+
+	for _, col := range report.Collisions {
+		serverNames := make([]string, len(col.Servers))
+		for i, s := range col.Servers {
+			t := ""
+			if s.IsExternal {
+				t = " (http)"
+			}
+			serverNames[i] = s.ServerName + t
+		}
+		fmt.Fprintf(os.Stdout, "  %s  %s %s\n",
+			c(sevColor(col.Risk), strings.ToUpper(col.Risk)),
+			c(bold, col.ToolName),
+			c(dim, "·  "+strings.Join(serverNames, " ↔ ")),
+		)
+		fmt.Fprintf(os.Stdout, "     %s\n\n", c(dim, col.Reason))
+	}
+
+	crit := 0
+	high := 0
+	for _, col := range report.Collisions {
+		switch col.Risk {
+		case "critical":
+			crit++
+		case "high":
+			high++
+		}
+	}
+	fmt.Fprintf(os.Stdout, "  %s %d collision(s) found",
+		c(dim, "─"),
+		len(report.Collisions),
+	)
+	if crit > 0 {
+		fmt.Fprintf(os.Stdout, " · %s", c(red+bold, fmt.Sprintf("%d critical", crit)))
+	}
+	if high > 0 {
+		fmt.Fprintf(os.Stdout, " · %s", c(yellow, fmt.Sprintf("%d high", high)))
+	}
+	fmt.Fprintf(os.Stdout, "\n\n")
+	return nil
 }
 
 func newInspectCmd(gf *globalFlags) *cobra.Command {

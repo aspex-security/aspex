@@ -149,6 +149,7 @@ Commands:
   inspect <target>      Scan a single server by command or URL
   inventory             List every MCP server and tool on this machine
   attack-paths          Identify dangerous cross-server attack chains
+  shadow                Detect tool name collisions (shadow attack surface)
   diff --baseline <f>   Compare to a saved baseline (rug-pull detection)
   verify <package>      Check an npm package against the known-bad registry
   install-hook          Install a git pre-commit hook
@@ -197,6 +198,23 @@ Example output:
   HIGH  Persistence via Shell  · Persistence (TA0003)
      ...
 ```
+
+### Tool name shadowing
+
+`shadow` detects a class of attack that per-server scanning misses: when two servers expose the same tool name, an AI agent's routing is ambiguous. A malicious server can register common names like `read_file` or `execute_command` to intercept calls meant for a trusted server — receiving the agent's inputs, forging responses, or silently running alongside it.
+
+```sh
+# Check for tool name collisions across all installed servers
+aspex-scan shadow
+
+# JSON output for CI or custom tooling
+aspex-scan shadow --json | jq '.collisions[] | select(.risk == "critical")'
+```
+
+Risk levels:
+- **CRITICAL** — an HTTP/SSE (remote) server shadows a high-value local tool. The remote server wins.
+- **HIGH** — two local servers share a high-capability tool name (`read_file`, `write_file`, `execute_command`).
+- **MEDIUM** — two servers share a less-critical tool name; routing is still ambiguous.
 
 ### MCP inventory
 
@@ -374,6 +392,7 @@ aspex-trace <command>
 Commands:
   stats                Activity dashboard — no rule evaluation, just counts
   session [id]         Forensic timeline for one session (list or drill in)
+  killchain            Detect multi-step attack patterns in event sequences
   export               Export all events to CSV or JSONL
   live                 Real-time monitoring — tails logs and prints new findings
   baseline --learn     Build a behavioural baseline from recent logs
@@ -396,9 +415,31 @@ Flags:
   --no-color           Disable colour output
 ```
 
+### Kill chain detection
+
+`killchain` goes beyond per-event flagging to reconstruct complete attack patterns from event sequences. It identifies whether suspicious events in combination form a coherent, intentional attack — the difference between "something looked odd" and "here is the evidence that an attack happened."
+
+Patterns detected:
+
+| Pattern | Trigger |
+|---|---|
+| **Credential Exfiltration** | Sensitive file read → outbound network call (< 5 min) |
+| **Persistence Establishment** | Shell exec → write to startup location |
+| **Recon to Credential Theft** | Enumeration / scan → credential file access |
+| **Cross-Server Data Chain** | Cred read via server A → outbound call via server B |
+| **Prompt Injection Signature** | Server becomes active with high-risk calls in an unexpected context |
+
+```sh
+# Detect kill chains in the last 7 days
+aspex-trace killchain --since 7d
+
+# JSON for SIEM ingest
+aspex-trace killchain --json | jq '.chains[] | select(.severity=="critical")'
+```
+
 ### Session forensics
 
-After the main report flags a session, drill into the exact sequence of events:
+After the main report or kill chain analysis flags a session, drill into the exact sequence of events:
 
 ```sh
 # List recent sessions
@@ -445,84 +486,142 @@ aspex-trace live --client claude-code --interval 2
 
 ## Examples
 
-Real-world workflows combining both tools.
+---
+
+### First run — find out what you have
+
+```sh
+# What MCP servers are installed on this machine?
+aspex-scan inventory
+
+# Do any of them share tool names? (shadow attack surface)
+aspex-scan shadow
+
+# Are there dangerous cross-server capability combinations?
+aspex-scan attack-paths
+
+# Full risk scan with HTML report
+aspex-scan --html report.html && open report.html
+```
+
+---
 
 ### Before installing a new MCP server
 
 ```sh
-# 1. Static scan first — no code runs
+# Static analysis first — no code runs
 aspex-scan inspect "npx -y @some-org/mcp-server-xyz" --no-exec
 
-# 2. If it looks clean, do a live scan
+# Full live inspection — tools, descriptions, scores
 aspex-scan inspect "npx -y @some-org/mcp-server-xyz"
 
-# 3. Check attack paths after installing it
-aspex-scan attack-paths
+# Check the npm package against the known-malicious registry
+aspex-scan verify @some-org/mcp-server-xyz
+
+# After adding it to your config: check if it shadows any existing tools
+aspex-scan shadow
 ```
 
-### Daily security audit (automate in cron)
+---
+
+### Daily security hygiene (put in cron)
 
 ```sh
-# Morning check: anything suspicious overnight?
-aspex-trace --since 12h --fail-on high
+# Morning: anything happened overnight?
+aspex-trace --since 12h --suppress-noise
 
-# Weekly scan: have any servers changed?
-aspex-scan diff --baseline ~/.config/aspex/baseline.json
+# Quick stats without full evaluation (fast)
+aspex-trace stats
+
+# Watch for real-time findings during a long agent session
+aspex-trace live --client claude-code
+
+# Weekly: have any servers changed since your last scan?
+aspex-scan diff --baseline ~/.config/aspex/scan-baseline.json
 ```
 
-### After an unexpected agent session
+---
+
+### Something looks wrong — investigate
 
 ```sh
-# See what happened in the last hour
-aspex-trace --since 1h
+# Run the kill chain detector first — proves attack vs. noise
+aspex-trace killchain --since 7d
 
-# Drill into a specific suspicious session
-aspex-trace session --since 1h  # lists sessions
-aspex-trace session filesystem --since 1h  # full timeline
+# See which sessions were active
+aspex-trace session
+
+# Drill into the suspicious one (fuzzy match on server/date)
+aspex-trace session filesystem --since 7d
+
+# Full chronological event log, JSON for further analysis
+aspex-trace session filesystem --since 7d --json | jq .
+
+# Export everything for your SIEM or forensics tool
+aspex-trace export --since 30d --format jsonl | \
+  jq 'select(.rule_ids | length > 0)'
 ```
 
-### CI gate for agent-enabled repos
+---
+
+### CI gate — block bad configs before they land
 
 ```yaml
-# .github/workflows/ci.yml — add to any repo using MCP
+# .github/workflows/security.yml
+- name: Scan MCP server configs
+  uses: aspex-security/aspex/.github/actions/aspex-scan-action@v0.2
+  with:
+    fail-on: high          # fail the build on HIGH or CRITICAL
+    no-exec: true          # static only in CI — don't launch servers
+
+- name: Check for tool name shadowing
+  run: aspex-scan shadow --json | jq 'if .collisions | length > 0 then error else . end'
+
 - name: Audit agent activity
   uses: aspex-security/aspex/.github/actions/aspex-trace-action@v0.2
   with:
     fail-on: critical
-
-- name: Scan MCP configs
-  uses: aspex-security/aspex/.github/actions/aspex-scan-action@v0.2
-  with:
-    fail-on: high
 ```
 
-### Investigate a compromised machine
+---
+
+### Incident response — post-mortem on a compromised machine
 
 ```sh
-# Full 30-day history — everything that happened
-aspex-trace --since 30d --json > audit-30d.json
-
-# Export all events for external forensics tools
-aspex-trace export --since 30d --format jsonl | \
-  jq 'select(.rule_ids | length > 0)' > flagged-events.jsonl
-
-# What MCP servers did this machine have?
+# 1. Get the full picture: what MCP servers existed?
 aspex-scan inventory --json > inventory.json
 
-# Could any of them exfiltrate data?
-aspex-scan attack-paths --json
+# 2. Which combinations could exfiltrate data?
+aspex-scan attack-paths --json > attack-paths.json
+
+# 3. Did it actually happen? Kill chain reconstruction
+aspex-trace killchain --since 30d --json > kill-chains.json
+
+# 4. Full 30-day event history
+aspex-trace export --since 30d --format jsonl > events.jsonl
+
+# 5. Drill into each kill chain's session
+aspex-trace session --since 30d --json | \
+  jq '.[] | select(.event_count > 50)' | \
+  while read id; do aspex-trace session "$id" --json; done
 ```
 
-### Shell completions
+---
+
+### Shell completions (one-time setup)
 
 ```sh
-# Set up completions once (example: zsh)
+# zsh
 aspex-scan completion zsh > "${fpath[1]}/_aspex-scan"
 aspex-trace completion zsh > "${fpath[1]}/_aspex-trace"
 
-# Or for the current session
-source <(aspex-scan completion bash)
-source <(aspex-trace completion bash)
+# bash
+aspex-scan completion bash > /etc/bash_completion.d/aspex-scan
+aspex-trace completion bash > /etc/bash_completion.d/aspex-trace
+
+# fish
+aspex-scan completion fish | source
+aspex-trace completion fish | source
 ```
 
 ---
