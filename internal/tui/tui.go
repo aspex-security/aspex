@@ -235,7 +235,26 @@ func Run(version string) {
 			fmt.Print(clearScr)
 
 			launch(item.Binary, args)
-			return
+
+			// After the tool exits, offer to return to the menu.
+			fmt.Print("\r\n  \033[2mPress any key to return to menu, Q to quit\033[0m\r\n")
+			newState, err := term.MakeRaw(fd)
+			if err != nil {
+				return
+			}
+			oldState = newState
+			fmt.Print(hideCursor)
+
+			var kb [8]byte
+			n, _ := os.Stdin.Read(kb[:])
+			if n > 0 && readKey(kb[:n]) == keyQuit {
+				term.Restore(fd, oldState)
+				fmt.Print(showCursor)
+				fmt.Print(clearScr)
+				return
+			}
+			inSub = false
+			subSel = 0
 		}
 	}
 }

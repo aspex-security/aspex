@@ -7,6 +7,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.3.3] — 2026-06-27
+
+### Changed
+
+- `aspex` TUI: after a tool exits, prompt the user to return to the menu instead of quitting. Press any key to go back, Q to exit.
+
+---
+
 ## [0.3.2] — 2026-06-27
 
 ### Fixed
