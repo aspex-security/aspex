@@ -7,6 +7,22 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.3.4] — 2026-06-27
+
+### Changed
+
+**aspex-scan redteam — false positive reduction**
+- `system-prompt-leak` detector now requires clear compliance signals (e.g. "I am now DAN", "my system prompt is:") rather than firing on the word "instructions" echoed back in tool error messages
+- `prompt-leakage` detector now requires specific system-prompt disclosure phrases; generic words like "always"/"never" in tool output no longer trigger it
+- Probes that receive a tool error response now skip injection/leakage detectors — a rejected malformed input is not a vulnerability
+- Error disclosure detectors still run on error responses (stack traces, internal paths in errors are valid findings)
+
+**aspex-scan redteam — UX**
+- Confirmation prompt before probing: shows scope (server list, timeout) and requires explicit `y` to proceed
+- Per-tool progress indicator while probing: shows `tool-name (N probes)…` in-place, replaced by result on completion
+
+---
+
 ## [0.3.3] — 2026-06-27
 
 ### Changed

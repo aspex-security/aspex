@@ -1184,13 +1184,25 @@ func runRedTeam(gf *globalFlags, serverFlag string, timeoutSecs int, jsonOut boo
 	yellow := "\033[93m"
 
 	if !jsonOut && !gf.jsonOut {
-		fmt.Fprintf(os.Stdout, "\n  %s  %s\n  %s %d server(s) · timeout %ds per probe\n\n",
+		// Confirmation prompt — show scope and require explicit Y before firing payloads.
+		fmt.Fprintf(os.Stdout, "\n  %s  %s\n\n",
 			c(purple+bold, "◆"),
 			c(bold, "Red Team Probe"),
-			c(dim, "→"),
-			len(servers),
-			timeoutSecs,
 		)
+		fmt.Fprintf(os.Stdout, "  %s This command calls live MCP tools with adversarial payloads.\n", c(yellow, "!"))
+		fmt.Fprintf(os.Stdout, "  Only run against servers you own or have explicit written permission to test.\n\n")
+		fmt.Fprintf(os.Stdout, "  Scope: %s server(s) · timeout %ds per probe\n", c(bold, fmt.Sprintf("%d", len(servers))), timeoutSecs)
+		for _, s := range servers {
+			fmt.Fprintf(os.Stdout, "    %s %s\n", c(dim, "·"), s.Name)
+		}
+		fmt.Fprintf(os.Stdout, "\n  Proceed? %s ", c(dim, "[y/N]"))
+		var answer string
+		fmt.Fscan(os.Stdin, &answer)
+		if strings.ToLower(strings.TrimSpace(answer)) != "y" {
+			fmt.Fprintln(os.Stdout, c(dim, "\n  Aborted."))
+			return nil
+		}
+		fmt.Fprintln(os.Stdout)
 	}
 
 	type jsonVuln struct {
@@ -1219,8 +1231,8 @@ func runRedTeam(gf *globalFlags, serverFlag string, timeoutSecs int, jsonOut boo
 
 	for _, entry := range servers {
 		if !jsonOut && !gf.jsonOut {
-			fmt.Fprintf(os.Stdout, "  %s %s\r",
-				c(dim, "probing"),
+			fmt.Fprintf(os.Stdout, "  %s %s\n",
+				c(dim, "▸"),
 				c(bold, entry.Name),
 			)
 		}
@@ -1281,6 +1293,14 @@ func runRedTeam(gf *globalFlags, serverFlag string, timeoutSecs int, jsonOut boo
 				continue
 			}
 
+			if !jsonOut && !gf.jsonOut {
+				fmt.Fprintf(os.Stdout, "    %s %s %s\r",
+					c(dim, "·"),
+					c(dim, tool.Name),
+					c(dim, fmt.Sprintf("(%d probes)…", len(probes))),
+				)
+			}
+
 			probeCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSecs)*time.Second)
 			results := redteam.RunProbes(probeCtx, entry, tool, probes)
 			cancel()
@@ -1307,6 +1327,8 @@ func runRedTeam(gf *globalFlags, serverFlag string, timeoutSecs int, jsonOut boo
 			}
 
 			if !jsonOut && !gf.jsonOut {
+				// Clear the in-progress line then print the result.
+				fmt.Fprintf(os.Stdout, "\033[2K")
 				if len(toolVulns) > 0 {
 					fmt.Fprintf(os.Stdout, "    %s  %s  %s\n",
 						c(red+bold, "VULNERABLE"),
