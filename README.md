@@ -345,6 +345,36 @@ aspex-scan --json > baseline.json
 aspex-scan diff --baseline baseline.json
 ```
 
+### Config hardening
+
+`fix` removes dangerous MCP servers from your client config files automatically:
+
+```sh
+# Preview what would be removed (no changes made)
+aspex-scan fix --dry-run
+
+# Remove all CRITICAL-severity servers from Claude Desktop config
+aspex-scan fix --severity critical --client claude
+
+# Write a hardened copy without touching the original
+aspex-scan fix --output ~/mcp-config-hardened.json
+```
+
+### Continuous monitoring
+
+`cron` runs `aspex-scan` on a schedule and only reports **new** findings — safe to run as an actual cron job without noise:
+
+```sh
+# Scan every hour, print new findings
+aspex-scan cron --interval 1h
+
+# Alert to Slack on new critical/high findings
+aspex-scan cron --interval 30m --notify https://hooks.slack.com/services/...
+
+# Quiet mode — only notify, no terminal output
+aspex-scan cron --interval 1h --notify https://hooks.slack.com/services/... --quiet
+```
+
 ### Pre-commit hook
 
 Block commits that introduce risky MCP config changes:
@@ -617,7 +647,39 @@ aspex-trace live
 
 # Watch only Claude Code, faster poll
 aspex-trace live --client claude-code --interval 2
+
+# Alert to Slack on any HIGH+ finding in real time
+aspex-trace live --notify https://hooks.slack.com/services/...
+
+# Generic webhook (any URL); pass Bearer token via ?token=
+aspex-trace live --notify https://alerts.example.com/mcp?token=abc123
 ```
+
+---
+
+## VS Code / Cursor extension
+
+Install the extension and aspex-scan runs inline whenever you save an MCP config file — no terminal needed.
+
+```sh
+# Build and install from source
+cd extensions/vscode-aspex
+npm install && npm run compile
+code --install-extension .
+```
+
+Findings appear as squiggles and Problems panel entries with severity levels. Commands available from the Command Palette (`Cmd+Shift+P`):
+
+- **Aspex: Scan MCP Configuration** — scan the currently open file
+- **Aspex: Scan All MCP Configurations** — scan every MCP config in the workspace
+
+Settings:
+
+| Setting | Default | Description |
+|---|---|---|
+| `aspex.binaryPath` | `aspex-scan` | Path to aspex-scan binary |
+| `aspex.scanOnSave` | `true` | Auto-scan on save |
+| `aspex.minSeverity` | `medium` | Minimum severity to show |
 
 ---
 

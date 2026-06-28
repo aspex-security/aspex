@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -17,6 +19,7 @@ import (
 	"github.com/aspex-security/aspex/internal/hook"
 	"github.com/aspex-security/aspex/internal/inspect"
 	"github.com/aspex-security/aspex/internal/mcpclient"
+	"github.com/aspex-security/aspex/internal/notify"
 	"github.com/aspex-security/aspex/internal/phantom"
 	"github.com/aspex-security/aspex/internal/redteam"
 	"github.com/aspex-security/aspex/internal/registry"
@@ -148,6 +151,8 @@ COMPARING OVER TIME
 	root.AddCommand(newPhantomCmd(&gf))
 	root.AddCommand(newRedTeamCmd(&gf))
 	root.AddCommand(newCompletionCmd())
+	root.AddCommand(newFixCmd(&gf))
+	root.AddCommand(newCronCmd(&gf))
 
 	return root
 }
@@ -1692,4 +1697,464 @@ func checkExitCode(failOn string, overall score.OverallScore) error {
 		return errExitOne
 	}
 	return nil
+}
+
+// ---- aspex-scan fix -------------------------------------------------------------
+
+func newFixCmd(gf *globalFlags) *cobra.Command {
+	var (
+		dryRun      bool
+		severityStr string
+		outputPath  string
+		clientName  string
+	)
+	cmd := &cobra.Command{
+		Use:   "fix [--dry-run] [--severity critical|high] [--output <path>] [--client <name>]",
+		Short: "Harden your MCP client configs by removing dangerous servers",
+		Long: `Run a full scan and generate hardened versions of your MCP client configs.
+
+Servers with findings at or above the threshold severity are removed from the
+config. A diff-style summary shows exactly what was changed.
+
+By default (--dry-run) the hardened config is printed to stdout and no files
+are modified. Pass --output to write to a specific path, or omit both flags to
+overwrite the original config in place (after confirmation).`,
+		Example: `  # Preview what would be removed (dry run, default)
+  aspex-scan fix --dry-run
+
+  # Remove critical+high servers and write to a new file
+  aspex-scan fix --severity high --output ~/mcp-safe.json
+
+  # Harden Claude Desktop config in place
+  aspex-scan fix --client claude
+
+  # Only show critical removals, no file write
+  aspex-scan fix --dry-run --severity critical`,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clients := gf.clients
+			if clientName != "" {
+				clients = []string{clientName}
+			}
+			return runFix(gf, clients, dryRun, severityStr, outputPath)
+		},
+	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print hardened config to stdout; do not write files")
+	cmd.Flags().StringVar(&severityStr, "severity", "critical", "Remove servers with findings at or above this severity: critical|high|medium|low")
+	cmd.Flags().StringVar(&outputPath, "output", "", "Write hardened config to this path instead of overwriting originals")
+	cmd.Flags().StringVar(&clientName, "client", "", "Only fix this client's config (e.g. claude, cursor)")
+	return cmd
+}
+
+func runFix(gf *globalFlags, clients []string, dryRun bool, severityStr string, outputPath string) error {
+	threshold := parseSeverityString(severityStr)
+
+	c := func(col, text string) string {
+		if gf.noColor {
+			return text
+		}
+		return col + text + "\033[0m"
+	}
+	bold := "\033[1m"
+	dim := "\033[2m"
+	red := "\033[91m"
+	yellow := "\033[93m"
+	green := "\033[92m"
+	purple := "\033[35m"
+
+	// Discover and inspect all servers.
+	entries, _ := discover.DiscoverAll(clients)
+	if len(entries) == 0 {
+		fmt.Fprintln(os.Stderr, "No MCP servers found.")
+		return nil
+	}
+
+	ctx := context.Background()
+	opts := inspect.Options{NoExec: gf.noExec}
+
+	// Group entries by config file so we can produce one hardened config per file.
+	type configGroup struct {
+		configPath string
+		client     string
+		entries    []discover.ServerEntry
+	}
+	groupMap := map[string]*configGroup{}
+	var groupOrder []string
+	for _, e := range entries {
+		if _, exists := groupMap[e.ConfigPath]; !exists {
+			groupMap[e.ConfigPath] = &configGroup{configPath: e.ConfigPath, client: e.Client}
+			groupOrder = append(groupOrder, e.ConfigPath)
+		}
+		groupMap[e.ConfigPath].entries = append(groupMap[e.ConfigPath].entries, e)
+	}
+
+	fmt.Fprintf(os.Stdout, "\n  %s  %s\n\n",
+		c(purple+bold, "◆"),
+		c(bold, "aspex-scan fix — config hardening"),
+	)
+
+	anyChanges := false
+
+	for _, cfgPath := range groupOrder {
+		grp := groupMap[cfgPath]
+
+		// Inspect each server in this config and collect findings.
+		type serverResult struct {
+			entry    discover.ServerEntry
+			findings []rules.Finding
+			remove   bool
+			topRule  string
+		}
+		var results []serverResult
+		for _, entry := range grp.entries {
+			srv := inspect.InspectServer(ctx, entry, opts)
+			findings := rules.EvalServer(srv)
+			remove := false
+			topRule := ""
+			for _, f := range findings {
+				if f.Severity >= threshold {
+					remove = true
+					topRule = f.RuleID + ": " + f.Name
+					break
+				}
+			}
+			results = append(results, serverResult{entry: entry, findings: findings, remove: remove, topRule: topRule})
+		}
+
+		// Build the set of servers to remove.
+		toRemove := map[string]string{} // server name -> reason
+		for _, r := range results {
+			if r.remove {
+				toRemove[r.entry.Name] = r.topRule
+			}
+		}
+
+		fmt.Fprintf(os.Stdout, "  %s  %s\n", c(purple, "◉"), c(bold, cfgPath))
+		if len(toRemove) == 0 {
+			fmt.Fprintf(os.Stdout, "     %s\n\n", c(green, "✓ no servers to remove at this severity threshold"))
+			continue
+		}
+
+		// Print diff-style summary.
+		for _, r := range results {
+			if r.remove {
+				fmt.Fprintf(os.Stdout, "     %s  %s  %s\n",
+					c(red, "✗ removed"),
+					c(bold, r.entry.Name),
+					c(dim, "("+r.topRule+")"),
+				)
+			} else {
+				fmt.Fprintf(os.Stdout, "     %s  %s\n",
+					c(green, "✓ kept   "),
+					r.entry.Name,
+				)
+			}
+		}
+		fmt.Fprintln(os.Stdout)
+
+		anyChanges = true
+
+		// Read and patch the config file.
+		rawData, err := os.ReadFile(cfgPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  %s reading %s: %v\n", c(yellow, "warn:"), cfgPath, err)
+			continue
+		}
+
+		hardenedData, err := removeServersFromConfig(grp.client, rawData, toRemove)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  %s patching %s: %v\n", c(yellow, "warn:"), cfgPath, err)
+			continue
+		}
+
+		// Determine where to write.
+		dest := ""
+		if dryRun {
+			fmt.Fprintf(os.Stdout, "  %s\n", c(dim, "--- dry run: hardened config follows ---"))
+			fmt.Fprintln(os.Stdout, string(hardenedData))
+			continue
+		}
+		if outputPath != "" {
+			dest = outputPath
+		} else {
+			// Ask for confirmation before overwriting.
+			fmt.Fprintf(os.Stdout, "  Overwrite %s? [y/N] ", cfgPath)
+			var answer string
+			fmt.Fscan(os.Stdin, &answer)
+			if strings.ToLower(strings.TrimSpace(answer)) != "y" {
+				fmt.Fprintln(os.Stdout, "  Skipped.")
+				continue
+			}
+			dest = cfgPath
+		}
+
+		if err := os.WriteFile(dest, hardenedData, 0o644); err != nil {
+			fmt.Fprintf(os.Stderr, "  %s writing %s: %v\n", c(red, "error:"), dest, err)
+			continue
+		}
+		fmt.Fprintf(os.Stdout, "  %s %s\n\n", c(green, "✓ wrote"), dest)
+	}
+
+	if !anyChanges {
+		fmt.Fprintf(os.Stdout, "  %s No servers meet the removal threshold (%s). No changes needed.\n\n",
+			c(green, "✓"), c(bold, strings.ToUpper(severityStr)))
+	}
+	return nil
+}
+
+// removeServersFromConfig reads the raw config JSON for the given client, deletes the
+// entries listed in toRemove (by server name), and returns the patched JSON.
+// It works by unmarshalling into a generic map so all client-specific config keys
+// outside the MCP servers section are preserved.
+func removeServersFromConfig(client string, data []byte, toRemove map[string]string) ([]byte, error) {
+	switch client {
+	case discover.ClientVSCode:
+		// VS Code uses "mcp.servers" key.
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return nil, fmt.Errorf("invalid JSON: %w", err)
+		}
+		if serversRaw, ok := raw["mcp.servers"]; ok {
+			var servers map[string]json.RawMessage
+			if err := json.Unmarshal(serversRaw, &servers); err == nil {
+				for name := range toRemove {
+					delete(servers, name)
+				}
+				patched, err := json.Marshal(servers)
+				if err != nil {
+					return nil, err
+				}
+				raw["mcp.servers"] = patched
+			}
+		}
+		return json.MarshalIndent(raw, "", "  ")
+
+	case discover.ClientZed:
+		// Zed uses "context_servers" key.
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return nil, fmt.Errorf("invalid JSON: %w", err)
+		}
+		if serversRaw, ok := raw["context_servers"]; ok {
+			var servers map[string]json.RawMessage
+			if err := json.Unmarshal(serversRaw, &servers); err == nil {
+				for name := range toRemove {
+					delete(servers, name)
+				}
+				patched, err := json.Marshal(servers)
+				if err != nil {
+					return nil, err
+				}
+				raw["context_servers"] = patched
+			}
+		}
+		return json.MarshalIndent(raw, "", "  ")
+
+	case discover.ClientContinue:
+		// Continue uses an array under "mcpServers".
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return nil, fmt.Errorf("invalid JSON: %w", err)
+		}
+		if serversRaw, ok := raw["mcpServers"]; ok {
+			var servers []json.RawMessage
+			if err := json.Unmarshal(serversRaw, &servers); err == nil {
+				var kept []json.RawMessage
+				for _, s := range servers {
+					var entry struct {
+						Name    string `json:"name"`
+						Command string `json:"command"`
+					}
+					if err := json.Unmarshal(s, &entry); err != nil {
+						kept = append(kept, s)
+						continue
+					}
+					name := entry.Name
+					if name == "" {
+						name = entry.Command
+					}
+					if _, remove := toRemove[name]; !remove {
+						kept = append(kept, s)
+					}
+				}
+				patched, err := json.Marshal(kept)
+				if err != nil {
+					return nil, err
+				}
+				raw["mcpServers"] = patched
+			}
+		}
+		return json.MarshalIndent(raw, "", "  ")
+
+	default:
+		// Claude Desktop, Cursor, Windsurf, Cline, Roo-Cline — all use "mcpServers" map.
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return nil, fmt.Errorf("invalid JSON: %w", err)
+		}
+		if serversRaw, ok := raw["mcpServers"]; ok {
+			var servers map[string]json.RawMessage
+			if err := json.Unmarshal(serversRaw, &servers); err == nil {
+				for name := range toRemove {
+					delete(servers, name)
+				}
+				patched, err := json.Marshal(servers)
+				if err != nil {
+					return nil, err
+				}
+				raw["mcpServers"] = patched
+			}
+		}
+		return json.MarshalIndent(raw, "", "  ")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// cron subcommand
+// ---------------------------------------------------------------------------
+
+func newCronCmd(gf *globalFlags) *cobra.Command {
+	var intervalStr, notifyURL string
+	var quiet bool
+	cmd := &cobra.Command{
+		Use:   "cron",
+		Short: "Run aspex-scan on a schedule and alert on new findings",
+		Long: `Continuously scan MCP server configs on a fixed interval. On each run,
+only NEW findings (not seen in previous runs) are printed and optionally
+sent to a webhook. Useful as a background monitor or scheduled CI job.
+
+Press Ctrl-C to stop.`,
+		Example: `  # Scan every hour, print new findings
+  aspex-scan cron --interval 1h
+
+  # Scan every 30 minutes and post alerts to Slack
+  aspex-scan cron --interval 30m --notify https://hooks.slack.com/services/...
+
+  # Silent unless something new appears
+  aspex-scan cron --interval 6h --quiet --notify https://hooks.slack.com/services/...`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runCron(gf, intervalStr, notifyURL, quiet)
+		},
+	}
+	cmd.Flags().StringVar(&intervalStr, "interval", "1h", "Scan interval (e.g. 30m, 1h, 6h)")
+	cmd.Flags().StringVar(&notifyURL, "notify", "", "Webhook URL for new HIGH/CRITICAL findings (Slack or generic JSON)")
+	cmd.Flags().BoolVar(&quiet, "quiet", false, "Suppress per-run summary when no new findings")
+	return cmd
+}
+
+func runCron(gf *globalFlags, intervalStr, notifyURL string, quiet bool) error {
+	interval, err := time.ParseDuration(intervalStr)
+	if err != nil {
+		return fmt.Errorf("invalid interval %q: %w", intervalStr, err)
+	}
+
+	bold := "\033[1m"
+	dim := "\033[2m"
+	purple := "\033[35m"
+	red := "\033[91m"
+	yellow := "\033[93m"
+	green := "\033[92m"
+	c := func(col, text string) string {
+		if gf.noColor {
+			return text
+		}
+		return col + text + "\033[0m"
+	}
+
+	fmt.Fprintf(os.Stdout, "\n  %s  %s  %s\n",
+		c(purple+bold, "◆"),
+		c(bold, "aspex-scan cron"),
+		c(dim, fmt.Sprintf("interval %s · Ctrl-C to stop", intervalStr)),
+	)
+	if notifyURL != "" {
+		fmt.Fprintf(os.Stdout, "  %s Alerts → %s\n", c(dim, "→"), notifyURL)
+	}
+	fmt.Fprintln(os.Stdout)
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	done := make(chan struct{})
+	go func() { <-sigCh; close(done) }()
+
+	seen := map[string]bool{}
+
+	scan := func() {
+		ts := time.Now().Format("15:04:05")
+		servers, _ := discover.DiscoverAll(gf.clients)
+		ctx := context.Background()
+		opts := inspect.Options{NoExec: gf.noExec}
+
+		newCount := 0
+		for _, entry := range servers {
+			srv := inspect.InspectServer(ctx, entry, opts)
+			findings := rules.EvalServer(srv)
+			for _, f := range findings {
+				key := entry.Name + "/" + f.RuleID
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				newCount++
+
+				sevColor := yellow
+				if f.Severity >= rules.SeverityCritical {
+					sevColor = red + bold
+				} else if f.Severity >= rules.SeverityHigh {
+					sevColor = red
+				}
+				fmt.Fprintf(os.Stdout, "  %s  %s  %s  %s  %s\n",
+					c(dim, ts),
+					c(sevColor, strings.ToUpper(f.Severity.String())),
+					c(purple, f.RuleID),
+					c(bold, f.Name),
+					c(dim, entry.Name),
+				)
+				fmt.Fprintf(os.Stdout, "     %s\n", f.Detail)
+
+				if notifyURL != "" && f.Severity >= rules.SeverityHigh {
+					notify.Send(notifyURL, notify.Finding{
+						Severity: f.Severity.String(),
+						RuleID:   f.RuleID,
+						Tool:     "",
+						Server:   entry.Name,
+						Detail:   f.Detail,
+						Client:   entry.Client,
+					})
+				}
+			}
+		}
+
+		if !quiet || newCount > 0 {
+			icon := c(green, "✓")
+			if newCount > 0 {
+				icon = c(yellow, "!")
+			}
+			fmt.Fprintf(os.Stdout, "  %s %s  scan complete · %d server(s) · %s\n",
+				icon,
+				c(dim, ts),
+				len(servers),
+				c(bold, fmt.Sprintf("%d new finding(s)", newCount)),
+			)
+		}
+	}
+
+	// Run immediately, then on ticker.
+	runOnce := make(chan struct{}, 1)
+	runOnce <- struct{}{}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-done:
+			fmt.Fprintf(os.Stdout, "\n  %s  Stopped.\n\n", c(dim, "◇"))
+			return nil
+		case <-runOnce:
+			scan()
+		case <-ticker.C:
+			scan()
+		}
+	}
 }

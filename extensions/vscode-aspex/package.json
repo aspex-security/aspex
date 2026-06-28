@@ -1,0 +1,58 @@
+{
+  "name": "vscode-aspex",
+  "displayName": "Aspex — MCP Security Scanner",
+  "description": "Inline security analysis for MCP server configurations using aspex-scan",
+  "version": "0.1.0",
+  "publisher": "aspex-security",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Linters", "Security"],
+  "keywords": ["mcp", "security", "ai", "agent", "claude"],
+  "icon": "icon.png",
+  "repository": { "type": "git", "url": "https://github.com/aspex-security/aspex" },
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "aspex.scan",
+        "title": "Aspex: Scan MCP Configuration",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "aspex.scanWorkspace",
+        "title": "Aspex: Scan All MCP Configurations"
+      }
+    ],
+    "configuration": {
+      "title": "Aspex",
+      "properties": {
+        "aspex.binaryPath": {
+          "type": "string",
+          "default": "aspex-scan",
+          "description": "Path to the aspex-scan binary"
+        },
+        "aspex.scanOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically scan when an MCP config file is saved"
+        },
+        "aspex.minSeverity": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low"],
+          "default": "medium",
+          "description": "Minimum severity level to show as a diagnostic"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  }
+}

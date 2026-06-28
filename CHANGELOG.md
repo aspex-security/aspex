@@ -7,6 +7,38 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.4.0] — 2026-06-28
+
+### Added
+
+**aspex-attack — standalone binary**
+- `aspex-attack` is now a first-class binary (previously routed to `aspex-scan redteam`)
+- Flags: `--server`, `--timeout`, `--categories`, `--json`, `--no-color`, `--clients`
+- Unicode block progress bar per-tool; confirmation prompt before probing; per-server summary table
+
+**aspex-scan fix — config hardening**
+- New `aspex-scan fix` command removes dangerous MCP servers from JSON config files
+- Flags: `--dry-run`, `--severity critical`, `--output path`, `--client name`
+- Handles all 4 config variants: `mcpServers` map, `mcp.servers`, `context_servers`, `mcpServers` array
+
+**aspex-scan cron — scheduled scanning**
+- New `aspex-scan cron` command runs continuous scans on a configurable interval
+- Only reports new findings (deduplicates across runs via `seen` map)
+- Flags: `--interval 1h`, `--notify <webhook-url>`, `--quiet`
+
+**aspex-trace live — webhook alerting**
+- `aspex-trace live --notify <url>` sends HIGH+ findings to a Slack or generic webhook
+- Slack format auto-detected for `hooks.slack.com` URLs (blocks with emoji severity indicators)
+- Generic JSON for other endpoints; Bearer token via `?token=` query param
+
+**VS Code extension**
+- New `extensions/vscode-aspex/` extension scans MCP config files inline
+- Scan on save, manual scan command, workspace-wide scan command
+- Findings appear as VS Code diagnostics in Problems panel with severity levels
+- Configurable binary path, severity threshold, and scan-on-save toggle
+
+---
+
 ## [0.3.4] — 2026-06-27
 
 ### Changed

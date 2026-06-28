@@ -48,6 +48,26 @@ builds:
       - -X github.com/aspex-security/aspex/internal/version.Version={{.Version}}
       - -X github.com/aspex-security/aspex/internal/version.BuildDate={{.Date}}
 
+  - id: aspex-attack
+    binary: aspex-attack
+    main: ./cmd/aspex-attack
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X github.com/aspex-security/aspex/internal/version.Version={{.Version}}
+      - -X github.com/aspex-security/aspex/internal/version.BuildDate={{.Date}}
+
   - id: aspex
     binary: aspex
     main: ./cmd/aspex
@@ -90,7 +110,7 @@ archives:
       - README.md
 
   - id: aspex-combined
-    builds: [mcp-scan, agent-trace, aspex]
+    builds: [mcp-scan, agent-trace, aspex, aspex-attack]
     name_template: "aspex_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
@@ -118,17 +138,20 @@ brews:
     install: |
       bin.install "aspex-scan"
       bin.install "aspex-trace"
+      bin.install "aspex-attack"
       bin.install "aspex"
     test: |
       system "#{bin}/aspex-scan version"
       system "#{bin}/aspex-trace version"
+      system "#{bin}/aspex-attack --version"
       system "#{bin}/aspex --version"
     caveats: |
-      Aspex is ready. Three commands are now available:
+      Aspex is ready. Four commands are now available:
 
         aspex         — Interactive launcher (start here)
         aspex-scan    — Scan MCP server configs for security risks
         aspex-trace   — Audit AI agent activity from native client logs
+        aspex-attack  — Red team MCP servers with adversarial probes
 
       ── QUICK START ────────────────────────────────────────────────
         aspex-scan                  Scan all MCP clients on this machine

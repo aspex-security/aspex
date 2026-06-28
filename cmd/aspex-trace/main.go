@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aspex-security/aspex/internal/baseline"
+	"github.com/aspex-security/aspex/internal/notify"
 	"github.com/aspex-security/aspex/internal/killchain"
 	"github.com/aspex-security/aspex/internal/provenance"
 	"github.com/aspex-security/aspex/internal/logparse"
@@ -723,6 +724,7 @@ func newLiveCmd() *cobra.Command {
 	var client, server string
 	var noColor bool
 	var interval int
+	var notifyURL string
 	cmd := &cobra.Command{
 		Use:   "live",
 		Short: "Real-time monitoring — tails agent logs and prints new findings as they arrive",
@@ -735,21 +737,25 @@ Press Ctrl-C to stop. Findings already shown are not repeated.`,
   aspex-trace live
 
   # Watch only Claude Code, refresh every 2 seconds
-  aspex-trace live --client claude-code --interval 2`,
+  aspex-trace live --client claude-code --interval 2
+
+  # Send HIGH/CRITICAL findings to a Slack webhook
+  aspex-trace live --notify https://hooks.slack.com/services/...`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runLive(client, server, noColor, interval)
+			return runLive(client, server, noColor, interval, notifyURL)
 		},
 	}
 	cmd.Flags().StringVar(&client, "client", "", "Filter to one client")
 	cmd.Flags().StringVar(&server, "server", "", "Filter to one server")
 	cmd.Flags().BoolVar(&noColor, "no-color", false, "Plain-text output")
 	cmd.Flags().IntVar(&interval, "interval", 5, "Polling interval in seconds")
+	cmd.Flags().StringVar(&notifyURL, "notify", "", "Webhook URL for HIGH/CRITICAL findings (Slack or generic JSON)")
 	return cmd
 }
 
-func runLive(clientFilter, serverFilter string, noColor bool, intervalSecs int) error {
+func runLive(clientFilter, serverFilter string, noColor bool, intervalSecs int, notifyURL string) error {
 	c := colorFunc(noColor)
 	bold := "\033[1m"
 	dim := "\033[2m"
@@ -763,6 +769,14 @@ func runLive(clientFilter, serverFilter string, noColor bool, intervalSecs int) 
 		c(bold, "aspex-trace live"),
 		c(dim, fmt.Sprintf("polling every %ds · Ctrl-C to stop", intervalSecs)),
 	)
+
+	if notifyURL != "" {
+		fmt.Fprintf(os.Stdout, "  %s Alerts %s %s\n\n",
+			c(dim, "→"),
+			c(dim, "→"),
+			c(dim, notifyURL),
+		)
+	}
 
 	// Handle Ctrl-C cleanly.
 	sigCh := make(chan os.Signal, 1)
@@ -839,6 +853,17 @@ func runLive(clientFilter, serverFilter string, noColor bool, intervalSecs int) 
 					)
 					fmt.Fprintf(os.Stdout, "     %s\n", f.Detail)
 					findingCount++
+
+					if notifyURL != "" && (f.Severity >= rules.SeverityHigh) {
+						notify.Send(notifyURL, notify.Finding{
+							Severity: strings.ToUpper(f.Severity.String()),
+							RuleID:   f.RuleID,
+							Tool:     fe.Event.Tool,
+							Server:   fe.Event.Server,
+							Detail:   f.Detail,
+							Client:   fe.Event.Client,
+						})
+					}
 				}
 			}
 		}
