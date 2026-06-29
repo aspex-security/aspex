@@ -1,0 +1,66 @@
+---
+title: "Privacy"
+description: "Aspex never sends your data anywhere. Here's exactly what runs where."
+---
+
+## What Aspex does with your data
+
+Nothing. Every Aspex tool runs entirely on your machine. No data leaves your system under any circumstances during analysis.
+
+Specifically:
+
+- **aspex-scan** reads your MCP client configs and connects to your local MCP servers. No configs, server responses, findings, file paths, or tool names are transmitted anywhere.
+- **aspex-trace** reads your AI client log files. No log content, session events, or findings are transmitted anywhere.
+- **aspex-attack** sends payloads to MCP servers you specify. No results, payloads, or server responses are transmitted to Aspex or Onyx.
+- **aspex-doctor** reads your shell environment and config files. No secrets, findings, or file contents are transmitted anywhere.
+
+## Network activity
+
+The only network activity Aspex performs:
+
+| When | What | Why |
+|---|---|---|
+| `brew install` or `curl install.sh` | Downloads the binary | Install only |
+| `aspex-scan` | Connects to your local MCP servers | Analysis |
+| `aspex-attack <target>` | Sends payloads to the target server | Analysis |
+| `aspex-scan --notify` | Sends findings to your webhook URL | If you configure this |
+
+There is no telemetry, no analytics, no crash reporting, and no update check.
+
+## What Aspex reads from your machine
+
+| Tool | What it reads |
+|---|---|
+| aspex-scan | MCP client config files, MCP server tool lists |
+| aspex-trace | AI client log directories |
+| aspex-doctor | Shell rc files, MCP client configs, shell environment variables |
+| aspex-attack | Nothing locally - connects to the target server |
+
+Aspex does not read, index, or transmit your code, documents, browser history, or any file outside the above.
+
+## Supply chain
+
+Every Aspex release ships:
+
+- **SHA-256 checksums** for all binaries
+- **SPDX SBOM** (Software Bill of Materials) listing every dependency
+- **Signed commits** on the release branch
+- **GoReleaser** builds from source on GitHub Actions - the build process is public
+
+Verify a binary:
+
+```sh
+# Download the checksums file alongside the binary
+curl -LO https://github.com/aspex-security/aspex/releases/download/v0.5.5/checksums.txt
+shasum -a 256 -c checksums.txt
+```
+
+## Security disclosures
+
+Do not open a public GitHub issue for security vulnerabilities.
+
+Email: steven.d@onyx.security
+
+## License
+
+Aspex is released under the [Apache 2.0 license](https://github.com/aspex-security/aspex/blob/main/LICENSE). You can use it, modify it, and redistribute it freely. The source code is available at [github.com/aspex-security/aspex](https://github.com/aspex-security/aspex).

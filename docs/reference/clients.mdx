@@ -1,0 +1,75 @@
+---
+title: "Supported clients"
+description: "AI clients and MCP config locations detected by Aspex."
+---
+
+Aspex automatically detects installed AI clients and reads their MCP configurations. No setup required.
+
+## Client support matrix
+
+| Client | aspex-scan | aspex-trace | aspex-doctor | Config location |
+|---|---|---|---|---|
+| Claude Desktop | Yes | Yes | Yes | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Claude Code | Yes | Yes | Yes | `~/.claude/settings.json` |
+| Cursor | Yes | Yes | Yes | `~/.cursor/mcp.json` |
+| Windsurf | Yes | Yes | Yes | `~/.codeium/windsurf/mcp_config.json` |
+| Cline | Yes | Yes | Yes | VS Code extension settings |
+| Roo-Cline | Yes | Yes | Yes | VS Code extension settings |
+| Continue | Yes | No | Partial | `.continue/config.json` |
+| Zed | Yes | No | Partial | `~/.config/zed/settings.json` |
+
+## Log locations (aspex-trace)
+
+aspex-trace reads these log directories to reconstruct session events.
+
+| Client | Log path |
+|---|---|
+| Claude Desktop | `~/Library/Logs/Claude/` |
+| Claude Code | `~/.claude/logs/` |
+| Cursor | `~/Library/Application Support/Cursor/logs/` |
+| Windsurf | `~/Library/Application Support/Windsurf/logs/` |
+| Cline | VS Code output channel (parsed from `~/Library/Application Support/Code/logs/`) |
+| Roo-Cline | VS Code output channel (same as Cline) |
+
+## Log format support
+
+Each client writes logs in a different format. aspex-trace ships a parser for each:
+
+| Client | Format | MCP event granularity |
+|---|---|---|
+| Claude Desktop | JSON-L | Full tool call/response |
+| Claude Code | JSON-L | Full tool call/response |
+| Cursor | Mixed text/JSON | Tool call, partial response |
+| Windsurf | JSON-L | Full tool call/response |
+| Cline | JSON-L | Full tool call/response |
+| Roo-Cline | JSON-L | Full tool call/response |
+
+<Note>
+Log format granularity determines what aspex-trace can detect. Clients with "Full tool call/response" coverage enable the complete 85-rule ruleset. Clients with "partial response" coverage may miss argument-level rules.
+</Note>
+
+## Adding a client manually
+
+If your client isn't listed, you can point aspex-scan at its MCP config directly:
+
+```sh
+aspex-scan inspect --config /path/to/mcp-config.json
+```
+
+For aspex-trace, JSON-L log files that follow the MCP protocol log format can be passed directly:
+
+```sh
+aspex-trace --log /path/to/mcp-session.jsonl
+```
+
+## Windows support
+
+Config and log paths on Windows:
+
+| Client | Config | Logs |
+|---|---|---|
+| Claude Desktop | `%APPDATA%\Claude\claude_desktop_config.json` | `%APPDATA%\Claude\logs\` |
+| Cursor | `%APPDATA%\Cursor\mcp.json` | `%APPDATA%\Cursor\logs\` |
+| VS Code (Cline) | `%APPDATA%\Code\User\settings.json` | `%APPDATA%\Code\logs\` |
+
+Aspex binaries for Windows are available on the [releases page](https://github.com/aspex-security/aspex/releases).
