@@ -41,11 +41,13 @@ jobs:
       - name: Publish npm package (mcp-scan)
         working-directory: npm/mcp-scan
         run: npm publish --access public
+        continue-on-error: true
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish npm package (agent-trace)
         working-directory: npm/agent-trace
         run: npm publish --access public
+        continue-on-error: true
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
