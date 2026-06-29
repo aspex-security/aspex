@@ -37,24 +37,23 @@ Aspex is the answer to both questions.
 | `aspex-attack` | Active red-teaming of live MCP tools with adversarial payloads |
 | `aspex-doctor` | Fast local health check for your AI agent setup (~2 seconds) |
 
-Run `aspex` for an interactive launcher that puts all four tools at your fingertips.
-
 ---
 
 ## Quick start
 
+Run `aspex` for an interactive menu - arrow keys to navigate, enter to run any tool:
+
 ```sh
-# Scan every MCP server configured on this machine
-aspex-scan
-
-# Check what your agent did in the last 24 hours
-aspex-trace
-
-# Quick health check of your AI setup
-aspex-doctor
-
-# Interactive menu (arrow keys)
 aspex
+```
+
+Or run each tool directly:
+
+```sh
+aspex-scan      # Scan every MCP server on this machine
+aspex-trace     # Audit what your agent did in the last 24 hours
+aspex-doctor    # Quick health check of your AI setup
+aspex-attack    # Actively probe a live MCP server (opt-in)
 ```
 
 ---
