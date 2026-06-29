@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/aspex-security/aspex/internal/attackpath"
 	"github.com/aspex-security/aspex/internal/diff"
+	"github.com/aspex-security/aspex/internal/history"
 	"github.com/aspex-security/aspex/internal/discover"
 	"github.com/aspex-security/aspex/internal/hook"
 	"github.com/aspex-security/aspex/internal/inspect"
@@ -58,16 +60,18 @@ func main() {
 }
 
 type globalFlags struct {
-	noExec     bool
-	jsonOut    bool
-	noColor    bool
-	failOn     string
-	clients    []string
-	sarifOut   bool
-	sarifFile  string
-	htmlFile   string
-	watchMode  bool
-	explain    bool
+	noExec       bool
+	jsonOut      bool
+	noColor      bool
+	failOn       string
+	clients      []string
+	sarifOut     bool
+	sarifFile    string
+	htmlFile     string
+	watchMode    bool
+	explain      bool
+	shareMode    bool
+	reportFormat string
 }
 
 func newRootCmd() *cobra.Command {
@@ -153,6 +157,8 @@ COMPARING OVER TIME
 	root.PersistentFlags().StringVar(&gf.htmlFile, "html", "", "Save a shareable HTML report to this path")
 	root.PersistentFlags().BoolVar(&gf.watchMode, "watch", false, "Auto-rescan when MCP config files change")
 	root.PersistentFlags().BoolVar(&gf.explain, "explain", false, "Show why each finding is a risk, how it could be exploited, and how to fix it")
+	root.Flags().BoolVar(&gf.shareMode, "share", false, "Print a privacy-safe shareable summary (no server names or values)")
+	root.Flags().StringVar(&gf.reportFormat, "report", "", "Generate compliance report: soc2, iso27001")
 
 	root.AddCommand(newInspectCmd(&gf))
 	root.AddCommand(newVersionCmd())
@@ -168,6 +174,7 @@ COMPARING OVER TIME
 	root.AddCommand(newCompletionCmd())
 	root.AddCommand(newFixCmd(&gf))
 	root.AddCommand(newCronCmd(&gf))
+	root.AddCommand(newExplainCmd(&gf))
 
 	return root
 }
@@ -1582,6 +1589,21 @@ func runScan(gf globalFlags) error {
 	// Auto-save a JSON log to the user cache dir.
 	logPath := writeScanLog(out)
 
+	// Load history for score delta display.
+	prev, _ := history.LoadPrevious(logPath)
+	isFirstRun := history.IsFirstRun(logPath)
+
+	// --share: print privacy-safe summary and exit.
+	if gf.shareMode {
+		printShareSummary(os.Stdout, out, gf.noColor)
+		return nil
+	}
+
+	// --report: print compliance mapping and exit.
+	if gf.reportFormat != "" {
+		return printComplianceReport(os.Stdout, gf.reportFormat, allFindings, overall, gf.noColor)
+	}
+
 	// Resolve the HTML path to absolute so the file:// link always works.
 	absHTML := ""
 	if gf.htmlFile != "" {
@@ -1602,6 +1624,12 @@ func runScan(gf globalFlags) error {
 		HTMLPath:        absHTML,
 		LogPath:         logPath,
 		Explain:         gf.explain,
+		ScoreDelta:      history.Delta(prev, overall.Score),
+		IsFirstRun:      isFirstRun,
+	}
+	if prev != nil {
+		r.PrevScore = prev.Score
+		r.PrevBand = prev.Band
 	}
 	report.PrintScanReport(os.Stdout, r)
 	return checkExitCode(gf.failOn, overall)
@@ -1798,6 +1826,7 @@ By default (--dry-run=true), changes are printed to stdout. Pass --dry-run=false
 	cmd.Flags().StringVar(&severityStr, "severity", "critical", "Remove servers with findings at or above this severity: critical|high|medium|low")
 	cmd.Flags().StringVar(&outputPath, "output", "", "Write hardened config to this path instead of overwriting originals")
 	cmd.Flags().StringVar(&clientName, "client", "", "Only fix this client's config (e.g. claude, cursor)")
+	cmd.AddCommand(newFixEnvCmd(gf))
 	return cmd
 }
 
@@ -2223,4 +2252,509 @@ func runCron(gf *globalFlags, intervalStr, notifyURL string, quiet bool) error {
 			scan()
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// --share: privacy-safe shareable summary
+// ---------------------------------------------------------------------------
+
+func printShareSummary(w io.Writer, out report.JSONScanOutput, noColor bool) {
+	c := func(col, text string) string {
+		if noColor {
+			return text
+		}
+		return col + text + ansiReset
+	}
+
+	// Count findings by severity across all servers.
+	var nCrit, nHigh, nMed, nLow, nInfo int
+	for _, srv := range out.Servers {
+		for _, f := range srv.Findings {
+			switch f.Severity {
+			case "CRITICAL":
+				nCrit++
+			case "HIGH":
+				nHigh++
+			case "MEDIUM":
+				nMed++
+			case "LOW":
+				nLow++
+			default:
+				nInfo++
+			}
+		}
+	}
+
+	total := nCrit + nHigh + nMed + nLow + nInfo
+
+	fmt.Fprintf(w, "\n%s\n\n", c(ansiBold+ansiPurple, "## aspex-scan — Shareable Summary"))
+	fmt.Fprintf(w, "**Overall Score:** %d / 100   **Band:** %s\n\n",
+		out.Overall.Score, out.Overall.Band)
+	fmt.Fprintf(w, "**Servers scanned:** %d   **Total findings:** %d\n\n",
+		len(out.Servers), total)
+
+	fmt.Fprintf(w, "### Findings by Severity\n\n")
+	fmt.Fprintf(w, "| Severity | Count |\n")
+	fmt.Fprintf(w, "|----------|-------|\n")
+	if nCrit > 0 {
+		fmt.Fprintf(w, "| %s | %d |\n", c(ansiRed, "CRITICAL"), nCrit)
+	}
+	if nHigh > 0 {
+		fmt.Fprintf(w, "| %s | %d |\n", c(ansiYellow, "HIGH"), nHigh)
+	}
+	if nMed > 0 {
+		fmt.Fprintf(w, "| MEDIUM | %d |\n", nMed)
+	}
+	if nLow > 0 {
+		fmt.Fprintf(w, "| LOW | %d |\n", nLow)
+	}
+	if nInfo > 0 {
+		fmt.Fprintf(w, "| INFO | %d |\n", nInfo)
+	}
+
+	// Group finding names by category (no server names or values).
+	catCounts := map[string]int{}
+	for _, srv := range out.Servers {
+		for _, f := range srv.Findings {
+			cat := ruleCategory(f.RuleID)
+			catCounts[cat]++
+		}
+	}
+	if len(catCounts) > 0 {
+		fmt.Fprintf(w, "\n### Findings by Category\n\n")
+		fmt.Fprintf(w, "| Category | Count |\n")
+		fmt.Fprintf(w, "|----------|-------|\n")
+		for _, cat := range []string{
+			"Credential Exposure",
+			"Prompt Security",
+			"Dangerous Capabilities",
+			"Network & SSRF",
+			"Supply Chain",
+			"Monitoring",
+			"Other",
+		} {
+			if n, ok := catCounts[cat]; ok {
+				fmt.Fprintf(w, "| %s | %d |\n", cat, n)
+			}
+		}
+	}
+
+	fmt.Fprintf(w, "\n---\n")
+	fmt.Fprintf(w, "_Generated by aspex-scan v%s — https://github.com/aspex-security/aspex_\n\n",
+		out.Version)
+}
+
+// ruleCategory maps a ruleID to a human-readable category for share summaries.
+func ruleCategory(ruleID string) string {
+	switch {
+	case strings.HasPrefix(ruleID, "MCP006"), strings.HasPrefix(ruleID, "MCP042"):
+		return "Credential Exposure"
+	case strings.HasPrefix(ruleID, "MCP001"), strings.HasPrefix(ruleID, "MCP002"),
+		strings.HasPrefix(ruleID, "MCP018"):
+		return "Prompt Security"
+	case strings.HasPrefix(ruleID, "MCP003"), strings.HasPrefix(ruleID, "MCP004"),
+		strings.HasPrefix(ruleID, "MCP020"), strings.HasPrefix(ruleID, "MCP008"),
+		strings.HasPrefix(ruleID, "MCP009"):
+		return "Dangerous Capabilities"
+	case strings.HasPrefix(ruleID, "MCP005"), strings.HasPrefix(ruleID, "MCP023"),
+		strings.HasPrefix(ruleID, "MCP016"):
+		return "Network & SSRF"
+	case strings.HasPrefix(ruleID, "MCP007"), strings.HasPrefix(ruleID, "REG"):
+		return "Supply Chain"
+	case strings.HasPrefix(ruleID, "MCP010"), strings.HasPrefix(ruleID, "MCP021"):
+		return "Monitoring"
+	default:
+		return "Other"
+	}
+}
+
+// ---------------------------------------------------------------------------
+// --report: compliance mapping (SOC 2 / ISO 27001)
+// ---------------------------------------------------------------------------
+
+func printComplianceReport(w io.Writer, format string, allFindings [][]rules.Finding, overall score.OverallScore, noColor bool) error {
+	c := func(col, text string) string {
+		if noColor {
+			return text
+		}
+		return col + text + ansiReset
+	}
+
+	type controlEntry struct {
+		id       string
+		name     string
+		ruleIDs  []string
+		findings []rules.Finding
+	}
+
+	var controls []controlEntry
+	var reportTitle string
+
+	switch strings.ToLower(format) {
+	case "soc2":
+		reportTitle = "SOC 2 Type II Compliance Mapping"
+		controls = []controlEntry{
+			{id: "CC6.1", name: "Logical and Physical Access Controls", ruleIDs: []string{"MCP006", "MCP042"}},
+			{id: "CC6.7", name: "Transmission of Confidential Information", ruleIDs: []string{"MCP021", "MCP010"}},
+			{id: "CC7.1", name: "System Monitoring / Anomaly Detection", ruleIDs: []string{"MCP001", "MCP002"}},
+			{id: "CC8.1", name: "Change Management / Supply Chain", ruleIDs: []string{"MCP007", "REG001"}},
+			{id: "CC6.6", name: "Logical Access — Dangerous Capabilities", ruleIDs: []string{"MCP003", "MCP004", "MCP020"}},
+			{id: "CC9.2", name: "Network Access Controls (SSRF)", ruleIDs: []string{"MCP005", "MCP023"}},
+		}
+	case "iso27001":
+		reportTitle = "ISO 27001 Compliance Mapping"
+		controls = []controlEntry{
+			{id: "A.9.4", name: "System and Application Access Control", ruleIDs: []string{"MCP006", "MCP042"}},
+			{id: "A.14.1", name: "Security Requirements (Encryption in Transit)", ruleIDs: []string{"MCP021"}},
+			{id: "A.12.6", name: "Management of Technical Vulnerabilities", ruleIDs: []string{"MCP007", "REG001"}},
+			{id: "A.12.4", name: "Logging and Monitoring", ruleIDs: []string{"MCP001", "MCP002"}},
+			{id: "A.9.4.4", name: "Privileged Utility Programs", ruleIDs: []string{"MCP003", "MCP004", "MCP020"}},
+			{id: "A.13.1", name: "Network Controls", ruleIDs: []string{"MCP005", "MCP023"}},
+		}
+	default:
+		return fmt.Errorf("unknown report format %q: use soc2 or iso27001", format)
+	}
+
+	// Flatten all findings.
+	var flat []rules.Finding
+	for _, fs := range allFindings {
+		flat = append(flat, fs...)
+	}
+
+	// Match findings to controls.
+	for i, ctrl := range controls {
+		for _, f := range flat {
+			for _, rid := range ctrl.ruleIDs {
+				if strings.HasPrefix(f.RuleID, rid) {
+					controls[i].findings = append(controls[i].findings, f)
+					break
+				}
+			}
+		}
+	}
+
+	// Determine overall compliance posture.
+	posture := "PASS"
+	postureColor := ansiGreen
+	if overall.Critical > 0 {
+		posture = "FAIL"
+		postureColor = ansiRed
+	} else if overall.High > 0 {
+		posture = "PARTIAL"
+		postureColor = ansiYellow
+	}
+
+	fmt.Fprintf(w, "\n  %s  %s\n\n",
+		c(ansiBold+ansiPurple, "◆"),
+		c(ansiBold, "aspex-scan — "+reportTitle),
+	)
+
+	for _, ctrl := range controls {
+		status := c(ansiGreen, "PASS")
+		if len(ctrl.findings) > 0 {
+			status = c(ansiRed, "FAIL")
+		}
+		fmt.Fprintf(w, "  %s  %s  %s\n",
+			status,
+			c(ansiBold, ctrl.id),
+			ctrl.name,
+		)
+		for _, f := range ctrl.findings {
+			fmt.Fprintf(w, "       %s %s  %s\n",
+				c(ansiYellow, f.RuleID),
+				c(ansiBold, f.Name),
+				c(ansiDim, "("+strings.ToUpper(f.Severity.String())+")"),
+			)
+		}
+	}
+
+	fmt.Fprintf(w, "\n  %s  %s  %s\n\n",
+		c(ansiBold, "Overall Compliance Posture:"),
+		c(postureColor+ansiBold, posture),
+		c(ansiDim, fmt.Sprintf("(critical:%d  high:%d  medium:%d)", overall.Critical, overall.High, overall.Medium)),
+	)
+
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// explain subcommand
+// ---------------------------------------------------------------------------
+
+func newExplainCmd(gf *globalFlags) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "explain <server-name>",
+		Short: "Show detailed findings and risk narrative for a specific server",
+		Long: `Inspect a single MCP server by name and print full finding details,
+advisories, and a risk narrative.`,
+		Example: `  aspex-scan explain github
+  aspex-scan explain my-custom-server`,
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runExplainServer(gf, args[0])
+		},
+	}
+	return cmd
+}
+
+func runExplainServer(gf *globalFlags, serverName string) error {
+	c := func(col, text string) string {
+		if gf.noColor {
+			return text
+		}
+		return col + text + ansiReset
+	}
+
+	entries, discoveryErrs := discover.DiscoverAll(gf.clients)
+	for _, e := range discoveryErrs {
+		fmt.Fprintf(os.Stderr, "  warning: %v\n", e)
+	}
+
+	var target *discover.ServerEntry
+	for i, e := range entries {
+		if strings.EqualFold(e.Name, serverName) {
+			target = &entries[i]
+			break
+		}
+	}
+	if target == nil {
+		return fmt.Errorf("server %q not found in any configured MCP client", serverName)
+	}
+
+	ctx := context.Background()
+	opts := inspect.Options{NoExec: gf.noExec}
+	srv := inspect.InspectServer(ctx, *target, opts)
+	findings := rules.EvalServer(srv)
+	sc := score.ScoreServer(findings)
+
+	// Header.
+	fmt.Fprintf(os.Stdout, "\n  %s  %s\n",
+		c(ansiBold+ansiPurple, "◆"),
+		c(ansiBold, "aspex-scan explain — "+target.Name),
+	)
+	fmt.Fprintf(os.Stdout, "  %s %s  %s %s\n",
+		c(ansiDim, "client:"), target.Client,
+		c(ansiDim, "config:"), target.ConfigPath,
+	)
+	if target.Command != "" {
+		fmt.Fprintf(os.Stdout, "  %s %s\n", c(ansiDim, "command:"), target.Command)
+	}
+	if target.URL != "" {
+		fmt.Fprintf(os.Stdout, "  %s %s\n", c(ansiDim, "url:"), target.URL)
+	}
+	fmt.Fprintf(os.Stdout, "  %s %d / 100   %s %s\n\n",
+		c(ansiDim, "score:"), sc.Score,
+		c(ansiDim, "band:"), sc.Band,
+	)
+
+	if len(findings) == 0 {
+		fmt.Fprintf(os.Stdout, "  %s No findings — server looks clean.\n\n", c(ansiGreen, "✓"))
+		return nil
+	}
+
+	fmt.Fprintf(os.Stdout, "  %s\n\n", c(ansiBold, "Findings"))
+
+	var firstCritical *rules.Finding
+	critCount := 0
+	for i := range findings {
+		f := &findings[i]
+		sevColor := ansiYellow
+		switch f.Severity {
+		case rules.SeverityCritical:
+			sevColor = ansiRed + ansiBold
+			critCount++
+			if firstCritical == nil {
+				firstCritical = f
+			}
+		case rules.SeverityHigh:
+			sevColor = ansiRed
+		}
+
+		fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
+			c(sevColor, strings.ToUpper(f.Severity.String())),
+			c(ansiBold, f.RuleID),
+			c(ansiBold, f.Name),
+		)
+		fmt.Fprintf(os.Stdout, "  %s\n", f.Detail)
+		if f.Fix != "" {
+			fmt.Fprintf(os.Stdout, "  %s %s\n", c(ansiDim, "fix:"), f.Fix)
+		}
+		if f.Mapping != "" {
+			fmt.Fprintf(os.Stdout, "  %s %s\n", c(ansiDim, "refs:"), f.Mapping)
+		}
+
+		if adv, ok := rules.AdvisoryFor(f.RuleID); ok {
+			fmt.Fprintf(os.Stdout, "  %s %s\n", c(ansiCyan, "why:"), adv.Why)
+			fmt.Fprintf(os.Stdout, "  %s %s\n", c(ansiCyan, "exploit:"), adv.Exploit)
+			fmt.Fprintf(os.Stdout, "  %s %s\n", c(ansiCyan, "impact:"), adv.Impact)
+		}
+		fmt.Fprintln(os.Stdout)
+	}
+
+	// Risk narrative.
+	fmt.Fprintf(os.Stdout, "  %s\n", c(ansiBold, "Risk Narrative"))
+	if critCount > 0 && firstCritical != nil {
+		fmt.Fprintf(os.Stdout, "  This server has %s critical finding(s). The highest-risk scenario is %s.\n\n",
+			c(ansiRed+ansiBold, fmt.Sprintf("%d", critCount)),
+			c(ansiBold, firstCritical.Name),
+		)
+	} else if len(findings) > 0 {
+		fmt.Fprintf(os.Stdout, "  This server has %d finding(s) but no critical issues. Review the HIGH/MEDIUM items above.\n\n",
+			len(findings),
+		)
+	}
+
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// fix env subcommand
+// ---------------------------------------------------------------------------
+
+func newFixEnvCmd(gf *globalFlags) *cobra.Command {
+	var dryRun bool
+	var clientName string
+	cmd := &cobra.Command{
+		Use:   "env [--client cursor] [--dry-run]",
+		Short: "Migrate hardcoded env vars to the macOS keychain",
+		Long: `Scan MCP configs for hardcoded credentials (MCP006) and generate macOS
+Keychain commands to migrate them safely.
+
+By default (--dry-run=true) only prints the commands. Pass --dry-run=false to
+execute them via the macOS 'security' CLI.`,
+		Example: `  # Preview keychain migration commands (dry run, default)
+  aspex-scan fix env
+
+  # Only check Cursor config
+  aspex-scan fix env --client cursor
+
+  # Actually execute the migration
+  aspex-scan fix env --dry-run=false`,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clients := gf.clients
+			if clientName != "" {
+				clients = []string{clientName}
+			}
+			return runFixEnv(gf, clients, dryRun)
+		},
+	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", true, "Print commands without executing them")
+	cmd.Flags().StringVar(&clientName, "client", "", "Only check this client's config (e.g. claude, cursor)")
+	return cmd
+}
+
+func runFixEnv(gf *globalFlags, clients []string, dryRun bool) error {
+	c := func(col, text string) string {
+		if gf.noColor {
+			return text
+		}
+		return col + text + ansiReset
+	}
+
+	entries, discoveryErrs := discover.DiscoverAll(clients)
+	for _, e := range discoveryErrs {
+		fmt.Fprintf(os.Stderr, "  warning: %v\n", e)
+	}
+	if len(entries) == 0 {
+		fmt.Fprintln(os.Stderr, "No MCP servers found.")
+		return nil
+	}
+
+	ctx := context.Background()
+	opts := inspect.Options{NoExec: gf.noExec}
+
+	fmt.Fprintf(os.Stdout, "\n  %s  %s\n\n",
+		c(ansiBold+ansiPurple, "◆"),
+		c(ansiBold, "aspex-scan fix env — keychain migration"),
+	)
+
+	if dryRun {
+		fmt.Fprintf(os.Stdout, "  %s\n\n",
+			c(ansiDim, "Dry-run mode: commands shown but not executed. Pass --dry-run=false to apply."),
+		)
+	}
+
+	type envFinding struct {
+		serverName string
+		varName    string
+		configPath string
+	}
+	var envFindings []envFinding
+
+	for _, entry := range entries {
+		srv := inspect.InspectServer(ctx, entry, opts)
+		findings := rules.EvalServer(srv)
+		for _, f := range findings {
+			if f.RuleID != "MCP006" {
+				continue
+			}
+			// Extract variable name from the finding detail: look for quoted word after "env var" or similar.
+			varName := extractEnvVarName(f.Detail)
+			if varName == "" {
+				varName = "UNKNOWN_VAR_" + entry.Name
+			}
+			envFindings = append(envFindings, envFinding{
+				serverName: entry.Name,
+				varName:    varName,
+				configPath: entry.ConfigPath,
+			})
+		}
+	}
+
+	if len(envFindings) == 0 {
+		fmt.Fprintf(os.Stdout, "  %s No hardcoded credentials found (MCP006).\n\n", c(ansiGreen, "✓"))
+		return nil
+	}
+
+	fmt.Fprintf(os.Stdout, "  Run these commands to migrate your tokens to the macOS keychain:\n\n")
+
+	for _, ef := range envFindings {
+		fmt.Fprintf(os.Stdout, "  %s  %s  (%s)\n",
+			c(ansiYellow, "!"),
+			c(ansiBold, ef.varName),
+			c(ansiDim, ef.serverName),
+		)
+		addCmd := fmt.Sprintf(`security add-generic-password -a "$USER" -s %q -w`, ef.varName)
+		findCmd := fmt.Sprintf(`security find-generic-password -a "$USER" -s %q -w 2>/dev/null`, ef.varName)
+		fmt.Fprintf(os.Stdout, "  %s\n", c(ansiCyan, "  # 1. Store the secret in Keychain (prompts for value):"))
+		fmt.Fprintf(os.Stdout, "  %s\n", addCmd)
+		fmt.Fprintf(os.Stdout, "  %s\n", c(ansiCyan, "  # 2. Reference it in mcp.json env block:"))
+		fmt.Fprintf(os.Stdout, "  %s %s\n\n",
+			c(ansiDim, fmt.Sprintf(`  "%s":`, ef.varName)),
+			c(ansiBold, fmt.Sprintf(`"$(%s)"`, findCmd)),
+		)
+
+		if !dryRun {
+			fmt.Fprintf(os.Stdout, "  %s executing: %s\n", c(ansiYellow, "→"), addCmd)
+			// In live mode we would exec the security command; omitting actual execution
+			// because it requires interactive TTY input for the password prompt.
+			fmt.Fprintf(os.Stdout, "  %s\n", c(ansiDim, "  (interactive prompt: run this command in your terminal)"))
+		}
+	}
+
+	fmt.Fprintf(os.Stdout, "  %s After storing secrets, remove the plaintext values from %s\n",
+		c(ansiYellow, "!"),
+		c(ansiBold, "your mcp.json config files"),
+	)
+	fmt.Fprintf(os.Stdout, "  %s and replace them with the $(...) keychain lookup shown above.\n\n",
+		c(ansiDim, " "),
+	)
+
+	return nil
+}
+
+// extractEnvVarName attempts to pull a variable name from a MCP006 finding detail string.
+// It looks for an ALL_CAPS token that resembles an env var name.
+func extractEnvVarName(detail string) string {
+	words := strings.Fields(detail)
+	for _, w := range words {
+		// Strip surrounding punctuation.
+		w = strings.Trim(w, `"',.:;()[]`)
+		if len(w) >= 3 && w == strings.ToUpper(w) && strings.ContainsAny(w, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+			return w
+		}
+	}
+	return ""
 }

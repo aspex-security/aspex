@@ -7,6 +7,21 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.5.5] - 2026-06-29
+
+### Added
+- aspex-scan: **Score delta** — summary box now shows change since last scan (`↑ +12 pts`, `↓ -5 pts`, `= no change`)
+- aspex-scan: **Prioritized fix plan** — after each scan, shows "Top actions to improve your score" ranked by estimated point gain (e.g. `Fix Secrets in config env across 2 servers (~+70 pts)`)
+- aspex-scan: **First-run calibration** — on first-ever scan, explains that a low score is typical for developer machines and most findings are fixable in under 30 minutes
+- aspex-scan: **`--share` flag** — prints a privacy-safe Markdown summary (no server names, URLs, or values) suitable for sharing with a team or security review
+- aspex-scan: **`--report soc2|iso27001`** — generates a compliance mapping report, showing PASS/FAIL per control with matching findings, and an overall posture verdict
+- aspex-scan: **`explain <server-name>`** subcommand — deep-inspection narrative per server: score, all findings with full advisory (why/exploit/impact), and a risk summary sentence
+- aspex-scan: **`fix env`** subcommand — generates macOS Keychain migration commands for each hardcoded credential found in MCP configs (`security add-generic-password` + `$(security find-generic-password ...)` replacement snippets)
+- aspex-scan: **Continuous monitoring prompt** — footer now suggests `aspex-scan cron --interval 1h` when findings exist
+- internal: new `history` package reads previous scan logs from the OS cache dir to power score delta and first-run detection
+
+---
+
 ## [0.5.4] - 2026-06-29
 
 ### Fixed
@@ -275,6 +290,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Release binaries signed with cosign (keyless, Sigstore) + SPDX SBOM
 - Offline-only: no data sent anywhere
 
+[0.5.5]: https://github.com/aspex-security/aspex/releases/tag/v0.5.5
 [0.5.4]: https://github.com/aspex-security/aspex/releases/tag/v0.5.4
 [0.5.3]: https://github.com/aspex-security/aspex/releases/tag/v0.5.3
 [0.5.2]: https://github.com/aspex-security/aspex/releases/tag/v0.5.2

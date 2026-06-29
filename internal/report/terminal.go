@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -63,6 +64,10 @@ type ScanReport struct {
 	HTMLPath        string // path to HTML report if one was written
 	LogPath         string // path to JSON log if one was written
 	Explain         bool   // show advisory details (why/exploit/impact/fix) per finding
+	PrevScore  int    // 0 if no history
+	PrevBand   string
+	ScoreDelta string // "+12", "-5", "=" or "" if no history
+	IsFirstRun bool
 }
 
 // Spinner shows an animated progress indicator on stderr during scanning.
@@ -235,6 +240,34 @@ func PrintScanReport(w io.Writer, r ScanReport) {
 		strings.Repeat(" ", sevPad),
 		c(colorDim, "│"),
 	)
+	// Score delta line (only if we have history).
+	if r.ScoreDelta != "" {
+		var deltaCol, arrow, deltaText string
+		switch {
+		case strings.HasPrefix(r.ScoreDelta, "+"):
+			deltaCol = colorBrGreen
+			arrow = "↑"
+			deltaText = fmt.Sprintf("%s %s pts since last scan (was %d/100)", arrow, r.ScoreDelta, r.PrevScore)
+		case strings.HasPrefix(r.ScoreDelta, "-"):
+			deltaCol = colorRed
+			arrow = "↓"
+			deltaText = fmt.Sprintf("%s %s pts since last scan (was %d/100)", arrow, r.ScoreDelta, r.PrevScore)
+		default:
+			deltaCol = colorDim
+			deltaText = fmt.Sprintf("= no change since last scan (was %d/100)", r.PrevScore)
+		}
+		deltaLine := "  " + c(deltaCol, deltaText)
+		deltaPad := 63 - len(stripANSI(deltaLine))
+		if deltaPad < 1 {
+			deltaPad = 1
+		}
+		fmt.Fprintf(w, "  %s%s%s%s\n",
+			c(colorDim, "│"),
+			deltaLine,
+			strings.Repeat(" ", deltaPad),
+			c(colorDim, "│"),
+		)
+	}
 	fmt.Fprintf(w, "  %s\n\n", c(colorDim, "╰─────────────────────────────────────────────────────────────╯"))
 	_ = elapsed
 
@@ -261,6 +294,91 @@ func PrintScanReport(w io.Writer, r ScanReport) {
 			)
 		}
 		fmt.Fprintln(w)
+	}
+
+	// Prioritized fix plan (only when score < 100 and there are findings).
+	if r.Overall.Score < 100 && len(r.Scores) > 0 {
+		type fixAction struct {
+			ruleID        string
+			name          string
+			serverCount   int
+			estimatedGain int
+		}
+		type ruleAgg struct {
+			name        string
+			servers     map[string]bool
+			totalWeight int
+			hasCritHigh bool
+		}
+		agg := map[string]*ruleAgg{}
+		weightOf := func(sev rules.Severity) int {
+			switch sev {
+			case rules.SeverityCritical:
+				return 35
+			case rules.SeverityHigh:
+				return 20
+			case rules.SeverityMedium:
+				return 10
+			case rules.SeverityLow:
+				return 3
+			default:
+				return 0
+			}
+		}
+		for i, sc := range r.Scores {
+			srvName := r.Servers[i].Entry.Name
+			for _, f := range sc.Findings {
+				if _, ok := agg[f.RuleID]; !ok {
+					agg[f.RuleID] = &ruleAgg{name: f.Name, servers: map[string]bool{}}
+				}
+				a := agg[f.RuleID]
+				a.servers[srvName] = true
+				a.totalWeight += weightOf(f.Severity)
+				if f.Severity >= rules.SeverityHigh {
+					a.hasCritHigh = true
+				}
+			}
+		}
+		var actions []fixAction
+		headroom := 100 - r.Overall.Score
+		for ruleID, a := range agg {
+			if !a.hasCritHigh {
+				continue
+			}
+			gain := a.totalWeight
+			if gain > headroom {
+				gain = headroom
+			}
+			actions = append(actions, fixAction{
+				ruleID:        ruleID,
+				name:          a.name,
+				serverCount:   len(a.servers),
+				estimatedGain: gain,
+			})
+		}
+		sort.Slice(actions, func(i, j int) bool {
+			return actions[i].estimatedGain > actions[j].estimatedGain
+		})
+		if len(actions) > 5 {
+			actions = actions[:5]
+		}
+		if len(actions) > 0 {
+			fmt.Fprintf(w, "  %s\n", c(colorBold, "Top actions to improve your score"))
+			for _, a := range actions {
+				serverWord := "server"
+				if a.serverCount > 1 {
+					serverWord = "servers"
+				}
+				fmt.Fprintf(w, "  %s Fix %s across %d %s  %s\n",
+					c(colorCyan, "→"),
+					c(colorBold, a.name),
+					a.serverCount,
+					serverWord,
+					c(colorBrGreen, fmt.Sprintf("(~+%d pts)", a.estimatedGain)),
+				)
+			}
+			fmt.Fprintln(w)
+		}
 	}
 
 	// Group servers by worst severity.
@@ -311,6 +429,16 @@ func PrintScanReport(w io.Writer, r ScanReport) {
 			fmt.Fprintf(w, "    %s %s\n", c(colorYellow, "▸"), e)
 		}
 		fmt.Fprintln(w)
+	}
+
+	// First-run calibration message.
+	if r.IsFirstRun && len(r.Servers) > 0 {
+		fmt.Fprintf(w, "  %s\n",
+			c(colorDim, "First scan complete. A score under 50 is typical for developer machines with"),
+		)
+		fmt.Fprintf(w, "  %s\n\n",
+			c(colorDim, "multiple MCP servers installed — most findings are fixable in under 30 minutes."),
+		)
 	}
 
 	// Footer.
@@ -365,6 +493,14 @@ func PrintScanReport(w io.Writer, r ScanReport) {
 		fmt.Fprintf(w, "  %s  Check cross-server risk: %s\n\n",
 			c(colorDim, "→"),
 			c(colorCyan, "aspex-scan attack-paths"),
+		)
+	}
+
+	// Cron/watch footer hint.
+	if r.Overall.Score < 100 {
+		fmt.Fprintf(w, "  %s  %s\n",
+			c(colorDim, "→"),
+			c(colorDim+colorCyan, "Set up continuous monitoring:  aspex-scan cron --interval 1h"),
 		)
 	}
 
