@@ -389,18 +389,15 @@ func outputText(clientResults []ClientResult, findings []Finding, allEntries []d
 		c(ansiDim), version.Version, c(ansiReset),
 	)
 
-	sep := strings.Repeat("─", 60)
+	// dash returns N repetitions of ─ (rune-safe, avoids byte-slicing a multi-byte char).
+	dash := func(n int) string { return strings.Repeat("─", n) }
 
 	// ── Clients ──
-	fmt.Printf("  %sClients %s%s%s\n", c(ansiBold, ansiWhite), c(ansiDim), sep[:52], c(ansiReset))
+	fmt.Printf("  %sClients %s%s%s\n", c(ansiBold, ansiWhite), c(ansiDim), dash(50), c(ansiReset))
+	var notFound []string
 	for _, cr := range clientResults {
-		// Only show clients where config was found or that have servers
 		if !cr.Found {
-			fmt.Printf("  %s✗%s  %-12s  %sconfig not found%s\n",
-				c(ansiRed), c(ansiReset),
-				cr.Client,
-				c(ansiDim), c(ansiReset),
-			)
+			notFound = append(notFound, cr.Client)
 			continue
 		}
 		fmt.Printf("  %s✓%s  %-12s  %sconfig OK%s  ·  %d servers\n",
@@ -410,10 +407,17 @@ func outputText(clientResults []ClientResult, findings []Finding, allEntries []d
 			cr.ServerCount,
 		)
 	}
+	if len(notFound) > 0 {
+		fmt.Printf("  %s·  not detected: %s%s\n",
+			c(ansiDim),
+			strings.Join(notFound, ", "),
+			c(ansiReset),
+		)
+	}
 	fmt.Println()
 
 	// ── Environment ──
-	fmt.Printf("  %sEnvironment %s%s%s\n", c(ansiBold, ansiWhite), c(ansiDim), sep[:48], c(ansiReset))
+	fmt.Printf("  %sEnvironment %s%s%s\n", c(ansiBold, ansiWhite), c(ansiDim), dash(46), c(ansiReset))
 	envFindings := filterByCategory(findings, "environment")
 	for _, f := range envFindings {
 		fmt.Printf("  %s✗%s  %s\n", c(ansiRed), c(ansiReset), f.Detail)
@@ -425,7 +429,7 @@ func outputText(clientResults []ClientResult, findings []Finding, allEntries []d
 	fmt.Println()
 
 	// ── Config secrets ──
-	fmt.Printf("  %sConfig secrets %s%s%s\n", c(ansiBold, ansiWhite), c(ansiDim), sep[:44], c(ansiReset))
+	fmt.Printf("  %sConfig secrets %s%s%s\n", c(ansiBold, ansiWhite), c(ansiDim), dash(43), c(ansiReset))
 	configFindings := filterByCategory(findings, "config-secrets")
 	for _, f := range configFindings {
 		fmt.Printf("  %s✗%s  %s\n", c(ansiRed), c(ansiReset), f.Title)
@@ -437,7 +441,7 @@ func outputText(clientResults []ClientResult, findings []Finding, allEntries []d
 	fmt.Println()
 
 	// ── Filesystem exposure ──
-	fmt.Printf("  %sFilesystem exposure %s%s%s\n", c(ansiBold, ansiWhite), c(ansiDim), sep[:40], c(ansiReset))
+	fmt.Printf("  %sFilesystem exposure %s%s%s\n", c(ansiBold, ansiWhite), c(ansiDim), dash(38), c(ansiReset))
 	fsFindings := filterByCategory(findings, "filesystem")
 	for _, f := range fsFindings {
 		fmt.Printf("  %s✗%s  %s\n", c(ansiRed), c(ansiReset), f.Detail)
@@ -449,7 +453,7 @@ func outputText(clientResults []ClientResult, findings []Finding, allEntries []d
 	fmt.Println()
 
 	// ── Network ──
-	fmt.Printf("  %sNetwork %s%s%s\n", c(ansiBold, ansiWhite), c(ansiDim), sep[:52], c(ansiReset))
+	fmt.Printf("  %sNetwork %s%s%s\n", c(ansiBold, ansiWhite), c(ansiDim), dash(50), c(ansiReset))
 	netFindings := filterByCategory(findings, "network")
 	for _, f := range netFindings {
 		sym := c(ansiRed) + "✗" + c(ansiReset)
@@ -465,7 +469,7 @@ func outputText(clientResults []ClientResult, findings []Finding, allEntries []d
 	fmt.Println()
 
 	// ── Summary ──
-	fmt.Printf("  %s%s%s\n", c(ansiDim), sep, c(ansiReset))
+	fmt.Printf("  %s%s%s\n", c(ansiDim), dash(60), c(ansiReset))
 	crit := countBySeverity(findings, severityCritical)
 	warn := countBySeverity(findings, severityWarning)
 

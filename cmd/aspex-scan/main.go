@@ -513,22 +513,43 @@ func runAttackPaths(gf *globalFlags, jsonOut bool) error {
 		return dim
 	}
 
+	// Group chains by Name so repeated server-pair combinations collapse into one block.
+	type group struct {
+		chain        attackpath.AttackChain // representative entry (first seen)
+		serverPairs  []string               // all server combinations for this attack type
+	}
+	var groupOrder []string
+	groups := map[string]*group{}
 	for _, ch := range chains {
+		if _, ok := groups[ch.Name]; !ok {
+			groupOrder = append(groupOrder, ch.Name)
+			cp := ch
+			groups[ch.Name] = &group{chain: cp}
+		}
+		groups[ch.Name].serverPairs = append(groups[ch.Name].serverPairs, strings.Join(ch.Servers, " → "))
+	}
+
+	for _, name := range groupOrder {
+		g := groups[name]
+		ch := g.chain
 		fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
 			c(sevColor(ch.Severity), strings.ToUpper(ch.Severity)),
 			c(bold, ch.Name),
 			c(dim, "· "+ch.MITRETactic+" ("+ch.MITRERef+")"),
 		)
-		fmt.Fprintf(os.Stdout, "     %s\n", c(dim, ch.Description))
-		fmt.Fprintf(os.Stdout, "     %s %s\n", c(dim, "servers:"), c(cyan, strings.Join(ch.Servers, " → ")))
-		for _, step := range ch.Steps {
-			fmt.Fprintf(os.Stdout, "     %s %s\n", c(dim, "│"), step)
+		// Generic description without server names (those vary per pair).
+		for _, step := range ch.Steps[len(ch.Steps)-1:] {
+			fmt.Fprintf(os.Stdout, "     %s\n", c(dim, step))
+		}
+		for _, pair := range g.serverPairs {
+			fmt.Fprintf(os.Stdout, "     %s %s\n", c(dim, "·"), c(cyan, pair))
 		}
 		fmt.Fprintln(os.Stdout)
 	}
 
-	fmt.Fprintf(os.Stdout, "  %s %d attack chain(s) found across %d server(s).\n\n",
+	fmt.Fprintf(os.Stdout, "  %s %d attack type(s) · %d chain(s) across %d server(s).\n\n",
 		c(dim, "─"),
+		len(groupOrder),
 		len(chains),
 		len(inspected),
 	)

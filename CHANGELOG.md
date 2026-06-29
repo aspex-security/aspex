@@ -7,6 +7,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.5.3] - 2026-06-29
+
+### Fixed
+- aspex-doctor: section headers were garbled on all sections except Environment due to byte-slicing multi-byte UTF-8 `─` characters (each is 3 bytes; `sep[:52]` was cutting mid-rune). Fixed by using `strings.Repeat("─", N)` directly.
+- aspex-doctor: uninstalled clients (vscode, windsurf, etc.) no longer show as red `✗ config not found` — collapsed to a single dim `· not detected: ...` line
+- aspex-scan attack-paths: 14 near-duplicate findings now grouped by attack type (4 blocks instead of 14), with all server pairs listed under each type
+
+---
+
 ## [0.5.2] - 2026-06-29
 
 ### Added
@@ -253,6 +262,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Release binaries signed with cosign (keyless, Sigstore) + SPDX SBOM
 - Offline-only: no data sent anywhere
 
+[0.5.3]: https://github.com/aspex-security/aspex/releases/tag/v0.5.3
 [0.5.2]: https://github.com/aspex-security/aspex/releases/tag/v0.5.2
 [0.5.1]: https://github.com/aspex-security/aspex/releases/tag/v0.5.1
 [0.5.0]: https://github.com/aspex-security/aspex/releases/tag/v0.5.0
