@@ -76,14 +76,14 @@ curl -fsSL https://raw.githubusercontent.com/aspex-security/aspex/main/install.s
 
 ## Documentation
 
-Full reference, guides, and examples at **[docs.aspex.security](https://docs.aspex.security)**
+Full reference, guides, and examples at **[aspex.mintlify.site](https://aspex.mintlify.site)**
 
-- [aspex-scan reference](https://docs.aspex.security/tools/scan)
-- [aspex-trace reference](https://docs.aspex.security/tools/trace)
-- [aspex-attack reference](https://docs.aspex.security/tools/attack)
-- [aspex-doctor reference](https://docs.aspex.security/tools/doctor)
-- [CI integration guide](https://docs.aspex.security/guides/ci-integration)
-- [Daily workflow guide](https://docs.aspex.security/guides/daily-workflow)
+- [aspex-scan reference](https://aspex.mintlify.site/tools/scan)
+- [aspex-trace reference](https://aspex.mintlify.site/tools/trace)
+- [aspex-attack reference](https://aspex.mintlify.site/tools/attack)
+- [aspex-doctor reference](https://aspex.mintlify.site/tools/doctor)
+- [CI integration guide](https://aspex.mintlify.site/guides/ci-integration)
+- [Daily workflow guide](https://aspex.mintlify.site/guides/daily-workflow)
 
 ---
 
