@@ -12,6 +12,7 @@ import (
 // knownRuntimes is the set of executable names that are safe to look up via PATH.
 var knownRuntimes = map[string]bool{
 	"npx":     true,
+	"npm":     true,
 	"node":    true,
 	"python3": true,
 	"python":  true,

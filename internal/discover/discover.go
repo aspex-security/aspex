@@ -23,14 +23,15 @@ const (
 
 // ServerEntry represents one MCP server entry from a client config.
 type ServerEntry struct {
-	Name      string
-	Client    string
-	ConfigPath string
-	Command   string
-	Args      []string
-	EnvKeys   []string // key names only, never values
-	URL       string   // for HTTP/SSE servers
-	Disabled  bool
+	Name        string
+	Client      string
+	ConfigPath  string
+	Command     string
+	Args        []string
+	EnvKeys     []string // key names only, never values
+	URL         string   // for HTTP/SSE servers
+	Description string   // from metadata.description, if present
+	Disabled    bool
 }
 
 // clientConfigPaths returns candidate config file paths for the given client on the current OS.
@@ -193,6 +194,9 @@ type cursorMCPConfig struct {
 		Env      map[string]string `json:"env"`
 		URL      string            `json:"url"`
 		Disabled bool              `json:"disabled"`
+		Metadata struct {
+			Description string `json:"description"`
+		} `json:"metadata"`
 	} `json:"mcpServers"`
 }
 
@@ -320,14 +324,15 @@ func parseCursor(path string, data []byte) ([]ServerEntry, error) {
 	var entries []ServerEntry
 	for name, s := range cfg.MCPServers {
 		entries = append(entries, ServerEntry{
-			Name:       name,
-			Client:     ClientCursor,
-			ConfigPath: path,
-			Command:    s.Command,
-			Args:       s.Args,
-			EnvKeys:    envKeys(s.Env),
-			URL:        s.URL,
-			Disabled:   s.Disabled,
+			Name:        name,
+			Client:      ClientCursor,
+			ConfigPath:  path,
+			Command:     s.Command,
+			Args:        s.Args,
+			EnvKeys:     envKeys(s.Env),
+			URL:         s.URL,
+			Description: s.Metadata.Description,
+			Disabled:    s.Disabled,
 		})
 	}
 	return entries, nil

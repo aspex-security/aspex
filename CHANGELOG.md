@@ -7,6 +7,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.5.4] - 2026-06-29
+
+### Fixed
+- aspex-scan: `npm` added to `knownRuntimes` — servers launched via `npm exec` (e.g. Onyx MCP gateway) were treated as static-only, causing 0 tools to be enumerated and all tool-level rules (prompt injection, credential exposure, etc.) to be silently skipped
+- aspex-scan MCP021: plaintext HTTP remote server now correctly rated CRITICAL (was MEDIUM); transmitting MCP tool calls over unencrypted HTTP is a critical interception risk
+- aspex-scan MCP001: prompt injection patterns now also checked against `metadata.description` in the server config entry (static analysis, no server connection required)
+- aspex-doctor: removed over-broad `"AUTH"` pattern from `dangerousEnvPatterns` — it matched `OAUTH` state flags (`USE_STAGING_OAUTH`, `CLAUDE_CODE_OAUTH_SCOPES`, `CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH`, `CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH`) causing false positives
+- aspex-doctor: vars ending in `_URL` are no longer flagged as secrets — URLs are endpoints, not credentials
+- aspex-doctor: added known OAuth state vars to `envFalsePositives` (`USE_STAGING_OAUTH`, `USE_LOCAL_OAUTH`, `CLAUDE_CODE_*`, `MCP_GATEWAY_OAUTH_PROVIDERS_URL`)
+- aspex-doctor: config-secrets findings now deduplicated by key name across all server blocks — gateway-style configs where N servers share the same env block no longer report the same key N times
+
+---
+
 ## [0.5.3] - 2026-06-29
 
 ### Fixed
@@ -262,6 +275,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Release binaries signed with cosign (keyless, Sigstore) + SPDX SBOM
 - Offline-only: no data sent anywhere
 
+[0.5.4]: https://github.com/aspex-security/aspex/releases/tag/v0.5.4
 [0.5.3]: https://github.com/aspex-security/aspex/releases/tag/v0.5.3
 [0.5.2]: https://github.com/aspex-security/aspex/releases/tag/v0.5.2
 [0.5.1]: https://github.com/aspex-security/aspex/releases/tag/v0.5.1

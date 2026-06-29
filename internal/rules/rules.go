@@ -66,6 +66,7 @@ func EvalServer(srv *inspect.Server) []Finding {
 	var f []Finding
 
 	// Server-level rules.
+	f = append(f, checkMCP001StaticDescription(srv)...)
 	f = append(f, checkMCP006SecretsInEnv(srv)...)
 	f = append(f, checkMCP007UnpinnedSource(srv)...)
 	f = append(f, checkMCP010UnauthRemote(srv)...)
@@ -117,6 +118,28 @@ func evalTool(t *mcpclient.Tool) []Finding {
 	f = append(f, checkMCP022PackageManifestAccess(t)...)
 	f = append(f, checkMCP024SystemInfoGathering(t)...)
 	return f
+}
+
+// ---- MCP001 (static): Prompt injection in config metadata.description -----------
+
+func checkMCP001StaticDescription(srv *inspect.Server) []Finding {
+	desc := srv.Entry.Description
+	if desc == "" {
+		return nil
+	}
+	for _, pat := range injectionPhrasePatterns {
+		if pat.MatchString(desc) {
+			return []Finding{{
+				RuleID:   "MCP001",
+				Name:     "Prompt injection in server config description",
+				Severity: SeverityHigh,
+				Detail:   "Server metadata.description matches prompt-injection pattern: " + pat.String(),
+				Fix:      "Remove the malicious description from the MCP config. Do not trust this server.",
+				Mapping:  "OWASP LLM01, ATLAS AML.T0051, CWE-77",
+			}}
+		}
+	}
+	return nil
 }
 
 // ---- MCP001: Prompt injection in tool description --------------------------------
@@ -880,7 +903,7 @@ func checkMCP021PlaintextHTTP(srv *inspect.Server) []Finding {
 		return []Finding{{
 			RuleID:   "MCP021",
 			Name:     "Remote server using plaintext HTTP (no TLS)",
-			Severity: SeverityMedium,
+			Severity: SeverityCritical,
 			Detail:   "Remote MCP server at '" + srv.Entry.URL + "' uses unencrypted HTTP. Tool calls and responses are visible on the network.",
 			Fix:      "Use HTTPS. Never transmit tool calls or responses over plaintext HTTP.",
 			Mapping:  "OWASP LLM02, CWE-319",

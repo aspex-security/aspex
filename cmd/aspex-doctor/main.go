@@ -55,10 +55,10 @@ type JSONOutput struct {
 // dangerous patterns matched against env var key names (uppercase)
 var dangerousEnvPatterns = []string{
 	"SECRET", "TOKEN", "KEY", "PASSWORD", "PASSWD", "CREDENTIAL",
-	"API_KEY", "PRIVATE_KEY", "ACCESS_KEY", "AUTH",
+	"API_KEY", "PRIVATE_KEY", "ACCESS_KEY",
 }
 
-// false-positive env var names to skip
+// false-positive env var names to skip (OAuth state flags, URLs, display settings)
 var envFalsePositives = map[string]bool{
 	"COLORTERM":    true,
 	"TERM_PROGRAM": true,
@@ -66,6 +66,13 @@ var envFalsePositives = map[string]bool{
 	"DISPLAY":      true,
 	"LESS":         true,
 	"PAGER":        true,
+	// Claude Code / Onyx OAuth state flags — booleans and scope lists, not credentials
+	"USE_STAGING_OAUTH":                      true,
+	"USE_LOCAL_OAUTH":                        true,
+	"CLAUDE_CODE_OAUTH_SCOPES":               true,
+	"CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH":      true,
+	"CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH":  true,
+	"MCP_GATEWAY_OAUTH_PROVIDERS_URL":        true,
 }
 
 func isDangerousEnvKey(key string) bool {
@@ -73,6 +80,10 @@ func isDangerousEnvKey(key string) bool {
 		return false
 	}
 	upper := strings.ToUpper(key)
+	// Skip vars that end in _URL — they hold endpoints, not secrets
+	if strings.HasSuffix(upper, "_URL") {
+		return false
+	}
 	for _, pat := range dangerousEnvPatterns {
 		if strings.Contains(upper, pat) {
 			return true
@@ -293,22 +304,26 @@ func checkConfigSecrets(client, configPath string) []Finding {
 	}
 
 	var findings []Finding
-	// Walk the JSON looking for "env" objects
-	findings = append(findings, walkForEnvSecrets(client, configPath, raw)...)
+	// Walk the JSON looking for "env" objects; deduplicate by key name across all server blocks
+	seen := make(map[string]bool)
+	findings = append(findings, walkForEnvSecrets(client, configPath, raw, seen)...)
 	return findings
 }
 
-func walkForEnvSecrets(client, configPath string, v interface{}) []Finding {
+func walkForEnvSecrets(client, configPath string, v interface{}, seen map[string]bool) []Finding {
 	var findings []Finding
 	switch node := v.(type) {
 	case map[string]interface{}:
 		if envBlock, ok := node["env"]; ok {
 			if envMap, ok := envBlock.(map[string]interface{}); ok {
 				for k, val := range envMap {
+					if seen[k] {
+						continue
+					}
 					if isDangerousEnvKey(k) {
 						valStr, _ := val.(string)
 						if valStr != "" {
-							// Don't print value - just flag the key
+							seen[k] = true
 							findings = append(findings, Finding{
 								Category: "config-secrets",
 								Severity: severityCritical,
@@ -321,11 +336,11 @@ func walkForEnvSecrets(client, configPath string, v interface{}) []Finding {
 			}
 		}
 		for _, child := range node {
-			findings = append(findings, walkForEnvSecrets(client, configPath, child)...)
+			findings = append(findings, walkForEnvSecrets(client, configPath, child, seen)...)
 		}
 	case []interface{}:
 		for _, child := range node {
-			findings = append(findings, walkForEnvSecrets(client, configPath, child)...)
+			findings = append(findings, walkForEnvSecrets(client, configPath, child, seen)...)
 		}
 	}
 	return findings
