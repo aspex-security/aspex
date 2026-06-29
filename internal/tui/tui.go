@@ -33,9 +33,10 @@ const (
 
 // Option is a quick-launch action inside a tool's submenu.
 type Option struct {
-	Label string
-	Args  []string
-	Hint  string
+	Label     string
+	Args      []string
+	Hint      string
+	OpenAfter string // path to open in browser after the tool exits (optional)
 }
 
 // Item is a top-level menu entry (one per tool).
@@ -59,6 +60,7 @@ var items = []Item{
 			{Label: "Full scan", Args: nil, Hint: "Scan all clients on this machine"},
 			{Label: "With --explain", Args: []string{"--explain"}, Hint: "Show why each finding is dangerous"},
 			{Label: "Static only  (fast)", Args: []string{"--no-exec"}, Hint: "Parse configs without launching servers"},
+			{Label: "HTML report", Args: []string{"--html", "~/aspex-report.html"}, Hint: "Save + open a shareable HTML report", OpenAfter: "~/aspex-report.html"},
 			{Label: "Attack paths", Args: []string{"attack-paths"}, Hint: "Map cross-server capability chains"},
 			{Label: "Inventory", Args: []string{"inventory"}, Hint: "List every server and tool"},
 			{Label: "Shadow detection", Args: []string{"shadow"}, Hint: "Find tool name collisions"},
@@ -237,9 +239,15 @@ func Run(version string) {
 		case keyEnter:
 			item := items[sel]
 			var args []string
+			var openAfter string
 			if inSub {
-				args = item.Options[subSel].Args
+				opt := item.Options[subSel]
+				args = opt.Args
+				openAfter = opt.OpenAfter
 			}
+
+			// Resolve ~ in args before passing to the binary.
+			args = expandTilde(args)
 
 			// Restore terminal before running the subprocess.
 			term.Restore(fd, oldState)
@@ -247,6 +255,9 @@ func Run(version string) {
 			fmt.Print(clearScr)
 
 			launch(item.Binary, args)
+			if openAfter != "" {
+				openInBrowser(expandTildePath(openAfter))
+			}
 
 			// After the tool exits, offer to return to the menu.
 			fmt.Print("\r\n  \033[2mPress any key to return to menu, Q to quit\033[0m\r\n")
@@ -397,6 +408,42 @@ func launch(binary string, args []string) {
 			os.Exit(exitErr.ExitCode())
 		}
 	}
+}
+
+func expandTildePath(p string) string {
+	if strings.HasPrefix(p, "~/") {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			return home + p[1:]
+		}
+	}
+	return p
+}
+
+func expandTilde(args []string) []string {
+	out := make([]string, len(args))
+	for i, a := range args {
+		out[i] = expandTildePath(a)
+	}
+	return out
+}
+
+func openInBrowser(path string) {
+	var cmd *exec.Cmd
+	switch {
+	case fileExists("/usr/bin/open"): // macOS
+		cmd = exec.Command("open", path)
+	case fileExists("/usr/bin/xdg-open"): // Linux
+		cmd = exec.Command("xdg-open", path)
+	default:
+		return
+	}
+	cmd.Start() //nolint:errcheck
+}
+
+func fileExists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
 }
 
 func printHelp(version string) {

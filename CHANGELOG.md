@@ -7,6 +7,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.5.2] - 2026-06-29
+
+### Added
+- aspex TUI: SCAN submenu now includes "HTML report" option - runs `aspex-scan --html ~/aspex-report.html` and opens the result in the browser automatically
+
+---
+
 ## [0.5.1] - 2026-06-29
 
 ### Security
@@ -246,6 +253,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Release binaries signed with cosign (keyless, Sigstore) + SPDX SBOM
 - Offline-only: no data sent anywhere
 
+[0.5.2]: https://github.com/aspex-security/aspex/releases/tag/v0.5.2
 [0.5.1]: https://github.com/aspex-security/aspex/releases/tag/v0.5.1
 [0.5.0]: https://github.com/aspex-security/aspex/releases/tag/v0.5.0
 [0.4.0]: https://github.com/aspex-security/aspex/releases/tag/v0.4.0
