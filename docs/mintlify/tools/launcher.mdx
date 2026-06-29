@@ -1,0 +1,39 @@
+---
+title: "aspex (launcher)"
+description: "Interactive TUI menu for all Aspex tools. The easiest way to get started."
+---
+
+Run `aspex` with no arguments to open the interactive launcher - a terminal menu that puts all four tools at your fingertips without needing to remember any flags.
+
+```sh
+aspex
+```
+
+```
+  ┌─────────────────────────────────────────────────┐
+  │  aspex  MCP Security Suite                      │
+  │                                                 │
+  │  ▶  scan          Audit all MCP servers         │
+  │     trace         Analyse runtime logs          │
+  │     attack        Adversarial probe (opt-in)    │
+  │     doctor        Quick health check            │
+  │                                                 │
+  │  ↑↓ navigate · enter select · q quit            │
+  └─────────────────────────────────────────────────┘
+```
+
+## Navigation
+
+| Key | Action |
+|---|---|
+| `↑` / `↓` | Move between tools |
+| `Enter` | Run the selected tool |
+| `q` / `Ctrl+C` | Quit |
+
+Selecting a tool drops you into that tool's own interactive output. Press `q` or `Ctrl+C` to return to the launcher menu.
+
+## Why use the launcher?
+
+The launcher is the recommended starting point if you're new to Aspex or want a quick overview of your security posture without memorizing flags. It runs each tool with sensible defaults and no required arguments.
+
+For automation, CI, or scripting - use the individual binaries (`aspex-scan`, `aspex-trace`, `aspex-attack`, `aspex-doctor`) directly with their full flag sets.
