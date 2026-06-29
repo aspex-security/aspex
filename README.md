@@ -80,7 +80,7 @@ Aspex is an open-source AI agent security toolkit. Three CLI tools cover the ful
 | `aspex-attack` | Can I actually exploit these servers? |
 | `aspex-doctor` | Is my overall AI agent setup healthy? |
 
-Run `aspex` for an interactive launcher that puts all three at your fingertips.
+Run `aspex` for an interactive launcher that puts all four tools at your fingertips.
 
 **aspex-scan** reads every MCP client config on the machine, connects to each server (stdio and HTTP/SSE), enumerates tools, resources, and prompts, and produces a scored risk report. It catches misconfigurations, dangerous capabilities, and credential leaks before an agent ever calls a tool.
 
@@ -88,7 +88,7 @@ Run `aspex` for an interactive launcher that puts all three at your fingertips.
 
 **aspex-attack** actively calls live MCP tools with adversarial payloads - prompt injection strings, path traversal, SSRF probes - and tells you empirically what's exploitable, not just theoretically risky.
 
-All three tools run fully offline. No account. No data sent anywhere.
+All tools run fully offline. No account. No data sent anywhere.
 
 ## The problem
 
@@ -102,17 +102,18 @@ There is no equivalent of `npm audit` for MCP. No unified view of what your agen
 
 ## Interactive launcher
 
-Run `aspex` with no arguments for an arrow-key menu that puts all three tools at your fingertips - no flags to remember, no man page to consult.
+Run `aspex` with no arguments for an arrow-key menu that puts all four tools at your fingertips - no flags to remember, no man page to consult.
 
 ```
-  ◆  ASPEX  v0.3.0
-  AI Security Toolkit · 3 tools · offline · free
+  ◆  ASPEX  v0.5.5
+  AI Security Toolkit · 4 tools · offline · free
 
   ──────────────────────────────────────────────────────
 
   ▶  SCAN     Audit MCP server configurations
      TRACE    Review AI agent activity logs
      ATTACK   Red team your live MCP servers
+     DOCTOR   Health check your AI agent setup
 
   ──────────────────────────────────────────────────────
   ↑↓ move   Enter run   → options   Q quit
