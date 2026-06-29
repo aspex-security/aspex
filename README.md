@@ -39,6 +39,12 @@ brew install aspex-security/tap/aspex
   - [Security advisory mode](#security-advisory-mode)
   - [Red team mode](#red-team-mode)
   - [Config hardening](#config-hardening)
+  - [Score history and trends](#score-history-and-trends)
+  - [Prioritized fix plan](#prioritized-fix-plan)
+  - [Server risk brief](#server-risk-brief)
+  - [Keychain migration](#keychain-migration)
+  - [Shareable report](#shareable-report)
+  - [Compliance report](#compliance-report)
   - [Continuous monitoring](#continuous-monitoring)
   - [MCP inventory](#mcp-inventory)
   - [Rug-pull detection](#rug-pull-detection)
@@ -127,13 +133,24 @@ aspex-scan reads every MCP client config on the machine, connects to each server
 ### What it looks like
 
 ```
-  ◆  Aspex  v0.1.0
+  ◆  Aspex  v0.5.5
 
   ╭─────────────────────────────────────────────────────────────╮
-  │   12 / 100  ██░░░░░░░░░░░░░░░░░░░░░░  HIGH RISK            │
-  │  6 servers · 98 tools · 29 findings · 5s elapsed           │
-  │  6 critical  11 high  12 medium                             │
+  │   15 / 100  ███░░░░░░░░░░░░░░░░░░░░░  HIGH RISK            │
+  │  6 servers · 98 tools · 28 findings · 9s elapsed           │
+  │  5 critical  11 high  12 medium                             │
+  │  = no change since last scan (was 15/100)                   │
   ╰─────────────────────────────────────────────────────────────╯
+
+  Security categories
+  Prompt Security     ████████████████████  A+  No issues detected
+  Tool Security       ░░░░░░░░░░░░░░░░░░░░   F  Dangerous capability: shell/exec
+  Data Protection     ░░░░░░░░░░░░░░░░░░░░   F  Secrets in config env
+
+  Top actions to improve your score
+  → Fix Secrets in config env across 2 servers         (~+70 pts)
+  → Fix Dangerous capability: process spawn across 2   (~+40 pts)
+  → Fix Arbitrary code execution across 1 server       (~+35 pts)
 
   CRITICAL ────────────────────────────────────────────────────
 
@@ -144,16 +161,12 @@ aspex-scan reads every MCP client config on the machine, connects to each server
      │ OWASP LLM06 · CWE-94 · CWE-78
      ╰ fix: Remove this tool or sandbox it strictly.
 
-     HIGH      MCP013  Screen capture capability
-     │ Tool 'browser_take_screenshot' can capture screen contents.
-     │ OWASP LLM02 · CWE-359
-     ╰ fix: Remove unless central to the server's stated purpose.
-
   OK ─────────────────────────────────────────────────────────
 
   ○  memory  cursor  100 / 100
 
   ──────────────────────────────────────────────────────────────
+  → Set up continuous monitoring:  aspex-scan cron --interval 1h
   This scanned 1 machine. Fleet-wide coverage: https://onyx.security
 ```
 
@@ -226,6 +239,8 @@ Commands:
   verify <package>      Check an npm package against the known-bad registry
   install-hook          Install a git pre-commit hook
   uninstall-hook        Remove the pre-commit hook
+  fix env           Migrate hardcoded credentials to the macOS Keychain
+  explain <server>  Full risk narrative for one server (why/exploit/impact per finding)
   completion <shell>    Generate shell completion script (bash|zsh|fish)
   version [--check]     Print version; --check queries GitHub for updates
 
@@ -244,6 +259,10 @@ Flags:
                         critical, high, medium, low (default: off)
   --no-color            Disable colour output (also respects the NO_COLOR
                         environment variable; see no-color.org)
+  --share               Print a privacy-safe Markdown summary (no server names or
+                        values) suitable for sharing with a team or security review
+  --report <format>     Compliance mapping report: soc2, iso27001
+                        Shows PASS/FAIL per control with matching findings
 ```
 
 ### Attack path analysis
@@ -400,6 +419,142 @@ aspex-scan fix --severity critical --client claude
 
 # Write a hardened copy without touching the original
 aspex-scan fix --output ~/mcp-config-hardened.json
+```
+
+`fix env` migrates hardcoded credentials from your MCP config to the macOS Keychain:
+
+```sh
+# Preview migration commands for all hardcoded tokens (dry run, default)
+aspex-scan fix env
+
+# Scope to one client
+aspex-scan fix env --client cursor
+```
+
+Output:
+```
+  ! GITHUB_PERSONAL_ACCESS_TOKEN  (github)
+  # 1. Store the secret in Keychain (prompts for value):
+  security add-generic-password -a "$USER" -s "GITHUB_PERSONAL_ACCESS_TOKEN" -w
+  # 2. Reference it in mcp.json env block:
+  "GITHUB_PERSONAL_ACCESS_TOKEN": "$(security find-generic-password -a "$USER" -s "GITHUB_PERSONAL_ACCESS_TOKEN" -w 2>/dev/null)"
+```
+
+### Score history and trends
+
+Every scan result is saved locally. Subsequent scans automatically show how your score has changed:
+
+```
+  │  ↑ +12 pts since last scan (was 3/100)   ← green when improving
+  │  ↓ -5 pts since last scan (was 20/100)   ← red when regressing
+  │  = no change since last scan (was 15/100) ← dim when stable
+```
+
+On your very first scan, aspex calibrates expectations: a score under 50 is normal for a developer machine with several MCP servers installed - most findings are fixable in under 30 minutes.
+
+### Prioritized fix plan
+
+After each scan, aspex shows the top actions ranked by estimated score improvement - so you know exactly where to start:
+
+```
+  Top actions to improve your score
+  → Fix Secrets in config env across 2 servers         (~+70 pts)
+  → Fix Dangerous capability: process spawn across 2   (~+40 pts)
+  → Fix Arbitrary code execution across 1 server       (~+35 pts)
+  → Fix Unpinned npm source across 3 servers           (~+30 pts)
+  → Fix Unrestricted network access across 1 server    (~+20 pts)
+```
+
+Only rules with at least one CRITICAL or HIGH finding are shown. The gain estimates are based on the scoring model's deduction weights.
+
+### Server risk brief
+
+`explain` gives a full narrative for any single server - useful when deciding whether to keep, restrict, or remove it:
+
+```sh
+aspex-scan explain desktop-commander
+aspex-scan explain github
+```
+
+Output per finding:
+```
+  CRITICAL  MCP006  Secrets in config env
+  Env key 'GITHUB_PERSONAL_ACCESS_TOKEN' stored in plaintext config.
+  fix: Move secrets to a vault or OS keychain.
+  why:    All secrets inherited by the MCP process are visible in the LLM context.
+  exploit: An agent asked to 'debug the config' calls the env-read tool. The full
+           environment—API keys, database URLs, GitHub tokens—appears in the
+           conversation and any downstream logging system.
+  impact:  Exposure of all runtime credentials to the model and observability tools.
+
+  Risk Narrative
+  This server has 1 critical finding. The highest-risk scenario is Secrets in config env.
+```
+
+### Keychain migration
+
+See [`fix env`](#config-hardening) above.
+
+### Shareable report
+
+`--share` generates a privacy-safe Markdown summary with no server names, URLs, or credential values - safe to paste into a Slack channel or attach to a security review:
+
+```sh
+aspex-scan --share
+aspex-scan --clients cursor --share
+```
+
+Output:
+```markdown
+## aspex-scan — Shareable Summary
+
+**Overall Score:** 15 / 100   **Band:** HIGH RISK
+
+**Servers scanned:** 6   **Total findings:** 28
+
+### Findings by Severity
+| Severity | Count |
+|----------|-------|
+| CRITICAL | 5 |
+| HIGH     | 11 |
+| MEDIUM   | 12 |
+
+### Findings by Category
+| Category                | Count |
+|-------------------------|-------|
+| Credential Exposure     | 2 |
+| Dangerous Capabilities  | 9 |
+| Network & SSRF          | 2 |
+
+_Generated by aspex-scan v0.5.5 — https://github.com/aspex-security/aspex_
+```
+
+### Compliance report
+
+`--report` maps findings to security framework controls with PASS/FAIL per control:
+
+```sh
+aspex-scan --report soc2
+aspex-scan --report iso27001
+```
+
+SOC 2 output:
+```
+  ◆  aspex-scan — SOC 2 Type II Compliance Mapping
+
+  FAIL  CC6.1  Logical and Physical Access Controls
+        MCP006  Secrets in config env  (CRITICAL)
+  PASS  CC6.7  Transmission of Confidential Information
+  PASS  CC7.1  System Monitoring / Anomaly Detection
+  FAIL  CC8.1  Change Management / Supply Chain
+        MCP007  Unpinned source (@latest tag)  (MEDIUM)
+  FAIL  CC6.6  Logical Access — Dangerous Capabilities
+        MCP003  Shell/exec capability  (CRITICAL)
+        MCP020  Arbitrary code execution  (CRITICAL)
+  FAIL  CC9.2  Network Access Controls (SSRF)
+        MCP005  Unrestricted network access  (HIGH)
+
+  Overall Compliance Posture:  FAIL  (critical: 5  high: 11  medium: 12)
 ```
 
 ### Continuous monitoring
@@ -773,6 +928,12 @@ aspex-scan attack-paths
 
 # Full risk scan with HTML report
 aspex-scan --html report.html && open report.html
+
+# Get a full risk narrative for a specific server
+aspex-scan explain desktop-commander
+
+# Share a privacy-safe summary with your team
+aspex-scan --share
 ```
 
 ---
