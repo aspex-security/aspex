@@ -35,6 +35,18 @@ import (
 // exceeded. main() converts it to os.Exit(1) after all defers have run.
 var errExitOne = fmt.Errorf("exit:1")
 
+// ANSI color/style constants shared across all subcommands.
+const (
+	ansiReset  = "\033[0m"
+	ansiBold   = "\033[1m"
+	ansiDim    = "\033[2m"
+	ansiPurple = "\033[35m"
+	ansiCyan   = "\033[36m"
+	ansiGreen  = "\033[92m"
+	ansiRed    = "\033[91m"
+	ansiYellow = "\033[93m"
+)
+
 func main() {
 	mcpclient.ClientVersion = version.Version
 	if err := newRootCmd().Execute(); err != nil {
@@ -112,6 +124,9 @@ COMPARING OVER TIME
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if os.Getenv("NO_COLOR") != "" {
+				gf.noColor = true
+			}
 			if gf.watchMode {
 				return runWatch(gf)
 			}
@@ -211,7 +226,10 @@ Useful for:
 }
 
 func runInventory(gf *globalFlags, jsonOut bool) error {
-	servers, _ := discover.DiscoverAll(gf.clients)
+	servers, discoveryErrs := discover.DiscoverAll(gf.clients)
+	for _, e := range discoveryErrs {
+		fmt.Fprintf(os.Stderr, "  warning: %v\n", e)
+	}
 	ctx := context.Background()
 	opts := inspect.Options{NoExec: gf.noExec}
 
@@ -380,7 +398,10 @@ which capabilities.`,
 }
 
 func runAttackPaths(gf *globalFlags, jsonOut bool) error {
-	servers, _ := discover.DiscoverAll(gf.clients)
+	servers, discoveryErrs := discover.DiscoverAll(gf.clients)
+	for _, e := range discoveryErrs {
+		fmt.Fprintf(os.Stderr, "  warning: %v\n", e)
+	}
 	ctx := context.Background()
 	opts := inspect.Options{NoExec: gf.noExec}
 
@@ -589,7 +610,10 @@ Risk levels:
 }
 
 func runShadow(gf *globalFlags, jsonOut bool) error {
-	servers, _ := discover.DiscoverAll(gf.clients)
+	servers, discoveryErrs := discover.DiscoverAll(gf.clients)
+	for _, e := range discoveryErrs {
+		fmt.Fprintf(os.Stderr, "  warning: %v\n", e)
+	}
 	ctx := context.Background()
 	opts := inspect.Options{NoExec: gf.noExec}
 
@@ -729,7 +753,7 @@ func runShadow(gf *globalFlags, jsonOut bool) error {
 
 func newPhantomCmd(gf *globalFlags) *cobra.Command {
 	var jsonOut bool
-	var intervalSecs int
+	var intervalStr string
 	cmd := &cobra.Command{
 		Use:   "phantom",
 		Short: "Detect servers that return different tools on successive calls",
@@ -761,22 +785,28 @@ the server changes its behavior based on session timing.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runPhantom(gf, jsonOut, intervalSecs)
+			dur, err := time.ParseDuration(intervalStr)
+			if err != nil {
+				return fmt.Errorf("invalid --interval %q: %w", intervalStr, err)
+			}
+			return runPhantom(gf, jsonOut, dur)
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
-	cmd.Flags().IntVar(&intervalSecs, "interval", 3, "Seconds between the two tools/list calls")
+	cmd.Flags().StringVar(&intervalStr, "interval", "5s", "Duration between the two tools/list calls (e.g. 5s, 10s, 1m)")
 	return cmd
 }
 
-func runPhantom(gf *globalFlags, jsonOut bool, intervalSecs int) error {
-	servers, _ := discover.DiscoverAll(gf.clients)
+func runPhantom(gf *globalFlags, jsonOut bool, interval time.Duration) error {
+	servers, discoveryErrs := discover.DiscoverAll(gf.clients)
+	for _, e := range discoveryErrs {
+		fmt.Fprintf(os.Stderr, "  warning: %v\n", e)
+	}
 	if len(servers) == 0 {
 		fmt.Fprintf(os.Stdout, "  No MCP servers found.\n")
 		return nil
 	}
 
-	interval := time.Duration(intervalSecs) * time.Second
 	ctx := context.Background()
 
 	c := func(col, text string) string {
@@ -794,12 +824,12 @@ func runPhantom(gf *globalFlags, jsonOut bool, intervalSecs int) error {
 	cyan := "\033[36m"
 
 	if !jsonOut && !gf.jsonOut {
-		fmt.Fprintf(os.Stdout, "\n  %s  %s\n  %s %d servers · %ds interval between calls\n\n",
+		fmt.Fprintf(os.Stdout, "\n  %s  %s\n  %s %d servers · %s interval between calls\n\n",
 			c(purple+bold, "◆"),
 			c(bold, "Phantom Tool Detection"),
 			c(dim, "→"),
 			len(servers),
-			intervalSecs,
+			interval,
 		)
 	}
 
@@ -999,7 +1029,10 @@ func newDiffCmd(gf *globalFlags) *cobra.Command {
 			}
 
 			// Run current scan.
-			servers, _ := discover.DiscoverAll(gf.clients)
+			servers, discoveryErrs := discover.DiscoverAll(gf.clients)
+			for _, e := range discoveryErrs {
+				fmt.Fprintf(os.Stderr, "  warning: %v\n", e)
+			}
 			ctx := context.Background()
 			opts := inspect.Options{NoExec: gf.noExec}
 			var inspected []*inspect.Server
@@ -1149,7 +1182,10 @@ to provide empirical vulnerability evidence.`,
 }
 
 func runRedTeam(gf *globalFlags, serverFlag string, timeoutSecs int, jsonOut bool, categories []string) error {
-	servers, _ := discover.DiscoverAll(gf.clients)
+	servers, discoveryErrs := discover.DiscoverAll(gf.clients)
+	for _, e := range discoveryErrs {
+		fmt.Fprintf(os.Stderr, "  warning: %v\n", e)
+	}
 	if len(servers) == 0 {
 		fmt.Fprintln(os.Stdout, "  No MCP servers found.")
 		return nil
@@ -1716,9 +1752,7 @@ func newFixCmd(gf *globalFlags) *cobra.Command {
 Servers with findings at or above the threshold severity are removed from the
 config. A diff-style summary shows exactly what was changed.
 
-By default (--dry-run) the hardened config is printed to stdout and no files
-are modified. Pass --output to write to a specific path, or omit both flags to
-overwrite the original config in place (after confirmation).`,
+By default (--dry-run=true), changes are printed to stdout. Pass --dry-run=false to apply them.`,
 		Example: `  # Preview what would be removed (dry run, default)
   aspex-scan fix --dry-run
 
@@ -1739,7 +1773,7 @@ overwrite the original config in place (after confirmation).`,
 			return runFix(gf, clients, dryRun, severityStr, outputPath)
 		},
 	}
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print hardened config to stdout; do not write files")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", true, "print changes without modifying files")
 	cmd.Flags().StringVar(&severityStr, "severity", "critical", "Remove servers with findings at or above this severity: critical|high|medium|low")
 	cmd.Flags().StringVar(&outputPath, "output", "", "Write hardened config to this path instead of overwriting originals")
 	cmd.Flags().StringVar(&clientName, "client", "", "Only fix this client's config (e.g. claude, cursor)")
@@ -1763,7 +1797,10 @@ func runFix(gf *globalFlags, clients []string, dryRun bool, severityStr string, 
 	purple := "\033[35m"
 
 	// Discover and inspect all servers.
-	entries, _ := discover.DiscoverAll(clients)
+	entries, discoveryErrs := discover.DiscoverAll(clients)
+	for _, e := range discoveryErrs {
+		fmt.Fprintf(os.Stderr, "  warning: %v\n", e)
+	}
 	if len(entries) == 0 {
 		fmt.Fprintln(os.Stderr, "No MCP servers found.")
 		return nil
@@ -2082,11 +2119,19 @@ func runCron(gf *globalFlags, intervalStr, notifyURL string, quiet bool) error {
 
 	scan := func() {
 		ts := time.Now().Format("15:04:05")
-		servers, _ := discover.DiscoverAll(gf.clients)
+		servers, discoveryErrs := discover.DiscoverAll(gf.clients)
+		for _, e := range discoveryErrs {
+			fmt.Fprintf(os.Stderr, "  warning: %v\n", e)
+		}
 		ctx := context.Background()
 		opts := inspect.Options{NoExec: gf.noExec}
 
 		newCount := 0
+		if len(seen) > 10000 {
+			seen = map[string]bool{}
+			fmt.Fprintf(os.Stdout, "  %s seen map reset after 10000 entries\n", c(ansiDim, "→"))
+		}
+
 		for _, entry := range servers {
 			srv := inspect.InspectServer(ctx, entry, opts)
 			findings := rules.EvalServer(srv)

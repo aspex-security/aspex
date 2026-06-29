@@ -103,10 +103,12 @@ func InspectStdio(ctx context.Context, command string, args []string) (*InspectR
 		cmd.Wait()
 	}()
 
+	sc := bufio.NewScanner(stdoutPipe)
+	sc.Buffer(make([]byte, 64*1024), 4*1024*1024)
 	c := &stdioClient{
 		cmd:    cmd,
 		stdin:  stdin,
-		stdout: bufio.NewScanner(stdoutPipe),
+		stdout: sc,
 	}
 
 	info, err := c.initialize()

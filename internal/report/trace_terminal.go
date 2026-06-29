@@ -162,6 +162,18 @@ func PrintTraceReport(w io.Writer, r TraceReport) {
 
 	if len(r.Flagged) == 0 {
 		fmt.Fprintf(w, "  %s No anomalies found in %d tool calls.\n\n", c(colorGreen+colorBold, "OK"), r.TotalEvents)
+		// Always show activity footprint even in the clean case.
+		a := r.Activity
+		uniqueTools := len(a.TopTools)
+		fmt.Fprintf(w, "  Activity footprint:\n")
+		fmt.Fprintf(w, "    total tool calls:  %d\n", r.TotalEvents)
+		fmt.Fprintf(w, "    unique tools:      %d\n", uniqueTools)
+		fmt.Fprintf(w, "    file reads:        %d\n", a.FileReads)
+		fmt.Fprintf(w, "    file writes:       %d\n", a.FileWrites)
+		fmt.Fprintf(w, "    shell commands:    %d\n", a.BashCmds)
+		fmt.Fprintf(w, "    network calls:     %d\n", a.NetworkCalls)
+		fmt.Fprintf(w, "    sessions analyzed: %d\n", r.Sessions)
+		fmt.Fprintf(w, "    time range:        last %s\n\n", r.Since)
 	} else {
 		var crits, highs, meds, lows []trace.FlaggedEvent
 		for _, fe := range r.Flagged {

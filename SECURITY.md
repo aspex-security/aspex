@@ -4,6 +4,9 @@
 
 | Version | Supported |
 |---|---|
+| 0.5.x | Yes |
+| 0.4.x | Yes |
+| 0.3.x | Yes |
 | 0.2.x | Yes |
 | 0.1.x | Critical fixes only |
 
@@ -53,21 +56,16 @@ Use `--no-exec` if you do not trust the servers in your config. This flag skips 
 
 ### Supply chain
 
-Release binaries are built with CGO disabled and reproducible build flags. Every release includes:
+Release binaries are built with CGO disabled and reproducible build flags. Release binaries are distributed via Homebrew (formula verified by SHA-256 checksum) and GitHub Releases (SHA-256 checksums in checksums.txt). Cosign signing is planned for a future release.
 
-- cosign signature (keyless, Sigstore): `checksums.txt.pem` + `checksums.txt.sig`
+Every release includes:
+
 - SPDX SBOM (`sbom.spdx.json`)
 
 Verify a release binary:
 
 ```sh
-# Verify the checksum signature
-cosign verify-blob \
-  --certificate checksums.txt.pem \
-  --signature checksums.txt.sig \
-  checksums.txt
-
-# Verify the binary against the checksum
+# Download checksums.txt from the release page, then:
 sha256sum --check --ignore-missing checksums.txt
 ```
 
@@ -81,7 +79,6 @@ Go module dependencies are pinned in `go.sum` and audited by:
 
 The release pipeline runs in GitHub Actions with the following controls:
 
-- OIDC-based cosign signing (no long-lived signing keys stored anywhere).
 - NPM publish gated on the same signed release artifacts.
 
 ---

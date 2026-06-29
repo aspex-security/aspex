@@ -13,6 +13,17 @@ The highest-value contributions are:
 
 ---
 
+## Fork & Branch Workflow
+
+1. Fork the repo on GitHub.
+2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/aspex`
+3. Create a branch: `git checkout -b feat/your-feature-name`
+4. Make changes, run `make test`.
+5. Push: `git push origin feat/your-feature-name`
+6. Open a PR targeting `main` on `aspex-security/aspex`.
+
+---
+
 ## Development setup
 
 ```sh
@@ -28,7 +39,7 @@ go run ./cmd/aspex-scan --no-exec
 go run ./cmd/aspex-trace
 ```
 
-Requirements: Go 1.24 or later. No other dependencies needed for development.
+Requirements: Go 1.25 or later. No other dependencies needed for development.
 
 ---
 

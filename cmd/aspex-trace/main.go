@@ -110,6 +110,9 @@ BASELINES
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if os.Getenv("NO_COLOR") != "" {
+				tf.noColor = true
+			}
 			return runTrace(tf)
 		},
 	}

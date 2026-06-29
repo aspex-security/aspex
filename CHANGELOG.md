@@ -7,6 +7,45 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.5.1] - 2026-06-29
+
+### Security
+- Fixed SSRF vulnerability in --notify webhook URL handler (no host validation, RFC1918 bypass)
+- Fixed terminal escape injection in aspex-doctor (server-supplied strings not sanitized)
+- Fixed bufio.Scanner 64 KB hard cap causing silent data loss on large MCP server tool lists
+- Fixed HTTP client timeout missing in redteam probe runner (malicious server could hang indefinitely)
+- Fixed subprocess spawned from relative path in inspector without path validation
+- Fixed http.DefaultClient with no timeout/redirect guard in version check
+
+### Fixed
+- aspex-scan fix --dry-run now defaults to true (previously documented as default but wasn't)
+- aspex-attack no longer shows green CLEAN verdict implying safety; now shows explicit probe count disclaimer
+- aspex-attack now has --fail-on flag for CI gating
+- aspex doctor pass-through added to aspex launcher (aspex doctor now works)
+- aspex-trace always shows activity footprint summary even when no anomalies found
+- discover.DiscoverAll errors now surfaced as warnings instead of silently discarded
+- seen map in aspex-scan cron capped at 10,000 entries to prevent memory leak
+- NO_COLOR environment variable now respected by all binaries
+- aspex-scan phantom --interval now accepts duration strings (e.g. 5s, 1m)
+- Homoglyph detection map: fixed identity mapping 's'->''s'' to correctly detect U+A731
+
+### Documentation
+- Removed cosign signing claims from README and SECURITY.md (not yet implemented)
+- Fixed rule counts: 140+ scan rules, 220+ total rules
+- Added privacy caveat for aspex-attack (it does call tools/call)
+- SECURITY.md supported versions updated to include 0.3.x-0.5.x
+- CONTRIBUTING.md: added fork/branch workflow, fixed Go version reference
+- install.sh: now installs all 5 binaries
+- CHANGELOG: added reference links for all releases
+
+### OSS
+- Added GitHub issue templates (bug report, false positive, feature request)
+- Added PR template
+- CI: all 5 binaries now built and tested
+- CI: govulncheck now blocks merges
+
+---
+
 ## [0.5.0] - 2026-06-29
 
 ### Added
@@ -207,4 +246,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Release binaries signed with cosign (keyless, Sigstore) + SPDX SBOM
 - Offline-only: no data sent anywhere
 
+[0.5.1]: https://github.com/aspex-security/aspex/releases/tag/v0.5.1
+[0.5.0]: https://github.com/aspex-security/aspex/releases/tag/v0.5.0
+[0.4.0]: https://github.com/aspex-security/aspex/releases/tag/v0.4.0
+[0.3.4]: https://github.com/aspex-security/aspex/releases/tag/v0.3.4
+[0.3.3]: https://github.com/aspex-security/aspex/releases/tag/v0.3.3
+[0.3.2]: https://github.com/aspex-security/aspex/releases/tag/v0.3.2
+[0.3.1]: https://github.com/aspex-security/aspex/releases/tag/v0.3.1
+[0.3.0]: https://github.com/aspex-security/aspex/releases/tag/v0.3.0
+[0.2.0]: https://github.com/aspex-security/aspex/releases/tag/v0.2.0
 [0.1.0]: https://github.com/aspex-security/aspex/releases/tag/v0.1.0

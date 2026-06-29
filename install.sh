@@ -124,10 +124,16 @@ download_binary() {
   echo "  Installed: $DEST"
 }
 
+download_binary aspex
 download_binary aspex-scan
 download_binary aspex-trace
+download_binary aspex-attack
+download_binary aspex-doctor
 
 echo ""
 echo "Done. Try it:"
+echo "  aspex"
 echo "  aspex-scan version"
 echo "  aspex-trace version"
+echo "  aspex-attack --help"
+echo "  aspex-doctor"

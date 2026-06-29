@@ -29,7 +29,7 @@ brew install aspex-security/tap/aspex
 - [The problem](#the-problem)
 - [Interactive launcher](#interactive-launcher)
 - [aspex-scan](#aspex-scan)
-  - [What it catches](#what-it-catches-150-rules)
+  - [What it catches](#what-it-catches-140-rules)
   - [Install](#install)
   - [Quickstart](#quickstart)
   - [All flags and commands](#all-flags-and-commands)
@@ -157,7 +157,7 @@ aspex-scan reads every MCP client config on the machine, connects to each server
   This scanned 1 machine. Fleet-wide coverage: https://onyx.security
 ```
 
-### What it catches (150+ rules)
+### What it catches (140+ rules)
 
 | Category | Rules | Examples |
 |---|---|---|
@@ -242,7 +242,8 @@ Flags:
   --watch               Re-scan automatically when configs change
   --fail-on <sev>       Exit 1 at or above this severity:
                         critical, high, medium, low (default: off)
-  --no-color            Disable colour output
+  --no-color            Disable colour output (also respects the NO_COLOR
+                        environment variable; see no-color.org)
 ```
 
 ### Attack path analysis
@@ -591,7 +592,8 @@ Flags:
   --json               Machine-readable JSON output
   --sarif              SARIF output for code scanning
   --fail-on <sev>      Exit 1 at or above this severity (default: high)
-  --no-color           Disable colour output
+  --no-color           Disable colour output (also respects the NO_COLOR
+                       environment variable; see no-color.org)
 ```
 
 ### Kill chain detection
@@ -903,20 +905,13 @@ Aspex is intentionally simple and intentionally limited.
 
 - Never sends configs, findings, file paths, or tool names anywhere.
 - Never proxies or intercepts live traffic.
-- Never calls `tools/call` on any MCP server.
+- Never calls `tools/call` on any MCP server. **Exception: aspex-attack explicitly calls tools/call with adversarial payloads as its primary function. It always shows a confirmation prompt before running and requires explicit consent.**
 - Never reads env variable values from config files (key names only).
 - Point-in-time, single-machine by design.
 
 The only network call either tool makes is downloading the binary at install time. After that: fully offline.
 
-Release binaries are signed with [cosign](https://github.com/sigstore/cosign) (keyless, Sigstore). SLSA provenance and SPDX SBOM are published with every release.
-
-```sh
-cosign verify-blob \
-  --certificate checksums.txt.pem \
-  --signature checksums.txt.sig \
-  checksums.txt
-```
+Releases include SHA-256 checksums in checksums.txt. SPDX SBOM is published with every release.
 
 Fleet-wide continuous monitoring, policy enforcement, and attack-path correlation are what [Onyx Security](https://onyx.security) builds. Aspex is the free on-ramp.
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -32,10 +33,59 @@ func Send(webhookURL string, f Finding) {
 	}()
 }
 
-func send(webhookURL string, f Finding) error {
-	client := &http.Client{Timeout: 5 * time.Second}
+// isPrivateIP returns true if the IP falls in an RFC1918 or link-local range.
+func isPrivateIP(ip net.IP) bool {
+	private := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"169.254.0.0/16",
+	}
+	for _, cidr := range private {
+		_, network, _ := net.ParseCIDR(cidr)
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
 
-	if strings.Contains(webhookURL, "hooks.slack.com") {
+// validateWebhookURL rejects non-HTTPS URLs and URLs that resolve to private/link-local ranges.
+// Localhost/127.0.0.1 are allowed for testing purposes.
+func validateWebhookURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid webhook URL: %w", err)
+	}
+	host := u.Hostname()
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+		return nil // allowed for local testing
+	}
+	if u.Scheme != "https" {
+		return fmt.Errorf("webhook URL must use HTTPS, got %q", u.Scheme)
+	}
+	addrs, err := net.LookupHost(host)
+	if err != nil {
+		return fmt.Errorf("cannot resolve webhook host %q: %w", host, err)
+	}
+	for _, addr := range addrs {
+		ip := net.ParseIP(addr)
+		if ip != nil && isPrivateIP(ip) {
+			return fmt.Errorf("webhook host %q resolves to private/link-local address %s", host, addr)
+		}
+	}
+	return nil
+}
+
+func send(webhookURL string, f Finding) error {
+	if err := validateWebhookURL(webhookURL); err != nil {
+		return err
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	u, _ := url.Parse(webhookURL)
+	if u.Host == "hooks.slack.com" {
 		return sendSlack(client, webhookURL, f)
 	}
 	return sendGeneric(client, webhookURL, f)

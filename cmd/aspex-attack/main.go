@@ -31,6 +31,7 @@ func rootCmd() *cobra.Command {
 		jsonOut     bool
 		noColor     bool
 		clients     []string
+		failOn      string
 	)
 
 	cmd := &cobra.Command{
@@ -46,7 +47,10 @@ servers you own or have explicit written permission to test.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return run(serverFlag, timeoutSecs, categories, jsonOut, noColor, clients)
+			if os.Getenv("NO_COLOR") != "" {
+				noColor = true
+			}
+			return run(serverFlag, timeoutSecs, categories, jsonOut, noColor, clients, failOn)
 		},
 	}
 
@@ -58,6 +62,7 @@ servers you own or have explicit written permission to test.`,
 	cmd.Flags().BoolVar(&noColor, "no-color", false, "Plain-text output (useful in CI)")
 	cmd.Flags().StringSliceVar(&clients, "clients", discover.AllClients,
 		"Clients to scan: claude,cursor,vscode,windsurf,cline,roo-cline,continue,zed")
+	cmd.Flags().StringVar(&failOn, "fail-on", "high", "Exit 1 when findings reach this severity: critical|high|medium|low|off")
 
 	return cmd
 }
@@ -102,7 +107,7 @@ func progressBar(done, total, width int) string {
 	return strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
 }
 
-func run(serverFlag string, timeoutSecs int, categories []string, jsonOut, noColor bool, clients []string) error {
+func run(serverFlag string, timeoutSecs int, categories []string, jsonOut, noColor bool, clients []string, failOn string) error {
 	c := colorFunc(noColor, jsonOut)
 
 	// Discover servers.
@@ -365,9 +370,9 @@ func run(serverFlag string, timeoutSecs int, categories []string, jsonOut, noCol
 		if !jsonOut {
 			if serverVulns == 0 {
 				fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
-					c(green, "✓"),
+					c(dim, "·"),
 					c(bold, entry.Name),
-					c(dim, fmt.Sprintf("CLEAN · %d probes · %d tools", serverProbes, len(srv.Tools))),
+					c(dim, fmt.Sprintf("No findings triggered by these %d probes — this does not mean the server is secure", serverProbes)),
 				)
 			} else {
 				fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
@@ -440,7 +445,7 @@ func run(serverFlag string, timeoutSecs int, categories []string, jsonOut, noCol
 		var verdictColor string
 		switch s.verdict {
 		case "CLEAN":
-			verdictColor = green
+			verdictColor = dim
 		case "VULNERABLE":
 			verdictColor = red + bold
 		case "SKIPPED":
@@ -463,12 +468,26 @@ func run(serverFlag string, timeoutSecs int, categories []string, jsonOut, noCol
 	// Overall verdict line.
 	fmt.Fprintf(os.Stdout, "  %s ", c(dim, "─"))
 	if totalVulns == 0 {
-		fmt.Fprintf(os.Stdout, "%s No vulnerabilities triggered across %d probe(s).\n\n",
-			c(green, "✓"), totalProbes)
+		fmt.Fprintf(os.Stdout, "No findings triggered by these %d probes — this does not mean the server is secure\n\n",
+			totalProbes)
 	} else {
 		fmt.Fprintf(os.Stdout, "%s %d finding(s) across %d probe(s) — review results above.\n\n",
 			c(red+bold, fmt.Sprintf("%d", totalVulns)),
 			totalVulns, totalProbes)
+	}
+
+	// --fail-on exit code.
+	if failOn != "" && failOn != "off" && totalVulns > 0 {
+		sevOrder := map[string]int{"low": 1, "medium": 2, "high": 3, "critical": 4}
+		threshold := sevOrder[failOn]
+		if threshold == 0 {
+			threshold = sevOrder["high"]
+		}
+		for _, v := range allVulns {
+			if sevOrder[v.Severity] >= threshold {
+				os.Exit(1)
+			}
+		}
 	}
 
 	return nil

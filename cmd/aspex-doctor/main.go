@@ -90,6 +90,9 @@ func rootCmd() *cobra.Command {
 		Short:   "Fast local health check for your AI agent setup",
 		Version: version.Version,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if os.Getenv("NO_COLOR") != "" {
+				noColor = true
+			}
 			return run(jsonMode, noColor)
 		},
 	}

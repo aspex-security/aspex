@@ -30,6 +30,8 @@ func main() {
 				binary = "aspex-scan"
 				rest = append([]string{"redteam"}, rest...)
 			}
+		case "doctor":
+			binary = "aspex-doctor"
 		case "--version", "-v":
 			println("aspex v" + version.Version)
 			return

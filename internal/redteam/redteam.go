@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/aspex-security/aspex/internal/discover"
 	"github.com/aspex-security/aspex/internal/mcpclient"
@@ -439,7 +440,7 @@ func callToolHTTP(ctx context.Context, serverURL string, toolName string, args m
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream, application/json")
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
@@ -475,6 +476,7 @@ func callToolHTTP(ctx context.Context, serverURL string, toolName string, args m
 
 func parseSSEForID(r io.Reader, id int64) (json.RawMessage, error) {
 	scanner := bufio.NewScanner(io.LimitReader(r, 10*1024*1024))
+	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" || strings.HasPrefix(line, ":") {
@@ -528,6 +530,7 @@ func callToolStdio(ctx context.Context, command string, cmdArgs []string, toolNa
 	}()
 
 	scanner := bufio.NewScanner(stdoutPipe)
+	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
 
 	send := func(method string, params interface{}) (json.RawMessage, error) {
 		id := nextID()

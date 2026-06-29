@@ -30,7 +30,13 @@ func CheckLatest() string {
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "aspex/"+Version)
 
-	resp, err := http.DefaultClient.Do(req)
+	versionClient := &http.Client{
+		Timeout: 5 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	resp, err := versionClient.Do(req)
 	if err != nil || resp.StatusCode != 200 {
 		return ""
 	}
