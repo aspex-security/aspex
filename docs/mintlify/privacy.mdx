@@ -1,66 +1,55 @@
 ---
 title: "Privacy"
-description: "Aspex never sends your data anywhere. Here's exactly what runs where."
+description: "Aspex is fully offline and never sends your data anywhere"
 ---
 
-## What Aspex does with your data
+<Info>
+  Aspex is fully offline. It never sends your data anywhere, requires no account, and has no telemetry of any kind.
+</Info>
 
-Nothing. Every Aspex tool runs entirely on your machine. No data leaves your system under any circumstances during analysis.
+## What Aspex Does Not Do
 
-Specifically:
+Aspex never:
 
-- **aspex-scan** reads your MCP client configs and connects to your local MCP servers. No configs, server responses, findings, file paths, or tool names are transmitted anywhere.
-- **aspex-trace** reads your AI client log files. No log content, session events, or findings are transmitted anywhere.
-- **aspex-attack** sends payloads to MCP servers you specify. No results, payloads, or server responses are transmitted to Aspex or Onyx.
-- **aspex-doctor** reads your shell environment and config files. No secrets, findings, or file contents are transmitted anywhere.
+- Sends tool schemas, server output, or scan results to any remote server
+- Phones home or checks for updates after install
+- Collects usage metrics, crash reports, or analytics
+- Requires an account, login, or license key
+- Reads credentials — only key names and file locations are reported, never values
+- Transmits environment variables, config files, or filesystem paths off-device
+- Persists any data outside your local machine
 
-## Network activity
+## aspex-attack: The One Exception
 
-The only network activity Aspex performs:
+`aspex-attack` (and the `aspex-scan redteam` subcommand) actively calls live MCP tools with adversarial payloads. This is the only component that sends data over the network — and it sends data **to your own MCP servers**, not to Aspex or any third party.
 
-| When | What | Why |
-|---|---|---|
-| `brew install` or `curl install.sh` | Downloads the binary | Install only |
-| `aspex-scan` | Connects to your local MCP servers | Analysis |
-| `aspex-attack <target>` | Sends payloads to the target server | Analysis |
-| `aspex-scan --notify` | Sends findings to your webhook URL | If you configure this |
+Explicit opt-in consent is required before any probe is sent. Only probe servers you own or have authorization to test.
 
-There is no telemetry, no analytics, no crash reporting, and no update check.
+## The Only Network Call
 
-## What Aspex reads from your machine
-
-| Tool | What it reads |
-|---|---|
-| aspex-scan | MCP client config files, MCP server tool lists |
-| aspex-trace | AI client log directories |
-| aspex-doctor | Shell rc files, MCP client configs, shell environment variables |
-| aspex-attack | Nothing locally - connects to the target server |
-
-Aspex does not read, index, or transmit your code, documents, browser history, or any file outside the above.
-
-## Supply chain
-
-Every Aspex release ships:
-
-- **SHA-256 checksums** for all binaries
-- **SPDX SBOM** (Software Bill of Materials) listing every dependency
-- **Signed commits** on the release branch
-- **GoReleaser** builds from source on GitHub Actions - the build process is public
-
-Verify a binary:
+The sole network activity associated with Aspex is the binary download at install time:
 
 ```sh
-# Download the checksums file alongside the binary
-curl -LO https://github.com/aspex-security/aspex/releases/download/v0.5.5/checksums.txt
-shasum -a 256 -c checksums.txt
+brew install aspex-security/tap/aspex
+# or
+curl -fsSL https://raw.githubusercontent.com/aspex-security/aspex/main/install.sh | sh
 ```
 
-## Security disclosures
+Once installed, Aspex makes no outbound network connections during normal operation — including `aspex-scan`, `aspex-trace`, and `aspex-doctor`.
 
-Do not open a public GitHub issue for security vulnerabilities.
+## Release Integrity
 
-Email: steven.d@onyx.security
+Every Aspex release ships with:
 
-## License
+- **SHA-256 checksums** for all binaries, verifiable before execution
+- **Full SPDX Software Bill of Materials (SBOM)** listing every dependency and its license
 
-Aspex is released under the [Apache 2.0 license](https://github.com/aspex-security/aspex/blob/main/LICENSE). You can use it, modify it, and redistribute it freely. The source code is available at [github.com/aspex-security/aspex](https://github.com/aspex-security/aspex).
+You can verify the integrity of any release before running it.
+
+## Open Source
+
+Aspex is licensed under **Apache-2.0**. The full source is available at [github.com/aspex-security/aspex](https://github.com/aspex-security/aspex). You can audit exactly what runs on your machine.
+
+---
+
+For enterprise and fleet coverage — centralized reporting, policy enforcement, and managed scanning across your engineering org — see [Onyx Security](https://onyx.security).
