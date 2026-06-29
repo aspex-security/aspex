@@ -1,0 +1,108 @@
+---
+title: "Daily workflow"
+description: "How to use Aspex as part of your everyday AI coding routine."
+---
+
+This guide covers a practical day-to-day workflow for developers who use AI coding agents with MCP servers.
+
+## Morning check
+
+Start each day with a quick health check and a look at what happened overnight.
+
+```sh
+# Fast offline check - catches the most common issues in ~2s
+aspex-doctor
+
+# Audit logs from the last 24 hours
+aspex-trace
+```
+
+If aspex-doctor finds issues, fix them before starting an AI session. A credential exposed in your shell environment is available to every MCP server you run.
+
+---
+
+## Before adding a new MCP server
+
+Any new MCP server is an untrusted code execution environment until proven otherwise.
+
+```sh
+# Scan just the new server before adding it to your config
+aspex-scan inspect "npx @modelcontextprotocol/server-filesystem ~/projects"
+
+# Or by URL for HTTP servers
+aspex-scan inspect https://mcp.example.com/sse
+```
+
+If the score is below 70 or there are CRITICAL findings, investigate before proceeding.
+
+<Warning>
+A single supply chain compromise in one MCP server can pivot to your other servers, credentials, and filesystem within a single AI session. Vet before you trust.
+</Warning>
+
+---
+
+## After an AI session
+
+After any AI coding session, check what your agent actually did.
+
+```sh
+aspex-trace --since 2h
+```
+
+Look specifically for:
+
+- File reads outside your project directory
+- Outbound network calls you didn't initiate
+- Shell commands you didn't ask for
+- Kill chains (run `aspex-trace killchain` if the summary flags any)
+
+If you see suspicious activity, run `aspex-trace provenance` to trace it back to its source.
+
+---
+
+## Weekly scan
+
+Run a full scan of all your MCP clients once a week to catch configuration drift and score changes.
+
+```sh
+aspex-scan
+```
+
+The scan shows a score delta since last run and a prioritized fix plan. Address the top 2-3 items and re-run.
+
+```sh
+# Generate a report you can share with your team or security org
+aspex-scan --share
+```
+
+---
+
+## When something feels wrong
+
+If an AI session behaved unexpectedly - the agent read files you didn't ask about, made network calls, or seemed to be following different instructions:
+
+```sh
+# Check for kill chains in recent sessions
+aspex-trace killchain --since 4h
+
+# Trace a finding back to its source
+aspex-trace provenance --since 4h
+
+# Active scan to see current server state
+aspex-scan
+
+# Check for phantom tools (servers hiding capabilities)
+aspex-scan phantom
+```
+
+---
+
+## Keyboard shortcut
+
+Run `aspex` with no arguments for the interactive TUI that puts all four tools at your fingertips:
+
+```sh
+aspex
+```
+
+Useful when you want to switch between scan, trace, and doctor without remembering flags.

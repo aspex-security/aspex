@@ -1,0 +1,140 @@
+---
+title: "aspex-doctor"
+description: "Fast offline health check for your AI agent setup. Runs in ~2 seconds."
+---
+
+aspex-doctor is a fast, fully offline health check for your AI agent environment. It runs in about 2 seconds, requires no MCP server connections, and checks the most common misconfigurations that create real-world risk.
+
+Run it before any AI session. Run it after adding a new MCP server. Run it when something feels off.
+
+## Usage
+
+```sh
+aspex-doctor [flags]
+aspex-doctor <command> [flags]
+```
+
+## Flags
+
+| Flag | Description |
+|---|---|
+| `--json` | Machine-readable JSON output |
+| `--fix` | Auto-fix issues where possible (interactive, with confirmation) |
+| `--no-color` | Disable color output |
+| `--quiet` | Print only failures |
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `clients` | Check AI client installation and config validity |
+| `env` | Scan shell environment for exposed secrets |
+| `config` | Check MCP config files for hardcoded credentials |
+| `fs` | Check filesystem grants for overly broad path access |
+| `network` | Check MCP server network exposure |
+
+---
+
+## What it checks
+
+### AI clients
+
+- Detects Claude Desktop, Claude Code, Cursor, Windsurf, Cline, Roo-Cline
+- Validates JSON syntax in every MCP config file
+- Flags duplicate server names and stale entries
+
+### Shell environment
+
+Scans `~/.zshrc`, `~/.bashrc`, `~/.zprofile`, `~/.bash_profile`, and the current shell environment for secret patterns.
+
+Patterns matched: `GITHUB_TOKEN`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `AWS_SECRET_ACCESS_KEY`, `DATABASE_URL`, common private key prefixes.
+
+```
+Environment  ✗ GITHUB_TOKEN exposed in shell env (zshrc, line 42)
+             ✗ OPENAI_API_KEY exported in .zprofile (line 8)
+```
+
+### Config secrets
+
+Scans MCP config `env` blocks and argument lists for hardcoded credentials.
+
+```
+Config secrets  ✗ API_KEY hardcoded in claude_desktop_config.json › servers.github.env
+                ✗ DB_PASSWORD in .cursor/mcp.json › servers.postgres.env
+```
+
+Run `aspex-scan fix env` to migrate these to macOS Keychain automatically.
+
+### Filesystem grants
+
+Checks every `--path` or equivalent argument in filesystem-capable MCP servers. Flags grants that include `~`, `/`, or `~/Documents`.
+
+```
+Filesystem  ✗ Path grant covers home directory (~/): filesystem server
+            ✓ Path grant scoped to ~/projects: code-server
+```
+
+A grant covering `~/` gives the MCP server (and any model using it) read/write access to your entire home directory, including `.ssh/`, `.aws/`, and every credential file you own.
+
+### Network
+
+- Checks for MCP servers using plain `http://` rather than `https://`
+- Flags servers listening on `0.0.0.0` (all interfaces) instead of `127.0.0.1`
+- Flags unusual port numbers
+
+---
+
+## Example output
+
+```
+aspex-doctor v0.5.5
+
+Clients      ✓ 3 installed
+             ✓ Claude Desktop config valid
+             ✓ Cursor config valid
+             ✗ Windsurf config has JSON syntax error (line 34)
+
+Environment  ✗ GITHUB_TOKEN in zshrc (line 42)
+             ✗ OPENAI_API_KEY in .zprofile (line 8)
+
+Config       ✗ API_KEY hardcoded in claude_desktop_config.json › github
+             ✓ No secrets in Cursor config
+
+Filesystem   ✗ filesystem server: path grant covers ~/ (entire home directory)
+             ✓ code-server: scoped to ~/projects
+
+Network      ✓ All servers use HTTPS or stdio
+
+4 issues found.
+  Run aspex-scan fix env to migrate credentials to Keychain.
+  Fix the Windsurf JSON syntax error to restore that client.
+  Scope the filesystem server path grant to a project directory.
+```
+
+---
+
+## Auto-fix
+
+```sh
+aspex-doctor --fix
+```
+
+aspex-doctor will prompt before making any change. Currently auto-fixable:
+
+- JSON syntax errors in MCP config files (whitespace, trailing commas)
+- Duplicate server name entries (keep first, remove duplicates)
+- Credential migration to Keychain (delegates to `aspex-scan fix env`)
+
+Non-fixable issues (path grants, shell rc exports) are explained with the exact line to change.
+
+---
+
+## CI / pre-flight
+
+```sh
+# Exit 1 if any failures found
+aspex-doctor --quiet --json | jq '.failures | length'
+
+# Block if environment secrets are exposed
+aspex-doctor env --fail-on any
+```

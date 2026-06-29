@@ -1,0 +1,86 @@
+---
+title: "VS Code integration"
+description: "Use Aspex findings directly in your editor."
+---
+
+<Note>
+The Aspex VS Code extension is coming soon. This page covers current integration options using the CLI.
+</Note>
+
+## Problem matcher
+
+VS Code can parse aspex-scan output and surface findings as Problems in your editor when you run the scan as a task.
+
+Add this to `.vscode/tasks.json`:
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "MCP Security Scan",
+      "type": "shell",
+      "command": "aspex-scan --json | jq -r '.findings[] | \"\\(.file):\\(.line): \\(.severity): \\(.message)\"'",
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": {
+        "owner": "aspex",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(.+):(\\d+): (critical|high|medium|low|info): (.+)$",
+          "file": 1,
+          "line": 2,
+          "severity": 3,
+          "message": 4
+        }
+      }
+    }
+  ]
+}
+```
+
+Run it with `Cmd+Shift+B` (or `Terminal > Run Task > MCP Security Scan`).
+
+---
+
+## SARIF output
+
+aspex-scan emits SARIF 2.1 output that VS Code's built-in SARIF viewer can display.
+
+Install the [SARIF Viewer extension](https://marketplace.visualstudio.com/items?itemName=MS-SarifVSCode.sarif-viewer), then:
+
+```sh
+aspex-scan --sarif > aspex-results.sarif
+```
+
+Open the `.sarif` file in VS Code to see findings annotated inline on your MCP config files.
+
+---
+
+## Pre-commit hook
+
+Block commits that introduce critical MCP security regressions:
+
+```sh
+aspex-scan install-hook
+```
+
+This installs a Git pre-commit hook that runs a fast config-only check on staged changes. Commits that introduce new CRITICAL findings are blocked with an explanation.
+
+---
+
+## Keyboard shortcut
+
+Add a keybinding to run aspex-doctor quickly from within VS Code's integrated terminal:
+
+```json
+// keybindings.json
+{
+  "key": "ctrl+shift+d",
+  "command": "workbench.action.terminal.sendSequence",
+  "args": { "text": "aspex-doctor\n" }
+}
+```

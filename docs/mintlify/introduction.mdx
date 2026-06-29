@@ -1,0 +1,66 @@
+---
+title: "What is Aspex?"
+description: "Security tooling for the MCP ecosystem — scan, trace, attack, and health-check your AI tool surface in seconds."
+---
+
+Aspex is an open-source security suite for the Model Context Protocol (MCP) ecosystem. It gives security teams and developers four focused tools to find, understand, and fix risks in AI-connected infrastructure — no account, no proxy, no telemetry.
+
+## The problem
+
+MCP servers can execute shell commands, read files, call external APIs, and inject instructions into your AI sessions. Most teams have no visibility into what tools are actually running, what they can do, or whether they've been tampered with. Aspex closes that gap.
+
+## Quick look
+
+```bash
+# Install
+brew install aspex-security/tap/aspex
+
+# Health check (offline, ~2 seconds)
+aspex doctor
+
+# Full scan of every MCP client on this machine
+aspex scan
+
+# Watch live sessions for suspicious behavior
+aspex trace live
+```
+
+## Tools
+
+<CardGroup cols={2}>
+  <Card title="aspex-scan" icon="magnifying-glass">
+    Enumerates every MCP server and tool across all clients, runs 140+ detection rules, and produces a 0–100 scored risk report with cross-server attack path analysis.
+  </Card>
+  <Card title="aspex-trace" icon="timeline">
+    Reads native log files from Claude Desktop, Cursor, Windsurf, Cline, and more — no proxy required — and reconstructs kill chains mapped to MITRE ATT&CK.
+  </Card>
+  <Card title="aspex-attack" icon="bolt">
+    Actively probes live MCP tools with 28 adversarial payloads across 5 probe types: prompt injection, path traversal, SSRF, error disclosure, and prompt leakage.
+  </Card>
+  <Card title="aspex-doctor" icon="heart-pulse">
+    Fast offline health check (~2 seconds) covering client configs, shell environment secrets, hardcoded credentials, filesystem grants, and network exposure.
+  </Card>
+</CardGroup>
+
+## Trust
+
+<Note>
+  **Aspex never phones home.** All analysis runs fully offline — no data leaves your machine, no account required, no telemetry. Released under Apache-2.0 with a full SPDX software bill of materials (SBOM) in every release. Server-supplied strings are sanitized before terminal rendering.
+</Note>
+
+## Install
+
+```bash
+# Homebrew
+brew install aspex-security/tap/aspex
+
+# curl installer
+curl -fsSL https://raw.githubusercontent.com/aspex-security/aspex/main/install.sh | sh
+
+# GitHub releases
+# https://github.com/aspex-security/aspex/releases
+```
+
+## Framework coverage
+
+Aspex maps findings to OWASP LLM Top 10 2025 (LLM01–LLM08), MITRE ATLAS, and 20+ CWEs so your findings slot directly into existing security workflows.

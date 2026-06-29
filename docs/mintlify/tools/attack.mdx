@@ -1,0 +1,58 @@
+---
+title: "aspex-attack"
+description: "Active red-teaming for live MCP tools"
+---
+
+<Warning>
+**Authorization required.** Only probe MCP servers you own or have explicit written permission to test. Unauthorized probing may violate computer fraud laws. `aspex-attack` requires explicit opt-in consent before any payloads are sent.
+</Warning>
+
+## Overview
+
+`aspex-attack` actively probes live MCP tools with adversarial payloads to surface vulnerabilities that static analysis cannot find. Where `aspex-scan` scores theoretical risk from server definitions, `aspex-attack` confirms exploitability by exercising real tool endpoints — distinguishing genuine attack surface from noise.
+
+## Probe types
+
+| Probe | Payloads | What it tests |
+|---|---|---|
+| Prompt injection | 8 | Role overrides, jailbreaks, delimiter attacks, system prompt extraction |
+| Path traversal | 4 | Directory escape via path parameters |
+| SSRF | 4 | AWS/GCP metadata endpoints, localhost, internal loopback |
+| Error disclosure | 4 | Stack traces and internal paths leaked in error responses |
+| Prompt leakage | 8 | Direct and indirect elicitation of embedded system prompts |
+
+**Total: 28 payloads across 5 probe categories.**
+
+## How probes are selected
+
+Probes are auto-selected based on each tool's parameter schema. Path traversal payloads are only sent to tools with path-like parameters; SSRF payloads target URL or endpoint parameters. This minimizes noise and ensures payloads are contextually appropriate for the tool being tested.
+
+## Usage
+
+```bash
+# Consent prompt — required before first run
+aspex attack
+
+# Probe a specific server
+aspex attack --server filesystem
+
+# Run only specific probe categories
+aspex attack --probes injection,ssrf
+
+# JSON output for programmatic use
+aspex attack --json
+
+# Target a server by URL
+aspex attack --url http://localhost:3000
+```
+
+## Flags
+
+| Flag | Description |
+|---|---|
+| `--server <name>` | Probe a single named MCP server |
+| `--url <url>` | Probe a server by URL (HTTP/SSE) |
+| `--probes <list>` | Comma-separated probe categories: `injection`, `traversal`, `ssrf`, `error`, `leakage` |
+| `--json` | Emit results as JSON |
+| `--fail-on <level>` | Exit non-zero if any finding meets or exceeds `low`, `medium`, `high`, or `critical` |
+| `--no-exec` | Dry-run: print payloads without sending them |

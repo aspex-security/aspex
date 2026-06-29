@@ -1,0 +1,89 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Aspex",
+  "logo": {
+    "light": "/logo/logo.svg",
+    "dark": "/logo/logo.svg"
+  },
+  "favicon": "/logo/logo.svg",
+  "colors": {
+    "primary": "#7c5cfc",
+    "light": "#a78bfa",
+    "dark": "#5b44c3",
+    "background": {
+      "dark": "#09080f"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/aspex-security/aspex"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Install",
+    "url": "https://github.com/aspex-security/aspex/releases"
+  },
+  "anchors": [
+    {
+      "name": "Releases",
+      "icon": "tag",
+      "url": "https://github.com/aspex-security/aspex/releases"
+    },
+    {
+      "name": "Changelog",
+      "icon": "list",
+      "url": "https://github.com/aspex-security/aspex/blob/main/CHANGELOG.md"
+    },
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/aspex-security/aspex"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Getting Started",
+      "pages": [
+        "introduction",
+        "quickstart"
+      ]
+    },
+    {
+      "group": "Tools",
+      "pages": [
+        "tools/scan",
+        "tools/trace",
+        "tools/attack",
+        "tools/doctor"
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        "guides/ci-integration",
+        "guides/daily-workflow",
+        "guides/vscode"
+      ]
+    },
+    {
+      "group": "Reference",
+      "pages": [
+        "reference/rules",
+        "reference/clients",
+        "privacy"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "github": "https://github.com/aspex-security/aspex"
+  },
+  "feedback": {
+    "thumbsRating": true,
+    "suggestEdit": true,
+    "raiseIssue": true
+  },
+  "modeToggle": {
+    "default": "dark"
+  }
+}

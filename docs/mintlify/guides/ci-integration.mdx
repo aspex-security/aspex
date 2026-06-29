@@ -1,0 +1,276 @@
+---
+title: "CI Integration"
+description: "Block risky MCP configs in your pipeline"
+---
+
+## Overview
+
+Aspex integrates directly into CI/CD pipelines to catch risky MCP server configurations before they reach production. The key primitives are:
+
+- **`--fail-on`** — exit with a non-zero code when findings exceed a threshold
+- **SARIF output** — feed results into GitHub code scanning
+- **Baseline diff** — detect rug-pulls between commits
+- **Shadow check** — catch tool name collisions across servers
+- **Pre-commit hook** — block risky changes before they are committed
+
+## Getting Started
+
+<Steps>
+
+### Install Aspex
+
+```bash
+brew install aspex-security/tap/aspex
+```
+
+Or download a binary from [GitHub Releases](https://github.com/aspex-security/aspex/releases).
+
+### Run your first scan
+
+```bash
+aspex-scan --json
+```
+
+This reads every MCP client config on the machine, connects to each server, enumerates tools, resources, and prompts, and produces a scored risk report (0–100).
+
+### Add the GitHub Actions composite action
+
+Copy the workflow below into `.github/workflows/aspex.yml`. The composite action handles installation and caching automatically.
+
+```yaml
+name: Aspex MCP Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  aspex-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write   # required for SARIF upload
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Aspex scan
+        uses: aspex-security/aspex-action@v1
+        with:
+          fail-on: high          # fail the job on high or critical findings
+          sarif: true            # emit aspex.sarif for code scanning
+          html: aspex-report.html
+
+      - name: Upload SARIF to GitHub code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()             # upload even when the scan step fails
+        with:
+          sarif_file: aspex.sarif
+
+      - name: Upload HTML report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aspex-report
+          path: aspex-report.html
+```
+
+### Install the pre-commit hook
+
+```bash
+aspex-scan install-hook
+```
+
+This adds a Git pre-commit hook that runs `aspex-scan` on any staged changes to MCP config files and blocks the commit if findings exceed the configured threshold.
+
+</Steps>
+
+## `--fail-on` Flag
+
+`--fail-on` sets the minimum severity level that causes `aspex-scan` to exit with a non-zero status, failing the CI job.
+
+```bash
+# Fail on any critical finding
+aspex-scan --fail-on critical
+
+# Fail on high or critical findings (default in the composite action)
+aspex-scan --fail-on high
+
+# Fail on any finding (strictest)
+aspex-scan --fail-on low
+
+# Never fail regardless of findings (report only)
+aspex-scan --fail-on none
+```
+
+Severity levels in ascending order: `low` → `medium` → `high` → `critical`.
+
+You can combine `--fail-on` with `--json` to parse results downstream:
+
+```bash
+aspex-scan --fail-on high --json > aspex-results.json
+```
+
+## SARIF Output for GitHub Code Scanning
+
+SARIF (Static Analysis Results Interchange Format) lets GitHub display Aspex findings inline on pull requests and in the Security tab.
+
+Generate a SARIF file:
+
+```bash
+aspex-scan --sarif aspex.sarif
+```
+
+Upload it with the CodeQL action (see the full workflow above). Once uploaded, findings appear as code scanning alerts pinned to the relevant lines in your MCP config files.
+
+To generate both SARIF and a human-readable HTML report in the same run:
+
+```bash
+aspex-scan --sarif aspex.sarif --html aspex-report.html
+```
+
+## Baseline Diff for Rug-Pull Detection
+
+A rug-pull occurs when an MCP server silently changes its tool definitions between runs — adding dangerous capabilities or altering behavior after an initial review.
+
+Save a baseline on the main branch:
+
+```bash
+aspex-scan --json > baseline.json
+```
+
+Commit `baseline.json` to your repository. Then in CI, compare against the baseline to detect drift:
+
+```bash
+aspex-scan diff --baseline baseline.json --fail-on high
+```
+
+The diff command reports:
+
+- New tools added since the baseline
+- Tools removed since the baseline
+- Tools whose descriptions changed (a common injection vector)
+- Score delta between baseline and current scan
+
+Example CI step:
+
+```yaml
+- name: Detect MCP rug-pull
+  run: |
+    aspex-scan diff --baseline baseline.json --fail-on high --json > diff-results.json
+    cat diff-results.json
+```
+
+To update the baseline after a deliberate, reviewed change:
+
+```bash
+aspex-scan --json > baseline.json
+git add baseline.json && git commit -m "chore: update aspex baseline"
+```
+
+## Shadow Check in CI
+
+Shadow detection identifies tool name collisions across servers — where two servers expose a tool with the same name, enabling one to silently intercept calls meant for the other.
+
+Run the shadow check standalone:
+
+```bash
+aspex-scan shadow --fail-on high
+```
+
+Add it as a dedicated CI step:
+
+```yaml
+- name: Shadow (tool name collision) check
+  run: aspex-scan shadow --fail-on high --json
+```
+
+Output lists every collision with the server pair involved, the shared tool name, and the risk rating. Any collision where one server is lower-trust than the other is flagged as high severity.
+
+## Pre-Commit Hook
+
+The pre-commit hook prevents risky MCP config changes from being committed in the first place, catching problems before they ever reach CI.
+
+Install:
+
+```bash
+aspex-scan install-hook
+```
+
+This writes a hook to `.git/hooks/pre-commit`. On each commit the hook:
+
+1. Detects whether any staged files are MCP client configs (Claude Desktop, Claude Code, Cursor, Windsurf, Cline, Roo, or custom paths).
+2. Runs `aspex-scan` scoped to those configs.
+3. Blocks the commit and prints findings if the score exceeds the threshold.
+
+To configure the threshold for the hook, set the `ASPEX_FAIL_ON` environment variable:
+
+```bash
+export ASPEX_FAIL_ON=medium   # block commits with medium or higher findings
+```
+
+To bypass the hook for a deliberate change (use sparingly):
+
+```bash
+git commit --no-verify -m "chore: intentional config update"
+```
+
+## Full CI Example
+
+Below is a complete workflow combining all integrations:
+
+```yaml
+name: Aspex MCP Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  mcp-security:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Core scan with SARIF and HTML output
+      - name: Aspex scan
+        uses: aspex-security/aspex-action@v1
+        with:
+          fail-on: high
+          sarif: true
+          html: aspex-report.html
+
+      # Rug-pull / baseline diff
+      - name: Baseline diff
+        run: aspex-scan diff --baseline baseline.json --fail-on high
+        continue-on-error: false
+
+      # Shadow (tool collision) check
+      - name: Shadow check
+        run: aspex-scan shadow --fail-on high
+
+      # Upload SARIF (runs even if previous steps failed)
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: aspex.sarif
+
+      # Upload HTML report as artifact
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aspex-report
+          path: aspex-report.html
+```
+
+## Trust and Privacy
+
+Aspex is fully offline. No scan data, tool schemas, or findings are sent anywhere. There is no telemetry and no account required. The tool is Apache-2.0 licensed with a full SPDX SBOM included in every release.

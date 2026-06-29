@@ -1,0 +1,185 @@
+---
+title: "Detection rules"
+description: "Complete reference for all 140+ aspex-scan rules and 85+ aspex-trace rules."
+---
+
+## aspex-scan rules (140+)
+
+Rules fire against static MCP server configuration and tool metadata. Each rule has an ID, a severity, and a framework mapping.
+
+### Prompt injection (PI)
+
+| Rule | Severity | Description |
+|---|---|---|
+| PI001 | CRITICAL | Role override in tool description |
+| PI002 | CRITICAL | "Ignore previous instructions" pattern |
+| PI003 | HIGH | System prompt extraction attempt in description |
+| PI004 | HIGH | Delimiter injection (XML/JSON tag injection) |
+| PI005 | HIGH | Jailbreak keyword in tool description or name |
+| PI006 | MEDIUM | Unusual instruction syntax in description |
+| PI007 | MEDIUM | Base64-encoded payload in tool description |
+| PI008 | MEDIUM | Prompt leakage vector in tool schema |
+| PI009 | LOW | Suspicious phrasing in resource description |
+| PI010 | LOW | Unusual Unicode in tool name |
+
+### Credential exposure (CE)
+
+| Rule | Severity | Description |
+|---|---|---|
+| CE001 | CRITICAL | API key in MCP config env block |
+| CE002 | CRITICAL | Database connection string with credentials |
+| CE003 | CRITICAL | Private key PEM in config |
+| CE004 | HIGH | GitHub token in config |
+| CE005 | HIGH | AWS access key or secret in config |
+| CE006 | HIGH | Slack/Discord bot token in config |
+| CE007 | HIGH | OpenAI/Anthropic API key in config |
+| CE008 | MEDIUM | Generic password pattern in config |
+| CE009 | MEDIUM | OAuth client secret in config |
+| CE010 | LOW | Credential-shaped argument default value |
+
+### Shell execution (SH)
+
+| Rule | Severity | Description |
+|---|---|---|
+| SH001 | CRITICAL | Unrestricted shell exec tool with no allowlist |
+| SH002 | CRITICAL | `exec`, `system`, `popen` in tool name or description |
+| SH003 | HIGH | Shell tool with no sandboxing mentioned |
+| SH004 | HIGH | `sudo` or privilege escalation capability |
+| SH005 | HIGH | Script interpreter (python, node, ruby) in tool args |
+| SH006 | MEDIUM | `curl` or `wget` pipe-to-shell in tool description |
+| SH007 | MEDIUM | Cron or scheduler manipulation capability |
+| SH008 | LOW | Shell-adjacent tool (awk, sed, grep) with broad args |
+
+### Supply chain (SC)
+
+| Rule | Severity | Description |
+|---|---|---|
+| SC001 | CRITICAL | Known-malicious server fingerprint |
+| SC002 | CRITICAL | Unverified npm package as MCP server |
+| SC003 | HIGH | Server installed from unverified source |
+| SC004 | HIGH | No version pin on npm/pip package |
+| SC005 | HIGH | Package name typosquat candidate |
+| SC006 | MEDIUM | Unsigned or unverified binary |
+| SC007 | MEDIUM | Server update mechanism not verified |
+| SC008 | LOW | Outdated package version |
+
+### C2 and persistence (C2)
+
+| Rule | Severity | Description |
+|---|---|---|
+| C2001 | CRITICAL | Known C2 domain in tool args or URL |
+| C2002 | CRITICAL | LaunchAgent/LaunchDaemon write capability |
+| C2003 | CRITICAL | Cron/systemd persistence capability |
+| C2004 | HIGH | Registry Run key write capability (Windows) |
+| C2005 | HIGH | Reverse shell capability |
+| C2006 | HIGH | Callback URL in tool description |
+| C2007 | MEDIUM | Unusual outbound port in server config |
+| C2008 | MEDIUM | Dynamic DNS hostname as server URL |
+
+### Surveillance (SV)
+
+| Rule | Severity | Description |
+|---|---|---|
+| SV001 | CRITICAL | Screen capture capability |
+| SV002 | CRITICAL | Keylogging capability |
+| SV003 | HIGH | Clipboard read capability |
+| SV004 | HIGH | Microphone or camera access |
+| SV005 | HIGH | Browser history or cookie access |
+| SV006 | MEDIUM | Email/calendar read without explicit grant |
+| SV007 | LOW | Broad contact/address book access |
+
+### Data protection (DP)
+
+| Rule | Severity | Description |
+|---|---|---|
+| DP001 | CRITICAL | Filesystem server with home directory grant |
+| DP002 | HIGH | Filesystem server with overly broad path |
+| DP003 | HIGH | `.ssh` or `.aws` directory accessible |
+| DP004 | HIGH | No auth on HTTP MCP server |
+| DP005 | MEDIUM | HTTP instead of HTTPS |
+| DP006 | MEDIUM | Sensitive file pattern in resource list |
+| DP007 | LOW | Missing content-type validation |
+
+---
+
+## aspex-trace rules (85+)
+
+Rules fire against live MCP session events. Applied post-hoc to native client log files.
+
+### Credential access (AT)
+
+| Rule | Severity | Description |
+|---|---|---|
+| AT001 | CRITICAL | `.ssh/id_rsa` or private key file read |
+| AT002 | CRITICAL | `.aws/credentials` read |
+| AT003 | CRITICAL | `.env` read in non-project directory |
+| AT004 | HIGH | `~/.netrc` or `~/.pgpass` read |
+| AT005 | HIGH | Browser cookie file read |
+| AT006 | HIGH | macOS Keychain access without prior user action |
+| AT007 | MEDIUM | kubeconfig read |
+| AT008 | MEDIUM | `~/.npmrc` or `~/.pypirc` read |
+
+### Execution (EX)
+
+| Rule | Severity | Description |
+|---|---|---|
+| EX001 | CRITICAL | Reverse shell command |
+| EX002 | CRITICAL | curl/wget pipe-to-shell |
+| EX003 | CRITICAL | Python/Ruby/Perl inline script |
+| EX004 | HIGH | Base64-decoded command execution |
+| EX005 | HIGH | `sudo` invocation from MCP tool |
+| EX006 | HIGH | SUID binary execution |
+| EX007 | MEDIUM | Unexpected shell invocation |
+| EX008 | LOW | Script interpreter without explicit user request |
+
+### Exfiltration (EF)
+
+| Rule | Severity | Description |
+|---|---|---|
+| EF001 | CRITICAL | Credential file read + outbound call within 5 min |
+| EF002 | CRITICAL | S3 upload or cloud storage write |
+| EF003 | CRITICAL | Email send via MCP tool |
+| EF004 | HIGH | Large outbound POST to unexpected host |
+| EF005 | HIGH | Cross-server data chain |
+| EF006 | MEDIUM | Clipboard write after file read |
+| EF007 | LOW | Unusual outbound host for this session |
+
+### Persistence (PE)
+
+| Rule | Severity | Description |
+|---|---|---|
+| PE001 | CRITICAL | LaunchAgent plist write |
+| PE002 | CRITICAL | crontab or systemd timer write |
+| PE003 | HIGH | Shell rc file modification |
+| PE004 | HIGH | Startup item or registry write |
+| PE005 | MEDIUM | Unexpected package install |
+
+### Defense evasion (DE)
+
+| Rule | Severity | Description |
+|---|---|---|
+| DE001 | HIGH | Log file deletion or truncation |
+| DE002 | HIGH | Shell history deletion |
+| DE003 | HIGH | AV/EDR exclusion write |
+| DE004 | MEDIUM | Timestamp modification |
+| DE005 | MEDIUM | Hidden file or directory creation |
+
+### Anomalous behavior (AB)
+
+| Rule | Severity | Description |
+|---|---|---|
+| AB001 | HIGH | Off-hours activity (outside 06:00-22:00 local) |
+| AB002 | HIGH | Oversized argument (> 10KB) |
+| AB003 | MEDIUM | New tool called for first time in session context |
+| AB004 | MEDIUM | Error burst (> 5 errors in 60 seconds) |
+| AB005 | LOW | New outbound hostname |
+
+---
+
+## Framework mapping
+
+All findings include mappings to:
+
+- **OWASP LLM Top 10 2025** - LLM01 (Prompt Injection), LLM02 (Insecure Output), LLM03 (Training Data Poisoning), LLM06 (Sensitive Info Disclosure), LLM08 (Excessive Agency)
+- **MITRE ATLAS** - AML.T0010, AML.T0043, AML.T0048, AML.T0051, AML.T0057
+- **CWE** - 20, 22, 77, 78, 89, 94, 116, 200, 214, 272, 284, 306, 307, 312, 319, 359, 522, 526, 732, 829, 918

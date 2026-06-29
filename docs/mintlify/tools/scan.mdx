@@ -1,0 +1,386 @@
+---
+title: "aspex-scan"
+description: "Static analysis for MCP server configurations"
+---
+
+`aspex-scan` reads every MCP client config on the machine, connects to each server (stdio and HTTP/SSE), enumerates tools, resources, and prompts, and produces a scored risk report. It requires no proxy, no account, and sends no data anywhere — analysis runs entirely offline. Run it once to get a baseline; run it again to track your security posture over time.
+
+## What It Catches
+
+`aspex-scan` ships with 140+ detection rules across six categories:
+
+| Category | Examples |
+|---|---|
+| Prompt Injection | Role overrides, jailbreaks, delimiter attacks, system prompt extraction |
+| Credential Exposure | Hardcoded tokens, API keys, passwords in config env blocks |
+| Shell Execution | Dangerous shell commands, unrestricted exec, command injection vectors |
+| Supply Chain | Unverified package sources, known-malicious server fingerprints |
+| C2 & Persistence | Callback domains, auto-start registration, cron/launchd manipulation |
+| Surveillance | File exfiltration, clipboard access, screen capture, keylogging patterns |
+
+Framework coverage:
+
+| Framework | Controls |
+|---|---|
+| OWASP LLM Top 10 2025 | LLM01, LLM02, LLM03, LLM06, LLM08 |
+| MITRE ATLAS | AML.T0010, AML.T0043, AML.T0048, AML.T0051, AML.T0057 |
+| CWE | 20, 22, 77, 78, 89, 94, 116, 200, 214, 272, 284, 306, 307, 312, 319, 359, 522, 526, 732, 829, 918 |
+
+## Flags
+
+| Flag | Description |
+|---|---|
+| `--no-exec` | Skip servers that require subprocess execution |
+| `--explain` | Print full security advisory (WHY, EXPLOIT, IMPACT, CONFIDENCE) for every finding |
+| `--clients` | Limit scan to specific MCP clients (e.g. `--clients claude,cursor`) |
+| `--json` | Emit machine-readable JSON output |
+| `--sarif` | Emit SARIF 2.1 output for GitHub Code Scanning |
+| `--html` | Write a self-contained HTML report |
+| `--watch` | Re-scan on config file changes |
+| `--fail-on` | Exit non-zero when score falls below threshold (e.g. `--fail-on 80`) |
+| `--share` | Generate a privacy-safe Markdown summary suitable for sharing |
+| `--report` | Export compliance report (`soc2` or `iso27001`) |
+
+## Commands
+
+| Subcommand | Description |
+|---|---|
+| `inspect <target>` | Scan a single server by command string or URL |
+| `inventory` | List every detected MCP server and all their tools |
+| `attack-paths` | Cross-server kill chain analysis mapped to MITRE ATT&CK |
+| `shadow` | Detect tool name collisions across servers |
+| `phantom` | Detect servers that return different tool lists on successive calls |
+| `redteam` | Active adversarial probing (5 probe types, 28 payloads) |
+| `diff --baseline` | Compare current state against a saved baseline (rug-pull detection) |
+| `fix env` | Migrate hardcoded credentials from config to macOS Keychain |
+| `explain <server>` | Print a full risk narrative for one server |
+| `install-hook` | Install a Git pre-commit hook that blocks risky MCP config changes |
+| `cron` | Run aspex-scan on a schedule for continuous monitoring |
+
+---
+
+## Security Score
+
+Every scan produces a 0–100 security score with a per-server breakdown and four category scores:
+
+- **Prompt Security** — injection surface, instruction hygiene
+- **Tool Security** — shell access, exec primitives, dangerous capabilities
+- **Data Protection** — credential handling, sensitive data exposure
+- **Supply Chain** — package provenance, update integrity
+
+```bash
+aspex-scan
+```
+
+```
+Overall score: 74 / 100
+
+  filesystem        88  ████████████████████░░░░
+  github            91  ██████████████████████░░
+  postgres          61  ██████████████░░░░░░░░░░
+  slack             55  █████████████░░░░░░░░░░░
+
+Category scores
+  Prompt Security   82
+  Tool Security     70
+  Data Protection   58
+  Supply Chain      79
+```
+
+<Tip>
+Run `aspex-scan` before adding any new MCP server to your client config. A single supply chain compromise can pivot across every tool in the session.
+</Tip>
+
+---
+
+## Attack Path Analysis
+
+`aspex-scan attack-paths` correlates findings across servers to surface multi-step kill chains mapped to MITRE ATT&CK.
+
+```bash
+aspex-scan attack-paths
+```
+
+```
+CRITICAL  Recon → Credential Theft → Exfiltration
+  Step 1  filesystem  read ~/  (AML.T0010 — Recon via file access)
+  Step 2  github      list repos  (AML.T0043 — Enumerate targets)
+  Step 3  slack       post_message  (AML.T0057 — Exfiltrate via trusted channel)
+
+  Attack chain exploits: unrestricted filesystem read + outbound Slack
+  Recommendation: scope filesystem server to project directories only
+```
+
+<Warning>
+Attack paths that span three or more servers with an exfiltration step at the end are rated CRITICAL regardless of individual server scores.
+</Warning>
+
+---
+
+## Shadow Detection
+
+Shadow detection finds tool name collisions — cases where two different servers expose a tool with the same name. An attacker-controlled server registering `read_file` alongside a legitimate one can intercept or override calls.
+
+```bash
+aspex-scan shadow
+```
+
+```
+SHADOW COLLISION DETECTED
+
+  Tool: read_file
+    Server A: filesystem  (trusted, scoped to ~/projects)
+    Server B: unknown-pkg  (unverified source, broad path access)
+
+  Risk: model may route calls to either server non-deterministically.
+  Action: remove or rename the conflicting tool in unknown-pkg.
+```
+
+---
+
+## Phantom Tool Detection
+
+`aspex-scan phantom` connects to each server twice and diffs the tool list. Servers that return different tools on successive calls are flagged — a technique used to evade static analysis while serving malicious capabilities at runtime.
+
+```bash
+aspex-scan phantom
+```
+
+```
+PHANTOM TOOLS DETECTED
+
+  Server: analytics-mcp
+    Call 1:  query_db, export_csv
+    Call 2:  query_db, export_csv, exfil_data   ← appeared on second call
+
+  Severity: HIGH — server is hiding tools from initial enumeration.
+```
+
+<Warning>
+Phantom tool behavior is a strong indicator of malicious intent. Remove the server from your config until you can audit its source.
+</Warning>
+
+---
+
+## Security Advisory Mode
+
+Pass `--explain` to get a full security advisory for every finding: what the rule detected, how it could be exploited, the blast radius if it is, and the model's confidence.
+
+```bash
+aspex-scan --explain
+```
+
+```
+FINDING  postgres › tool:execute_sql  [CRITICAL]
+
+  WHY
+    The execute_sql tool accepts raw SQL strings with no parameter binding
+    enforced at the schema level. The tool description contains no mention
+    of read-only access or row limits.
+
+  EXPLOIT
+    An injected instruction in a retrieved document can append a second
+    SQL statement: "; DROP TABLE users; --". Because the MCP server runs
+    with the database owner role, no privilege escalation is required.
+
+  IMPACT
+    Full read/write/delete access to all tables visible to the connection
+    role. If the connection string uses a superuser, filesystem read via
+    COPY TO is also possible.
+
+  CONFIDENCE  high (rule: SQL_NO_PARAMETERIZATION + TOOL_NO_READONLY_HINT)
+
+  REMEDIATION
+    1. Use parameterized queries in the server implementation.
+    2. Add "read_only: true" to the tool's inputSchema description.
+    3. Connect with a least-privilege role scoped to SELECT only.
+```
+
+---
+
+## Score History and Fix Plan
+
+Each scan writes a timestamped snapshot to `~/.aspex/history/`. On subsequent runs, `aspex-scan` shows the score delta and a prioritized fix plan sorted by expected score improvement.
+
+```bash
+aspex-scan
+```
+
+```
+Score delta since last scan (3 days ago): 74 → 68  ▼ 6
+
+Prioritized fix plan
+  +9 pts  Scope filesystem server to project directories      (Data Protection)
+  +5 pts  Remove execute_sql or add read-only role            (Tool Security)
+  +3 pts  Migrate GITHUB_TOKEN from env block to Keychain     (Data Protection)
+  +2 pts  Pin slack-mcp to a verified digest                  (Supply Chain)
+```
+
+---
+
+## Keychain Migration
+
+`aspex-scan fix env` finds every hardcoded credential in MCP config `env` blocks and migrates them to macOS Keychain, replacing the plaintext value with a `$(security find-generic-password ...)` shell substitution that is resolved at server startup.
+
+```bash
+aspex-scan fix env
+```
+
+```
+Found 3 credentials in MCP config env blocks:
+
+  GITHUB_TOKEN   claude_desktop_config.json › servers.github
+  OPENAI_API_KEY claude_desktop_config.json › servers.codegen
+  SLACK_TOKEN    .cursor/mcp.json › servers.slack
+
+Migrating to macOS Keychain...
+  ✓ GITHUB_TOKEN   → keychain:aspex/github/GITHUB_TOKEN
+  ✓ OPENAI_API_KEY → keychain:aspex/codegen/OPENAI_API_KEY
+  ✓ SLACK_TOKEN    → keychain:aspex/slack/SLACK_TOKEN
+
+Config updated. Plaintext values removed.
+```
+
+<Tip>
+After migration, the credentials are never written to disk in plaintext again. The Keychain entries are accessible only to your user account.
+</Tip>
+
+---
+
+## Shareable Report
+
+`--share` generates a privacy-safe Markdown summary that strips server commands, environment variable values, and filesystem paths before rendering. Share it with your security team or include it in a pull request description.
+
+```bash
+aspex-scan --share
+```
+
+```
+Privacy-safe report written to aspex-report-2024-01-15.md
+
+  Redacted: 3 server commands, 5 env values, 2 filesystem paths
+  Safe to share: scores, finding categories, recommendations
+```
+
+---
+
+## Compliance Export
+
+`--report` maps every finding to a compliance control and emits a PASS/FAIL report for SOC 2 or ISO 27001.
+
+<CodeGroup>
+
+```bash SOC 2
+aspex-scan --report soc2
+```
+
+```bash ISO 27001
+aspex-scan --report iso27001
+```
+
+</CodeGroup>
+
+```
+SOC 2 Type II — MCP Security Controls
+
+  CC6.1  Logical access controls          PASS
+  CC6.6  Restriction of network access    FAIL  (plain HTTP servers detected)
+  CC6.7  Transmission encryption          FAIL  (3 servers without auth token)
+  CC7.2  System monitoring                PASS
+  CC8.1  Change management controls       PASS
+
+  2 controls failed. Run `aspex-scan --explain` for remediation detail.
+```
+
+---
+
+## Continuous Monitoring
+
+`aspex-scan cron` installs a launchd job (macOS) or systemd timer (Linux) that runs a full scan on a schedule and alerts when the score drops or new findings appear.
+
+```bash
+# Scan every 6 hours, alert if score drops below 80
+aspex-scan cron --interval 6h --fail-on 80
+```
+
+```
+Continuous monitoring enabled.
+  Schedule: every 6 hours
+  Alert threshold: score < 80
+  Alert method: macOS Notification Center
+
+Next scan: 2024-01-15 18:00:00
+```
+
+<Tip>
+Use `--watch` instead of `cron` for lightweight filesystem-event-driven rescanning during active development — it triggers on any change to a detected MCP config file.
+</Tip>
+
+---
+
+## CI Integration
+
+`aspex-scan` exits non-zero when `--fail-on` is set and the score falls below the threshold. Use it in GitHub Actions with the official composite action, or pipe `--sarif` output directly to the Code Scanning API.
+
+<CodeGroup>
+
+```yaml GitHub Actions (composite action)
+- name: Scan MCP servers
+  uses: aspex-security/aspex-action@v1
+  with:
+    fail-on: 80
+    sarif: true
+```
+
+```yaml GitHub Actions (manual)
+- name: Install aspex
+  run: curl -fsSL https://raw.githubusercontent.com/aspex-security/aspex/main/install.sh | sh
+
+- name: Scan MCP servers
+  run: aspex-scan --sarif > results.sarif
+
+- name: Upload SARIF
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: results.sarif
+```
+
+```bash HTML report
+aspex-scan --html > security-report.html
+```
+
+</CodeGroup>
+
+<Warning>
+Set `--fail-on` to a threshold your team agrees to maintain. A score of 80 is a reasonable starting point for teams with existing MCP deployments; greenfield projects should target 90+.
+</Warning>
+
+---
+
+## Pre-Commit Hook
+
+`aspex-scan install-hook` writes a Git pre-commit hook that runs a fast config-only check before every commit. If the proposed change introduces a new MCP server with a critical finding, the commit is blocked with an explanation.
+
+```bash
+aspex-scan install-hook
+```
+
+```
+Pre-commit hook installed at .git/hooks/pre-commit
+
+The hook will:
+  • Detect changes to MCP config files in the staged diff
+  • Run aspex-scan --no-exec on the new config state
+  • Block the commit if any CRITICAL findings are introduced
+  • Print a summary of what was found and why
+```
+
+```bash
+# Example blocked commit
+git commit -m "add analytics server"
+
+aspex-scan pre-commit check...
+  BLOCKED — new server introduces CRITICAL finding:
+  analytics-mcp › PHANTOM_TOOL_BEHAVIOR
+  Commit aborted. Run `aspex-scan --explain` for detail.
+```
