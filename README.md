@@ -52,6 +52,7 @@ brew install aspex-security/tap/aspex
   - [Export for SIEM](#export-for-siem--custom-analysis)
   - [Activity dashboard](#activity-dashboard)
   - [Real-time monitoring](#real-time-monitoring)
+- [aspex-doctor](#aspex-doctor)
 - [VS Code / Cursor extension](#vs-code--cursor-extension)
 - [Examples](#examples)
 - [Privacy](#privacy)
@@ -71,6 +72,7 @@ Aspex is an open-source AI agent security toolkit. Three CLI tools cover the ful
 | `aspex-scan` | Is the MCP server I just installed safe to run? |
 | `aspex-trace` | What did my agent actually do while I wasn't looking? |
 | `aspex-attack` | Can I actually exploit these servers? |
+| `aspex-doctor` | Is my overall AI agent setup healthy? |
 
 Run `aspex` for an interactive launcher that puts all three at your fingertips.
 
@@ -692,6 +694,35 @@ aspex-trace live --notify https://hooks.slack.com/services/...
 
 # Generic webhook (any URL); pass Bearer token via ?token=
 aspex-trace live --notify https://alerts.example.com/mcp?token=abc123
+```
+
+---
+
+## aspex-doctor
+
+> Is my AI agent setup healthy?
+
+A fast (~2s) local health check across five categories. No network calls, no config changes.
+
+```sh
+aspex-doctor
+```
+
+What it checks:
+
+| Category | What it looks for |
+|---|---|
+| **Clients** | Which MCP clients are installed, whether their configs are valid JSON, how many servers each has |
+| **Environment** | Shell env var names matching secret patterns (TOKEN, SECRET, KEY, PASSWORD) that are inherited by every MCP server process |
+| **Config secrets** | API keys or tokens hardcoded in MCP config `env` blocks instead of using a secrets manager |
+| **Filesystem** | Overly broad path grants: root `/`, home directory, or volume roots passed as server arguments |
+| **Network** | Remote servers using plain HTTP (critical) or HTTPS without any auth token (warning) |
+
+Values are never printed - only key names and locations are reported.
+
+```sh
+# JSON output for scripting or CI
+aspex-doctor --json
 ```
 
 ---

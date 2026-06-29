@@ -7,6 +7,22 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.5.0] - 2026-06-29
+
+### Added
+
+**aspex-doctor - local health check**
+- New `aspex-doctor` command runs a fast (~2s) health check across 5 categories: client configs, environment secrets, hardcoded config secrets, filesystem exposure, and network security
+- Clients: shows which MCP clients are installed, config validity, and server count
+- Environment: scans shell env var names for secret patterns (API keys, tokens, passwords) that are inherited by all MCP server processes - never prints values
+- Config secrets: detects credentials hardcoded in MCP config env blocks
+- Filesystem: flags overly broad path grants (root `/`, home dir, volume roots)
+- Network: flags HTTP remote servers (critical) and HTTPS servers without auth tokens (warning)
+- Flags: `--json`, `--no-color`, `--version`
+- Added to `aspex` TUI launcher as the fourth menu item
+
+---
+
 ## [0.4.0] - 2026-06-28
 
 ### Added

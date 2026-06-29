@@ -68,6 +68,21 @@ builds:
       - -X github.com/aspex-security/aspex/internal/version.Version={{.Version}}
       - -X github.com/aspex-security/aspex/internal/version.BuildDate={{.Date}}
 
+  - id: aspex-doctor
+    binary: aspex-doctor
+    main: ./cmd/aspex-doctor
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X github.com/aspex-security/aspex/internal/version.Version={{.Version}}
+      - -X github.com/aspex-security/aspex/internal/version.BuildDate={{.Date}}
+
   - id: aspex
     binary: aspex
     main: ./cmd/aspex
@@ -110,7 +125,7 @@ archives:
       - README.md
 
   - id: aspex-combined
-    builds: [mcp-scan, agent-trace, aspex, aspex-attack]
+    builds: [mcp-scan, agent-trace, aspex, aspex-attack, aspex-doctor]
     name_template: "aspex_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
@@ -140,18 +155,21 @@ brews:
       bin.install "aspex-trace"
       bin.install "aspex-attack"
       bin.install "aspex"
+      bin.install "aspex-doctor"
     test: |
       system "#{bin}/aspex-scan version"
       system "#{bin}/aspex-trace version"
       system "#{bin}/aspex-attack --version"
       system "#{bin}/aspex --version"
+      system "#{bin}/aspex-doctor --version"
     caveats: |
-      Aspex is ready. Four commands are now available:
+      Aspex is ready. Five commands are now available:
 
-        aspex         — Interactive launcher (start here)
-        aspex-scan    — Scan MCP server configs for security risks
-        aspex-trace   — Audit AI agent activity from native client logs
-        aspex-attack  — Red team MCP servers with adversarial probes
+        aspex         - Interactive launcher (start here)
+        aspex-scan    - Scan MCP server configs for security risks
+        aspex-trace   - Audit AI agent activity from native client logs
+        aspex-attack  - Red team MCP servers with adversarial probes
+        aspex-doctor  - Health check your local AI agent setup
 
       ── QUICK START ────────────────────────────────────────────────
         aspex-scan                  Scan all MCP clients on this machine

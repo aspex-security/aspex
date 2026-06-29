@@ -96,6 +96,18 @@ var items = []Item{
 			{Label: "JSON output", Args: []string{"--json"}, Hint: "Machine-readable results"},
 		},
 	},
+	{
+		ID:          "doctor",
+		Binary:      "aspex-doctor",
+		Label:       "DOCTOR",
+		TagLine:     "Health check your AI agent setup",
+		Description: "Fast local health check across 5 categories.\nChecks clients, env secrets, config secrets,\nfilesystem exposure, and network security.",
+		Options: []Option{
+			{Label: "Run health check", Args: nil, Hint: "Full check across all categories"},
+			{Label: "JSON output", Args: []string{"--json"}, Hint: "Machine-readable results"},
+			{Label: "No color", Args: []string{"--no-color"}, Hint: "Plain text output for logging"},
+		},
+	},
 }
 
 // keyEvent represents a terminal key press.
@@ -142,7 +154,7 @@ func readKey(b []byte) keyEvent {
 func Run(version string) {
 	fd := int(os.Stdin.Fd())
 	if !term.IsTerminal(fd) {
-		// Not a TTY — just print help and exit.
+		// Not a TTY - just print help and exit.
 		printHelp(version)
 		return
 	}
@@ -270,7 +282,7 @@ func render(version string, sel int, inSub bool, subSel int) {
 		purple, bold, reset,
 		white, bold, reset,
 		dim, "v"+version, reset))
-	b.WriteString(fmt.Sprintf("  %sAI Security Toolkit  ·  3 tools  ·  offline  ·  free%s\n", dim, reset))
+	b.WriteString(fmt.Sprintf("  %sAI Security Toolkit  ·  4 tools  ·  offline  ·  free%s\n", dim, reset))
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("  %s%s%s\n", dim, strings.Repeat("─", 54), reset))
 	b.WriteString("\n")
@@ -388,9 +400,10 @@ func launch(binary string, args []string) {
 }
 
 func printHelp(version string) {
-	fmt.Printf("\n  ◆ ASPEX  v%s  — AI Security Toolkit\n\n", version)
+	fmt.Printf("\n  ◆ ASPEX  v%s  - AI Security Toolkit\n\n", version)
 	fmt.Println("  aspex-scan    Audit MCP server configurations")
 	fmt.Println("  aspex-trace   Review AI agent activity logs")
 	fmt.Println("  aspex-attack  Red team your live MCP servers")
+	fmt.Println("  aspex-doctor  Health check your AI agent setup")
 	fmt.Println()
 }
