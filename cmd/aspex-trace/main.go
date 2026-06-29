@@ -59,7 +59,7 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "aspex-trace [flags]",
 		Short: "Audit what your AI agents actually did",
-		Long: `aspex-trace — AI Agent Activity Auditor
+		Long: `aspex-trace - AI Agent Activity Auditor
 
 Reads the logs that Claude Desktop, Claude Code, Cursor, Windsurf, Cline,
 Roo Code and other MCP clients already write to disk. Parses them into a
@@ -89,7 +89,7 @@ SUBCOMMANDS
   aspex-trace stats                  Activity dashboard without rule evaluation
   aspex-trace session <id>           Forensic timeline for one session
   aspex-trace export                 Export all events to CSV or JSONL
-  aspex-trace live                   Real-time monitoring — tails logs as they grow
+  aspex-trace live                   Real-time monitoring - tails logs as they grow
   aspex-trace baseline --learn       Learn normal behavior from recent logs
 
 BASELINES
@@ -101,7 +101,7 @@ BASELINES
   # Investigate the last week, only Cursor sessions
   aspex-trace --since 7d --client cursor
 
-  # CI gate — fail the build on any high-severity finding
+  # CI gate - fail the build on any high-severity finding
   aspex-trace --fail-on high --json | jq '.flagged | length'
 
   # Build a normal-behavior baseline, then detect deviations
@@ -120,7 +120,7 @@ BASELINES
 	root.Flags().StringVar(&tf.client, "client", "", "Limit to one client: "+strings.Join(supportedClients, "|"))
 	root.Flags().StringVar(&tf.server, "server", "", "Limit to one MCP server name (e.g. filesystem, github)")
 	root.Flags().StringVar(&tf.since, "since", "24h", "How far back to scan (e.g. 1h, 24h, 7d, 30d)")
-	root.Flags().BoolVar(&tf.jsonOut, "json", false, "JSON output — pipe to jq or feed into SIEM")
+	root.Flags().BoolVar(&tf.jsonOut, "json", false, "JSON output - pipe to jq or feed into SIEM")
 	root.Flags().BoolVar(&tf.noColor, "no-color", false, "Plain-text output (useful in CI logs)")
 	root.Flags().StringVar(&tf.failOn, "fail-on", "high", "Exit 1 when findings reach this severity: critical|high|medium|low")
 	root.Flags().BoolVar(&tf.sarifOut, "sarif", false, "SARIF 2.1.0 output for GitHub Advanced Security / Semgrep")
@@ -187,7 +187,7 @@ func newStatsCmd() *cobra.Command {
 		Long: `Print a concise activity summary for your AI agents: total events, per-client
 and per-server breakdowns, most-called tools, and an hourly heatmap.
 
-Unlike the default command, no detection rules are evaluated — this is purely
+Unlike the default command, no detection rules are evaluated - this is purely
 informational and is much faster on large log sets.`,
 		Example: `  # Last 24 hours dashboard
   aspex-trace stats
@@ -305,7 +305,7 @@ func newSessionCmd() *cobra.Command {
 		Short: "Reconstruct a forensic timeline for a single agent session",
 		Long: `Reconstruct a complete, chronologically-ordered timeline for one AI agent
 session. Shows every MCP tool call, the arguments passed, and all detection
-rule findings — in the order they happened.
+rule findings - in the order they happened.
 
 This is the single-session "what exactly did the agent do?" view. It is
 especially useful after an incident: given a session ID from the main report,
@@ -523,7 +523,7 @@ func runSession(query, since, clientFilter, serverFilter string, noColor, jsonOu
 	)
 
 	for i, ev := range matchedEvents {
-		ts := "—"
+		ts := "-"
 		if !ev.Timestamp.IsZero() {
 			ts = ev.Timestamp.Format("15:04:05")
 		}
@@ -577,8 +577,8 @@ func newExportCmd() *cobra.Command {
 into a SIEM, running custom analysis in Python/R, or archiving audit logs.
 
 Formats:
-  csv    — spreadsheet-compatible, one row per event
-  jsonl  — one JSON object per line (NDJSON), easy to stream into jq`,
+  csv    - spreadsheet-compatible, one row per event
+  jsonl  - one JSON object per line (NDJSON), easy to stream into jq`,
 		Example: `  # Export last 7 days to CSV
   aspex-trace export --since 7d --format csv --output events.csv
 
@@ -715,7 +715,7 @@ func runExport(since, clientFilter, format, outputPath string) error {
 		return nil
 
 	default:
-		return fmt.Errorf("unknown format %q — use csv or jsonl", format)
+		return fmt.Errorf("unknown format %q - use csv or jsonl", format)
 	}
 }
 
@@ -730,7 +730,7 @@ func newLiveCmd() *cobra.Command {
 	var notifyURL string
 	cmd := &cobra.Command{
 		Use:   "live",
-		Short: "Real-time monitoring — tails agent logs and prints new findings as they arrive",
+		Short: "Real-time monitoring - tails agent logs and prints new findings as they arrive",
 		Long: `Poll agent logs every N seconds and print any new flagged events as they
 appear. Useful during an active session to watch for suspicious activity in
 real time.
@@ -889,7 +889,7 @@ most likely delivered the injected instruction.
 When an AI agent reads a file or fetches a URL and then immediately executes
 a suspicious command or exfiltrates data, the content it consumed is the
 most probable source of the injected instruction. This command makes that
-link explicit — turning "something suspicious happened" into "the agent read
+link explicit - turning "something suspicious happened" into "the agent read
 X, then did Y: here is the likely injection vector."
 
 Ingestion events tracked:
@@ -1105,7 +1105,7 @@ func newKillChainCmd() *cobra.Command {
 		Use:   "killchain",
 		Short: "Reconstruct multi-step attack kill chains from agent event logs",
 		Long: `Analyze agent event logs for multi-event sequences that together form a
-complete attack kill chain — not just individual suspicious events, but the
+complete attack kill chain - not just individual suspicious events, but the
 orchestrated sequence that proves an attack was attempted or succeeded.
 
 Patterns detected:
@@ -1358,7 +1358,7 @@ func newBaselineCmd() *cobra.Command {
 
 The baseline captures which MCP servers are typically used, what tools are called,
 and at what frequency. Run aspex-trace with --baseline to surface anything that
-deviates from that normal pattern — new servers, unusual tools, or spikes in activity.`,
+deviates from that normal pattern - new servers, unusual tools, or spikes in activity.`,
 		Example: `  # Learn from the last 7 days of activity
   aspex-trace baseline --learn --since 7d
 

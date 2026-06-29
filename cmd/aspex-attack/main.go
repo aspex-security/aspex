@@ -1,4 +1,4 @@
-// aspex-attack — dedicated red team tool for MCP servers.
+// aspex-attack - dedicated red team tool for MCP servers.
 // Probes live MCP servers with adversarial payloads and reports findings.
 package main
 
@@ -372,7 +372,7 @@ func run(serverFlag string, timeoutSecs int, categories []string, jsonOut, noCol
 				fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
 					c(dim, "·"),
 					c(bold, entry.Name),
-					c(dim, fmt.Sprintf("No findings triggered by these %d probes — this does not mean the server is secure", serverProbes)),
+					c(dim, fmt.Sprintf("No findings triggered by these %d probes - this does not mean the server is secure", serverProbes)),
 				)
 			} else {
 				fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
@@ -468,10 +468,10 @@ func run(serverFlag string, timeoutSecs int, categories []string, jsonOut, noCol
 	// Overall verdict line.
 	fmt.Fprintf(os.Stdout, "  %s ", c(dim, "─"))
 	if totalVulns == 0 {
-		fmt.Fprintf(os.Stdout, "No findings triggered by these %d probes — this does not mean the server is secure\n\n",
+		fmt.Fprintf(os.Stdout, "No findings triggered by these %d probes - this does not mean the server is secure\n\n",
 			totalProbes)
 	} else {
-		fmt.Fprintf(os.Stdout, "%s %d finding(s) across %d probe(s) — review results above.\n\n",
+		fmt.Fprintf(os.Stdout, "%s %d finding(s) across %d probe(s) - review results above.\n\n",
 			c(red+bold, fmt.Sprintf("%d", totalVulns)),
 			totalVulns, totalProbes)
 	}

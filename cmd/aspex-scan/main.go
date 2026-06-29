@@ -76,7 +76,7 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "aspex-scan [flags]",
 		Short: "Scan your MCP servers for security risks",
-		Long: `aspex-scan — MCP Server Security Scanner
+		Long: `aspex-scan - MCP Server Security Scanner
 
 Reads every MCP client config on this machine, enumerates all configured
 servers and their tools, and scores each one across 250+ detection rules
@@ -119,7 +119,7 @@ COMPARING OVER TIME
   # CI: fail the build on any critical finding
   aspex-scan --fail-on critical --no-color
 
-  # Watch mode — rescan when any config file changes
+  # Watch mode - rescan when any config file changes
   aspex-scan --watch`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -144,7 +144,7 @@ COMPARING OVER TIME
 	}
 
 	root.PersistentFlags().BoolVar(&gf.noExec, "no-exec", false, "Static analysis only; skip launching MCP servers")
-	root.PersistentFlags().BoolVar(&gf.jsonOut, "json", false, "JSON output — pipe to jq or feed into SIEM")
+	root.PersistentFlags().BoolVar(&gf.jsonOut, "json", false, "JSON output - pipe to jq or feed into SIEM")
 	root.PersistentFlags().BoolVar(&gf.noColor, "no-color", false, "Plain-text output (useful in CI logs)")
 	root.PersistentFlags().StringVar(&gf.failOn, "fail-on", "off", "Exit 1 when findings reach this severity: critical|high|medium|low")
 	root.PersistentFlags().StringSliceVar(&gf.clients, "clients", discover.AllClients, "Clients to scan: claude,cursor,vscode,windsurf,cline,roo-cline,continue,zed")
@@ -203,7 +203,7 @@ func newInventoryCmd(gf *globalFlags) *cobra.Command {
 		Short: "List every MCP server and tool configured on this machine",
 		Long: `Enumerate all MCP servers configured across every client on this machine.
 Outputs a machine-readable inventory of server names, transports, tools, resources,
-and prompts — without running any detection rules or scoring.
+and prompts - without running any detection rules or scoring.
 
 Useful for:
   - Asset management: know exactly what MCP surface area you have
@@ -325,7 +325,7 @@ func runInventory(gf *globalFlags, jsonOut bool) error {
 	fmt.Fprintf(os.Stdout, "\n  %s  %s %s\n\n",
 		c(purple+bold, "◆"),
 		c(bold, "MCP Inventory"),
-		c(dim, fmt.Sprintf("— %d servers · %d tools", out.TotalServers, out.TotalTools)),
+		c(dim, fmt.Sprintf("- %d servers · %d tools", out.TotalServers, out.TotalTools)),
 	)
 
 	for _, s := range inv {
@@ -368,7 +368,7 @@ func newAttackPathsCmd(gf *globalFlags) *cobra.Command {
 		Use:   "attack-paths",
 		Short: "Identify dangerous tool combinations that form attack chains",
 		Long: `Analyze your installed MCP servers for dangerous capability combinations
-that together form complete attack chains — even when no single server looks
+that together form complete attack chains - even when no single server looks
 malicious on its own.
 
 A "file-read" server paired with an "http" server gives any compromised prompt
@@ -578,7 +578,7 @@ func newShadowCmd(gf *globalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "shadow",
 		Short: "Detect tool name collisions across MCP servers (shadow attack surface)",
-		Long: `Scan for tool name shadowing — a class of attack where a malicious or
+		Long: `Scan for tool name shadowing - a class of attack where a malicious or
 misconfigured MCP server registers tool names that collide with tools on a
 legitimate server.
 
@@ -690,7 +690,7 @@ func runShadow(gf *globalFlags, jsonOut bool) error {
 	)
 
 	if len(report.Collisions) == 0 {
-		fmt.Fprintf(os.Stdout, "  %s  No tool name collisions found — every tool name is unique across your servers.\n\n",
+		fmt.Fprintf(os.Stdout, "  %s  No tool name collisions found - every tool name is unique across your servers.\n\n",
 			c("\033[92m", "✓"),
 		)
 		fmt.Fprintf(os.Stdout, "  %s Run %s regularly as you add new MCP servers.\n\n",
@@ -769,7 +769,7 @@ Changes detected:
   CRITICAL  Tool description changed AND contains injection language
   HIGH      Tool description or schema changed between calls
 
-The interval between calls is configurable — longer intervals test whether
+The interval between calls is configurable - longer intervals test whether
 the server changes its behavior based on session timing.`,
 		Example: `  # Check all servers for phantom tools
   aspex-scan phantom
@@ -953,12 +953,12 @@ func runPhantom(gf *globalFlags, jsonOut bool, interval time.Duration) error {
 			c(green, "✓"),
 			len(servers),
 		)
-		fmt.Fprintf(os.Stdout, "  %s Run %s periodically — servers can change between updates.\n\n",
+		fmt.Fprintf(os.Stdout, "  %s Run %s periodically - servers can change between updates.\n\n",
 			c(dim, "→"),
 			c(cyan, "aspex-scan phantom"),
 		)
 	} else {
-		fmt.Fprintf(os.Stdout, "%s %s inconsistent server(s) detected — investigate before continuing.\n\n",
+		fmt.Fprintf(os.Stdout, "%s %s inconsistent server(s) detected - investigate before continuing.\n\n",
 			c(red+bold, fmt.Sprintf("%d", dirtyCount)),
 			c(dim, ""),
 		)
@@ -1225,7 +1225,7 @@ func runRedTeam(gf *globalFlags, serverFlag string, timeoutSecs int, jsonOut boo
 	yellow := "\033[93m"
 
 	if !jsonOut && !gf.jsonOut {
-		// Confirmation prompt — show scope and require explicit Y before firing payloads.
+		// Confirmation prompt - show scope and require explicit Y before firing payloads.
 		fmt.Fprintf(os.Stdout, "\n  %s  %s\n\n",
 			c(purple+bold, "◆"),
 			c(bold, "Red Team Probe"),
@@ -1827,7 +1827,7 @@ func runFix(gf *globalFlags, clients []string, dryRun bool, severityStr string, 
 
 	fmt.Fprintf(os.Stdout, "\n  %s  %s\n\n",
 		c(purple+bold, "◆"),
-		c(bold, "aspex-scan fix — config hardening"),
+		c(bold, "aspex-scan fix - config hardening"),
 	)
 
 	anyChanges := false
@@ -2024,7 +2024,7 @@ func removeServersFromConfig(client string, data []byte, toRemove map[string]str
 		return json.MarshalIndent(raw, "", "  ")
 
 	default:
-		// Claude Desktop, Cursor, Windsurf, Cline, Roo-Cline — all use "mcpServers" map.
+		// Claude Desktop, Cursor, Windsurf, Cline, Roo-Cline - all use "mcpServers" map.
 		var raw map[string]json.RawMessage
 		if err := json.Unmarshal(data, &raw); err != nil {
 			return nil, fmt.Errorf("invalid JSON: %w", err)
