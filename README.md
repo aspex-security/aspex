@@ -6,7 +6,7 @@
 
 ### MCP Security Toolkit
 
-**Know what your MCP servers can do. Know what they actually did.**
+**Know what your MCP servers can do. Know what your agents actually did.**
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CI](https://github.com/aspex-security/aspex/actions/workflows/ci.yml/badge.svg)](https://github.com/aspex-security/aspex/actions/workflows/ci.yml)
