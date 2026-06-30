@@ -58,6 +58,7 @@ var items = []Item{
 		Description: "Static analysis across 250+ rules.\nFinds prompt injection, credential exposure,\nsupply chain risks, and cross-server attack paths.",
 		Options: []Option{
 			{Label: "Full scan", Args: nil, Hint: "Scan all clients on this machine"},
+			{Label: "Health check", Args: []string{"doctor"}, Hint: "Pre-flight: env, config secrets, filesystem, network"},
 			{Label: "With --explain", Args: []string{"--explain"}, Hint: "Show why each finding is dangerous"},
 			{Label: "Static only  (fast)", Args: []string{"--no-exec"}, Hint: "Parse configs without launching servers"},
 			{Label: "HTML report", Args: []string{"--html", "~/aspex-report.html"}, Hint: "Save + open a shareable HTML report", OpenAfter: "~/aspex-report.html"},
@@ -72,7 +73,7 @@ var items = []Item{
 		Binary:      "aspex-trace",
 		Label:       "TRACE",
 		TagLine:     "Review AI agent activity logs",
-		Description: "Reads native client logs. No agents.\nFinds kill chains, session anomalies,\nand instruction provenance.",
+		Description: "Reads native client logs. No proxy needed.\nFinds kill chains, session anomalies,\nand instruction provenance.",
 		Options: []Option{
 			{Label: "Last 24 hours", Args: nil, Hint: "Default audit window"},
 			{Label: "Last 7 days", Args: []string{"--since", "7d"}, Hint: "Broader history"},
@@ -87,8 +88,8 @@ var items = []Item{
 		ID:          "attack",
 		Binary:      "aspex-attack",
 		Label:       "ATTACK",
-		TagLine:     "Red team your live MCP servers",
-		Description: "Actively probes live tools with adversarial\npayloads. Tests prompt injection, path traversal,\nSSRF, error disclosure, and prompt leakage.",
+		TagLine:     "Red team a live MCP server  (advanced)",
+		Description: "Actively probes live tools with adversarial\npayloads. Only probe servers you own.\nRequires explicit opt-in consent.",
 		Options: []Option{
 			{Label: "All probes", Args: nil, Hint: "Full adversarial test suite"},
 			{Label: "Prompt injection", Args: []string{"--categories", "prompt-injection"}, Hint: "Injection payload battery"},
@@ -96,18 +97,6 @@ var items = []Item{
 			{Label: "SSRF", Args: []string{"--categories", "ssrf"}, Hint: "AWS/GCP metadata + internal endpoints"},
 			{Label: "Error disclosure", Args: []string{"--categories", "error-disclosure"}, Hint: "Stack traces and internal paths"},
 			{Label: "JSON output", Args: []string{"--json"}, Hint: "Machine-readable results"},
-		},
-	},
-	{
-		ID:          "doctor",
-		Binary:      "aspex-doctor",
-		Label:       "DOCTOR",
-		TagLine:     "Health check your AI agent setup",
-		Description: "Fast local health check across 5 categories.\nChecks clients, env secrets, config secrets,\nfilesystem exposure, and network security.",
-		Options: []Option{
-			{Label: "Run health check", Args: nil, Hint: "Full check across all categories"},
-			{Label: "JSON output", Args: []string{"--json"}, Hint: "Machine-readable results"},
-			{Label: "No color", Args: []string{"--no-color"}, Hint: "Plain text output for logging"},
 		},
 	},
 }
@@ -293,7 +282,7 @@ func render(version string, sel int, inSub bool, subSel int) {
 		purple, bold, reset,
 		white, bold, reset,
 		dim, "v"+version, reset))
-	b.WriteString(fmt.Sprintf("  %sAI Security Toolkit  ·  4 tools  ·  offline  ·  free%s\n", dim, reset))
+	b.WriteString(fmt.Sprintf("  %sMCP Security Toolkit  ·  offline  ·  no account  ·  free%s\n", dim, reset))
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("  %s%s%s\n", dim, strings.Repeat("─", 54), reset))
 	b.WriteString("\n")
@@ -447,10 +436,10 @@ func fileExists(p string) bool {
 }
 
 func printHelp(version string) {
-	fmt.Printf("\n  ◆ ASPEX  v%s  - AI Security Toolkit\n\n", version)
-	fmt.Println("  aspex-scan    Audit MCP server configurations")
-	fmt.Println("  aspex-trace   Review AI agent activity logs")
-	fmt.Println("  aspex-attack  Red team your live MCP servers")
-	fmt.Println("  aspex-doctor  Health check your AI agent setup")
+	fmt.Printf("\n  ◆ ASPEX  v%s  - MCP Security Toolkit\n\n", version)
+	fmt.Println("  aspex-scan           Audit MCP server configurations")
+	fmt.Println("  aspex-scan doctor    Pre-flight health check (~2s)")
+	fmt.Println("  aspex-trace          Review AI agent activity logs")
+	fmt.Println("  aspex-attack         Red team a live MCP server (advanced)")
 	fmt.Println()
 }

@@ -4,9 +4,9 @@
 
 # Aspex
 
-### AI Agent Security Toolkit
+### MCP Security Toolkit
 
-**Scan your MCP servers before you trust them. Audit what your agents actually did.**
+**Know what your MCP servers can do. Know what they actually did.**
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CI](https://github.com/aspex-security/aspex/actions/workflows/ci.yml/badge.svg)](https://github.com/aspex-security/aspex/actions/workflows/ci.yml)
@@ -24,36 +24,34 @@ brew install aspex-security/tap/aspex
 
 ## What is Aspex?
 
-Aspex is an open-source security toolkit for developers using AI coding agents. It covers the complete attack surface of any MCP-powered workflow - from static config analysis to live runtime auditing.
+Aspex is an open-source security toolkit for developers using AI coding agents. It answers two questions every MCP user should be asking:
 
-You wired an MCP server into Claude Code or Cursor. You copy-pasted the config from a README. The agent now has access to your filesystem, your GitHub, your browser. Do you know what that server is actually capable of? Do you know what it did the last time your agent ran?
+You wired an MCP server into Claude Code or Cursor. You copy-pasted the config from a README. The agent now has access to your filesystem, your GitHub, your browser.
 
-Aspex is the answer to both questions.
+**Do you know what that server is actually capable of? Do you know what it did the last time your agent ran?**
 
 | Tool | What it does |
 |---|---|
-| `aspex-scan` | Static analysis of MCP server configurations - 140+ rules, 0-100 security score |
-| `aspex-trace` | Runtime audit of AI agent activity logs - no proxy, no config change |
-| `aspex-attack` | Active red-teaming of live MCP tools with adversarial payloads |
-| `aspex-doctor` | Fast local health check for your AI agent setup (~2 seconds) |
+| `aspex-scan` | Static analysis of every MCP server on your machine - 140+ rules, 0-100 security score, cross-server attack paths |
+| `aspex-trace` | Runtime audit of your AI agent logs - reconstructs kill chains, traces instruction provenance, no proxy required |
 
 ---
 
 ## Quick start
 
-Run `aspex` for an interactive menu - arrow keys to navigate, enter to run any tool:
+Run `aspex` for an interactive menu - arrow keys to navigate, enter to run:
 
 ```sh
 aspex
 ```
 
-Or run each tool directly:
+Or run directly:
 
 ```sh
-aspex-scan      # Scan every MCP server on this machine
-aspex-trace     # Audit what your agent did in the last 24 hours
-aspex-doctor    # Quick health check of your AI setup
-aspex-attack    # Actively probe a live MCP server (opt-in)
+aspex-scan               # Audit every MCP server on this machine
+aspex-scan doctor        # Pre-flight health check (~2 seconds)
+aspex-trace              # Review what your agent did in the last 24 hours
+aspex-trace killchain    # Reconstruct multi-step attack patterns
 ```
 
 ---
@@ -79,8 +77,6 @@ Full reference, guides, and examples at **[aspex.mintlify.site](https://aspex.mi
 
 - [aspex-scan reference](https://aspex.mintlify.site/tools/scan)
 - [aspex-trace reference](https://aspex.mintlify.site/tools/trace)
-- [aspex-attack reference](https://aspex.mintlify.site/tools/attack)
-- [aspex-doctor reference](https://aspex.mintlify.site/tools/doctor)
 - [CI integration guide](https://aspex.mintlify.site/guides/ci-integration)
 - [Daily workflow guide](https://aspex.mintlify.site/guides/daily-workflow)
 

@@ -31,7 +31,7 @@ func main() {
 				rest = append([]string{"redteam"}, rest...)
 			}
 		case "doctor":
-			binary = "aspex-doctor"
+			binary, rest = "aspex-scan", append([]string{"doctor"}, args[1:]...)
 		case "--version", "-v":
 			println("aspex v" + version.Version)
 			return

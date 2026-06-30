@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aspex-security/aspex/internal/attackpath"
+	"github.com/aspex-security/aspex/internal/doctor"
 	"github.com/aspex-security/aspex/internal/diff"
 	"github.com/aspex-security/aspex/internal/history"
 	"github.com/aspex-security/aspex/internal/discover"
@@ -160,6 +161,7 @@ COMPARING OVER TIME
 	root.Flags().BoolVar(&gf.shareMode, "share", false, "Print a privacy-safe shareable summary (no server names or values)")
 	root.Flags().StringVar(&gf.reportFormat, "report", "", "Generate compliance report: soc2, iso27001")
 
+	root.AddCommand(newDoctorCmd())
 	root.AddCommand(newInspectCmd(&gf))
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newDiffCmd(&gf))
@@ -2757,4 +2759,26 @@ func extractEnvVarName(detail string) string {
 		}
 	}
 	return ""
+}
+
+func newDoctorCmd() *cobra.Command {
+	var jsonMode bool
+	var noColor bool
+
+	cmd := &cobra.Command{
+		Use:   "doctor",
+		Short: "Fast pre-flight health check (~2s, fully offline)",
+		Long:  "Checks clients, shell environment secrets, hardcoded config credentials, filesystem grants, and network exposure. Completes in ~2 seconds with no MCP server connections.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if os.Getenv("NO_COLOR") != "" {
+				noColor = true
+			}
+			return doctor.Run(jsonMode, noColor)
+		},
+	}
+
+	cmd.Flags().BoolVar(&jsonMode, "json", false, "Output results as JSON")
+	cmd.Flags().BoolVar(&noColor, "no-color", false, "Disable color output")
+
+	return cmd
 }
