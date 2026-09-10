@@ -21,7 +21,7 @@ The table below shows which MCP clients each Aspex tool works with.
 
 **aspex-doctor** detects all installed clients automatically by probing their config file paths — no flags required.
 
-**aspex-trace** requires the client to expose a running MCP session that can be intercepted; clients marked `—` do not yet expose a compatible session interface.
+**aspex-trace** reads the log files each client already writes to disk - no proxy, no interception. Clients marked `—` do not yet write MCP tool calls to a parseable log.
 
 ---
 
@@ -37,12 +37,16 @@ The table below shows which MCP clients each Aspex tool works with.
 
 ### Claude Code
 
-Claude Code reads MCP server config from the Claude Code settings directory and supports project-level config via `.claude/settings.json` in the workspace root.
+Claude Code keeps MCP servers in three places, and aspex-scan reads all of them:
 
-| OS | Path |
-|----|------|
-| macOS / Linux | `~/.claude/settings.json` |
-| Windows | `%APPDATA%\Claude\settings.json` |
+| Scope | Path | Notes |
+|----|------|------|
+| User | `~/.claude.json` under `mcpServers` | Added with `claude mcp add --scope user` |
+| Local | `~/.claude.json` under `projects.<dir>.mcpServers` | Per-project, not committed. Reported with a `project:` label |
+| Project | `<repo>/.mcp.json` | Committed to the repo; read from the current directory |
+| Plugin | `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/.mcp.json` | Only plugins listed in `installed_plugins.json` |
+
+Connectors added through **claude.ai** (the remote connector directory) are configured in the cloud and have no local file. aspex-scan cannot see them; `aspex-scan --with-trace` lists them as "in use but not in any scanned config" from aspex-trace logs, and `aspex-scan inspect <url>` can scan one directly.
 
 ### Cursor
 

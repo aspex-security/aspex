@@ -580,7 +580,7 @@ func checkMCP009ProcessSpawn(t *mcpclient.Tool) []Finding {
 // OWASP LLM02 | CWE-306
 
 func checkMCP010UnauthRemote(srv *inspect.Server) []Finding {
-	if srv.Entry.URL == "" {
+	if srv.Entry.URL == "" || srv.Entry.OAuth {
 		return nil
 	}
 	for _, k := range srv.Entry.EnvKeys {

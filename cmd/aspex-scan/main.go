@@ -1839,7 +1839,7 @@ func printActivity(w io.Writer, noColor bool, inspected []*inspect.Server, score
 			fmt.Fprintf(w, "     %-38s %d calls · %d tools · via %s%s\n",
 				report.SanitizeForTerminal(a.Server), a.Calls, len(a.Tools), strings.Join(a.Clients, ","), flag)
 		}
-		fmt.Fprintf(w, "     %s\n", c(ansiDim, "Remote connectors and per-project configs are not discovered yet. Scan one directly: aspex-scan inspect <url|command>"))
+		fmt.Fprintf(w, "     %s\n", c(ansiDim, "Connectors added through claude.ai are configured in the cloud, not on disk: review them in claude.ai settings. Scan any URL directly: aspex-scan inspect <url>"))
 	}
 
 	var prio []row
@@ -2334,6 +2334,53 @@ func removeServersFromConfig(client string, data []byte, toRemove map[string]str
 					return nil, err
 				}
 				raw["mcpServers"] = patched
+			}
+		}
+		return json.MarshalIndent(raw, "", "  ")
+
+	case discover.ClientClaudeCode:
+		// ~/.claude.json has a top-level "mcpServers" map plus per-project maps
+		// under "projects.<dir>.mcpServers"; .mcp.json files have only the former.
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return nil, fmt.Errorf("invalid JSON: %w", err)
+		}
+		dropFrom := func(obj map[string]json.RawMessage) error {
+			serversRaw, ok := obj["mcpServers"]
+			if !ok {
+				return nil
+			}
+			var servers map[string]json.RawMessage
+			if err := json.Unmarshal(serversRaw, &servers); err != nil {
+				return nil // not a map we understand; leave untouched
+			}
+			for name := range toRemove {
+				delete(servers, name)
+			}
+			patched, err := json.Marshal(servers)
+			if err != nil {
+				return err
+			}
+			obj["mcpServers"] = patched
+			return nil
+		}
+		if err := dropFrom(raw); err != nil {
+			return nil, err
+		}
+		if projectsRaw, ok := raw["projects"]; ok {
+			var projects map[string]map[string]json.RawMessage
+			if err := json.Unmarshal(projectsRaw, &projects); err == nil {
+				for dir, proj := range projects {
+					if err := dropFrom(proj); err != nil {
+						return nil, err
+					}
+					projects[dir] = proj
+				}
+				patched, err := json.Marshal(projects)
+				if err != nil {
+					return nil, err
+				}
+				raw["projects"] = patched
 			}
 		}
 		return json.MarshalIndent(raw, "", "  ")

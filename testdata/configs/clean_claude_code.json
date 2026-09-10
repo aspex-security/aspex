@@ -1,0 +1,26 @@
+{
+  "numStartups": 42,
+  "oauthAccount": {"emailAddress": "redacted"},
+  "mcpServers": {
+    "github": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github@2025.4.8"]
+    }
+  },
+  "projects": {
+    "/Users/dev/work/api": {
+      "allowedTools": [],
+      "mcpServers": {
+        "postgres": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-postgres@0.6.2", "postgresql://readonly@localhost/app"],
+          "env": {"PGPASSWORD": "hunter2"}
+        }
+      }
+    },
+    "/Users/dev/work/docs": {
+      "allowedTools": []
+    }
+  }
+}

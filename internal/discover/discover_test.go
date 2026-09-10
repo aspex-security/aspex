@@ -105,6 +105,47 @@ func TestParseZedConfig(t *testing.T) {
 	}
 }
 
+func TestParseClaudeCodeConfig_UserAndProjectScopes(t *testing.T) {
+	entries, err := discover.ParseConfigFile(discover.ClientClaudeCode, "../../testdata/configs/clean_claude_code.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 servers (1 user + 1 project scope), got %d: %+v", len(entries), entries)
+	}
+	byName := map[string]discover.ServerEntry{}
+	for _, e := range entries {
+		byName[e.Name] = e
+		if e.Client != discover.ClientClaudeCode {
+			t.Errorf("%s: client = %q", e.Name, e.Client)
+		}
+	}
+	gh, ok := byName["github"]
+	if !ok || gh.Command != "npx" || gh.Description != "" {
+		t.Errorf("user-scope github entry wrong: %+v", gh)
+	}
+	pg, ok := byName["postgres"]
+	if !ok || pg.Description != "project: /Users/dev/work/api" {
+		t.Errorf("project-scope postgres entry wrong: %+v", pg)
+	}
+	if len(pg.EnvKeys) != 1 || pg.EnvKeys[0] != "PGPASSWORD" {
+		t.Errorf("env keys should be names only: %+v", pg.EnvKeys)
+	}
+}
+
+func TestParseClaudeCodePluginMCP(t *testing.T) {
+	entries, err := discover.ParseConfigFile(discover.ClientClaudeCode, "../../testdata/configs/plugin_claude_code.mcp.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name != "slack" || entries[0].URL != "https://mcp.slack.com/mcp" {
+		t.Fatalf("plugin http server not parsed: %+v", entries)
+	}
+	if !entries[0].OAuth {
+		t.Error("oauth block should mark the server as authenticated")
+	}
+}
+
 func TestParseNonExistentFile_ReturnsNil(t *testing.T) {
 	entries, err := discover.ParseConfigFile(discover.ClientClaudeDesktop, "/nonexistent/path/config.json")
 	if err != nil {

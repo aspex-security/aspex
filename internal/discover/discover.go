@@ -12,6 +12,7 @@ import (
 // Client names.
 const (
 	ClientClaudeDesktop = "claude"
+	ClientClaudeCode    = "claude-code" // Claude Code CLI / desktop app: ~/.claude.json, project .mcp.json, installed plugins
 	ClientCursor        = "cursor"
 	ClientVSCode        = "vscode"
 	ClientWindsurf      = "windsurf"
@@ -32,6 +33,10 @@ type ServerEntry struct {
 	URL         string   // for HTTP/SSE servers
 	Description string   // from metadata.description, if present
 	Disabled    bool
+	// OAuth is true when the config declares an OAuth flow for a remote server
+	// (Claude Code plugins do this). Such servers authenticate without a token
+	// in env, so "no auth token" rules must not fire on them.
+	OAuth bool
 }
 
 // clientConfigPaths returns candidate config file paths for the given client on the current OS.
@@ -52,6 +57,9 @@ func clientConfigPaths(client string) []string {
 			configHome = filepath.Join(home, ".config")
 		}
 		return []string{filepath.Join(configHome, "Claude", "claude_desktop_config.json")}
+
+	case ClientClaudeCode:
+		return claudeCodeConfigPaths(home)
 
 	case ClientCursor:
 		if runtime.GOOS == "windows" {
@@ -133,9 +141,56 @@ func clientConfigPaths(client string) []string {
 	return nil
 }
 
+// claudeCodeConfigPaths lists every file Claude Code reads MCP servers from:
+//   - ~/.claude.json: "mcpServers" (user scope) and "projects.<dir>.mcpServers" (local scope)
+//   - ./.mcp.json: project scope, committed to the repo
+//   - <plugin installPath>/.mcp.json for each plugin in ~/.claude/plugins/installed_plugins.json
+//
+// Servers connected through claude.ai (remote connectors) are configured in the
+// cloud and have no local file; they are only visible through aspex-trace.
+func claudeCodeConfigPaths(home string) []string {
+	paths := []string{filepath.Join(home, ".claude.json")}
+	if cwd, err := os.Getwd(); err == nil {
+		paths = append(paths, filepath.Join(cwd, ".mcp.json"))
+	}
+	paths = append(paths, installedPluginMCPPaths(filepath.Join(home, ".claude", "plugins", "installed_plugins.json"))...)
+	return paths
+}
+
+// installedPluginMCPPaths returns <installPath>/.mcp.json for every installed
+// Claude Code plugin. Only the installed cache is consulted, never the
+// marketplace catalog, so uninstalled plugins are not reported as servers.
+func installedPluginMCPPaths(manifest string) []string {
+	data, err := os.ReadFile(manifest)
+	if err != nil {
+		return nil
+	}
+	var m struct {
+		Plugins map[string][]struct {
+			InstallPath string `json:"installPath"`
+		} `json:"plugins"`
+	}
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil
+	}
+	var paths []string
+	seen := map[string]bool{}
+	for _, installs := range m.Plugins {
+		for _, in := range installs {
+			if in.InstallPath == "" || seen[in.InstallPath] {
+				continue
+			}
+			seen[in.InstallPath] = true
+			paths = append(paths, filepath.Join(in.InstallPath, ".mcp.json"))
+		}
+	}
+	return paths
+}
+
 // AllClients is the default discovery order.
 var AllClients = []string{
 	ClientClaudeDesktop,
+	ClientClaudeCode,
 	ClientCursor,
 	ClientVSCode,
 	ClientWindsurf,
@@ -276,6 +331,8 @@ func ParseConfigFile(client, path string) ([]ServerEntry, error) {
 	switch client {
 	case ClientClaudeDesktop:
 		return parseClaudeDesktop(path, data)
+	case ClientClaudeCode:
+		return parseClaudeCode(path, data)
 	case ClientCursor:
 		return parseCursor(path, data)
 	case ClientVSCode:
@@ -312,6 +369,59 @@ func parseClaudeDesktop(path string, data []byte) ([]ServerEntry, error) {
 			URL:        s.URL,
 			Disabled:   s.Disabled,
 		})
+	}
+	return entries, nil
+}
+
+// claudeCodeServer is one server entry in any Claude Code config file.
+// "type" is "stdio" (default), "http", or "sse"; http/sse servers carry a URL.
+type claudeCodeServer struct {
+	Type     string            `json:"type"`
+	Command  string            `json:"command"`
+	Args     []string          `json:"args"`
+	Env      map[string]string `json:"env"`
+	URL      string            `json:"url"`
+	Disabled bool              `json:"disabled"`
+	OAuth    json.RawMessage   `json:"oauth"`
+}
+
+// claudeCodeConfig covers both ~/.claude.json (top-level mcpServers plus
+// per-project mcpServers under "projects") and plain .mcp.json files
+// (top-level mcpServers only). One shape parses all of them.
+type claudeCodeConfig struct {
+	MCPServers map[string]claudeCodeServer `json:"mcpServers"`
+	Projects   map[string]struct {
+		MCPServers map[string]claudeCodeServer `json:"mcpServers"`
+	} `json:"projects"`
+}
+
+func parseClaudeCode(path string, data []byte) ([]ServerEntry, error) {
+	var cfg claudeCodeConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("invalid JSON: %w", err)
+	}
+	var entries []ServerEntry
+	add := func(name string, s claudeCodeServer, scope string) {
+		entries = append(entries, ServerEntry{
+			Name:        name,
+			Client:      ClientClaudeCode,
+			ConfigPath:  path,
+			Command:     s.Command,
+			Args:        s.Args,
+			EnvKeys:     envKeys(s.Env),
+			URL:         s.URL,
+			Description: scope,
+			Disabled:    s.Disabled,
+			OAuth:       len(s.OAuth) > 0 && string(s.OAuth) != "null",
+		})
+	}
+	for name, s := range cfg.MCPServers {
+		add(name, s, "")
+	}
+	for project, p := range cfg.Projects {
+		for name, s := range p.MCPServers {
+			add(name, s, "project: "+project)
+		}
 	}
 	return entries, nil
 }
