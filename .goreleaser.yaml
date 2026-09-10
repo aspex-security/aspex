@@ -147,7 +147,7 @@ brews:
     commit_msg_template: "Brew formula update for aspex version {{ .Tag }}"
     directory: Formula
     homepage: "https://github.com/aspex-security/aspex"
-    description: "AI Agent Security Toolkit: scan MCP servers and audit agent activity"
+    description: "MCP security: see what your AI agents did, then scan what they could do"
     license: "Apache-2.0"
     skip_upload: auto
     install: |
@@ -163,40 +163,24 @@ brews:
       system "#{bin}/aspex --version"
       system "#{bin}/aspex-doctor --version"
     caveats: |
-      Aspex is ready. Five commands are now available:
+      Start here:
 
-        aspex         - Interactive launcher (start here)
-        aspex-scan    - Scan MCP server configs for security risks
-        aspex-trace   - Audit AI agent activity from native client logs
-        aspex-attack  - Red team MCP servers with adversarial probes
-        aspex-doctor  - Health check your local AI agent setup
+        aspex                 What your AI agents did in the last 30 days, then the menu
+        aspex share           Same headlines as a privacy-safe card to paste anywhere
 
-      ── QUICK START ────────────────────────────────────────────────
-        aspex-scan                  Scan all MCP clients on this machine
-        aspex-scan inspect github   Deep-inspect the 'github' server
+      The two tools:
 
-        aspex-trace                 Audit the last 24 h of agent activity
-        aspex-trace --since 7d      Audit the last 7 days
+        aspex-trace           Full audit trail from your AI clients' own logs. No proxy.
+        aspex-scan            Audit every MCP server you have configured. 140+ rules.
+        aspex-scan doctor     2-second pre-flight: leaked secrets, broad paths, plaintext HTTP
 
-      ── FULL HELP ──────────────────────────────────────────────────
-        aspex-scan --help
-        aspex-trace --help
+      Make it yours:
 
-      ── COMMON WORKFLOWS ───────────────────────────────────────────
-        # Save an HTML report
-        aspex-scan --html ~/aspex-report.html
+        aspex-scan init                                  .aspex.yaml: accept risks with a reason
+        aspex-scan --save-baseline aspex-baseline.json   then --baseline to fail only on new findings
+        aspex-scan --with-trace                          rank risky servers by how much you use them
 
-        # CI: exit 1 on any critical finding
-        aspex-scan --fail-on critical
-
-        # Detect suspicious agent behavior
-        aspex-trace --suppress-noise --fail-on high
-
-        # Learn a behavioral baseline, then detect deviations
-        aspex-trace baseline --learn --since 7d
-        aspex-trace --baseline ~/.config/aspex/aspex-trace-baseline.json
-
-      No data is sent anywhere. Both tools run entirely offline.
+      Offline. No account. Nothing leaves your machine.
 
 checksum:
   name_template: "checksums.txt"
