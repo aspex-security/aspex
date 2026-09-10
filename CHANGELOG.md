@@ -7,7 +7,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-## [Unreleased] - 0.6.0
+## [0.6.0] - 2026-09-10
 
 The release that turns Aspex from "a scanner with a trace tool" into "see what
 your agents actually did, then scan what they could do."
@@ -40,6 +40,12 @@ your agents actually did, then scan what they could do."
 - JSON output gains `policy`, `suppressed`, `baselined`, and `activity` fields.
 
 ### Fixed
+- AT015 (cross-server data chain) fired on every outbound call after any other
+  server had done any read, with no time bound and no dedupe, and treated
+  reading a web page as a data read. Thirty days of logs on the maintainer's
+  machine produced 103 findings that were two browser servers taking turns.
+  Now: one finding per reader->sender pair, 10-minute window, web-content
+  reads excluded. Same logs: 2 findings.
 - MCP020 matched `repl` as a substring and flagged the official Slack server's
   `slack_reply_to_thread` as CRITICAL code execution. Now token-bounded.
 - MCP001 whitelisted U+200B entirely (a trivial bypass). A lone zero-width

@@ -260,6 +260,64 @@ func TestAT015_CrossServerChain(t *testing.T) {
 	assertTraceRule(t, trace.AnalyzeEvents(events), "AT015", rules.SeverityMedium)
 }
 
+func at015Event(server, tool string, ev logparse.EventType, at time.Time) logparse.Event {
+	return logparse.Event{Timestamp: at, Client: "claude-code", Server: server, Event: ev, Tool: tool, Args: map[string]string{}}
+}
+
+func countRule(flagged []trace.FlaggedEvent, ruleID string) int {
+	n := 0
+	for _, fe := range flagged {
+		for _, f := range fe.Findings {
+			if f.RuleID == ruleID {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// One read followed by many outbound calls on the same other server is one
+// chain, not one finding per call. Before this test existed, 30 days of logs
+// produced 103 AT015 findings that were all the same two browser servers.
+func TestAT015_OncePerServerPair(t *testing.T) {
+	t0 := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	events := []logparse.Event{
+		at015Event("filesystem", "read_file", logparse.EventToolsCall, t0),
+		at015Event("fetch-mcp", "fetch", logparse.EventToolsCall, t0.Add(time.Minute)),
+		at015Event("fetch-mcp", "fetch", logparse.EventToolsCall, t0.Add(2*time.Minute)),
+		at015Event("fetch-mcp", "fetch", logparse.EventToolsCall, t0.Add(3*time.Minute)),
+	}
+	if n := countRule(trace.AnalyzeEvents(events), "AT015"); n != 1 {
+		t.Fatalf("AT015 fired %d times for one reader->sender pair, want 1", n)
+	}
+}
+
+// Reading a web page and then browsing elsewhere is browsing, not a data chain.
+func TestAT015_WebReadsAreNotDataReads(t *testing.T) {
+	t0 := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	events := []logparse.Event{
+		at015Event("Claude_Browser", "read_page", logparse.EventToolsCall, t0),
+		at015Event("claude-in-chrome", "browser_batch", logparse.EventToolsCall, t0.Add(time.Minute)),
+		at015Event("claude-in-chrome", "get_page_text", logparse.EventToolsCall, t0.Add(2*time.Minute)),
+		at015Event("Claude_Browser", "browser_batch", logparse.EventToolsCall, t0.Add(3*time.Minute)),
+	}
+	assertNoTraceRule(t, trace.AnalyzeEvents(events), "AT015")
+}
+
+// A local read hours before an outbound call on another server is not a chain.
+func TestAT015_StaleReadDoesNotChain(t *testing.T) {
+	t0 := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	events := []logparse.Event{
+		at015Event("filesystem", "read_file", logparse.EventToolsCall, t0),
+		at015Event("fetch-mcp", "fetch", logparse.EventToolsCall, t0.Add(3*time.Hour)),
+	}
+	assertNoTraceRule(t, trace.AnalyzeEvents(events), "AT015")
+	// ...but a fresh read re-arms it.
+	events = append(events, at015Event("filesystem", "read_file", logparse.EventToolsCall, t0.Add(3*time.Hour+time.Minute)),
+		at015Event("fetch-mcp", "fetch", logparse.EventToolsCall, t0.Add(3*time.Hour+2*time.Minute)))
+	assertTraceRule(t, trace.AnalyzeEvents(events), "AT015", rules.SeverityMedium)
+}
+
 // ---- AT016: Env var dump ---------------------------------------------------
 
 func TestAT016_GetEnv(t *testing.T) {

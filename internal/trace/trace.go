@@ -1,8 +1,9 @@
 // Package trace applies security analysis rules to the parsed MCP event stream.
 // Framework mappings:
-//   OWASP LLM Top 10 2025: LLM01-LLM10
-//   MITRE ATLAS: AML.Txxx
-//   CWE: CWE-N
+//
+//	OWASP LLM Top 10 2025: LLM01-LLM10
+//	MITRE ATLAS: AML.Txxx
+//	CWE: CWE-N
 package trace
 
 import (
@@ -23,8 +24,10 @@ type FlaggedEvent struct {
 
 // SessionState holds per-session running state for stateful rules.
 type SessionState struct {
-	// serverDataSeen tracks which servers have had data read in this session (for AT015).
-	serverDataSeen map[string]bool
+	// serverDataSeen records when each server last read local data (for AT015).
+	serverDataSeen map[string]time.Time
+	// chainFlagged dedupes AT015 to one finding per (reader -> sender) pair.
+	chainFlagged map[string]bool
 	// errorTimes holds timestamps of recent errors (for AT011 burst detection).
 	errorTimes []time.Time
 	// readCount tracks how many read/list operations have occurred (for AT013).
@@ -36,7 +39,8 @@ type SessionState struct {
 func AnalyzeEvents(events []logparse.Event) []FlaggedEvent {
 	var flagged []FlaggedEvent
 	state := &SessionState{
-		serverDataSeen: map[string]bool{},
+		serverDataSeen: map[string]time.Time{},
+		chainFlagged:   map[string]bool{},
 	}
 
 	for i := range events {
@@ -555,8 +559,8 @@ func checkAT012LateralMovement(ev *logparse.Event) []rules.Finding {
 // OWASP LLM02 | CWE-200
 
 const (
-	massEnumWindow     = 30 * time.Second
-	massEnumThreshold  = 20
+	massEnumWindow    = 30 * time.Second
+	massEnumThreshold = 20
 )
 
 var enumToolNames = []string{
@@ -674,6 +678,21 @@ func checkAT014ArbitraryCodeExecution(ev *logparse.Event) []rules.Finding {
 // ---- AT015: Cross-server data chain -----------------------------------------
 // OWASP LLM02 | ATLAS AML.T0057
 
+// crossServerWindow bounds how long after a local read an outbound call on a
+// different server still counts as a chain. Matches the killchain analyzer's
+// credential-exfiltration window.
+const crossServerWindow = 10 * time.Minute
+
+// isWebRead reports tool names that read web content rather than local data.
+func isWebRead(toolLower string) bool {
+	for _, w := range []string{"page", "web", "browser", "url", "search", "tab", "screenshot", "dom", "html"} {
+		if strings.Contains(toolLower, w) {
+			return true
+		}
+	}
+	return false
+}
+
 func checkAT015CrossServerDataChain(ev *logparse.Event, state *SessionState) []rules.Finding {
 	if ev.Event != logparse.EventToolsCall && ev.Event != logparse.EventResourceRead {
 		return nil
@@ -681,23 +700,29 @@ func checkAT015CrossServerDataChain(ev *logparse.Event, state *SessionState) []r
 	if ev.Server == "" {
 		return nil
 	}
-	// Track which servers have had outbound network calls after reading data.
+	toolLower := strings.ToLower(ev.Tool)
+
+	// A "read" here means local data - files, resources, repository contents.
+	// Reading a web page is not data that can be exfiltrated by then browsing
+	// somewhere else; it IS browsing. Excluding web-shaped reads is what stops
+	// two browser servers in one session from flagging each other on every call.
 	isRead := ev.Event == logparse.EventResourceRead
 	if !isRead {
-		toolLower := strings.ToLower(ev.Tool)
 		for _, n := range []string{"read_file", "read_", "get_file", "list_"} {
 			if strings.HasPrefix(toolLower, n) {
 				isRead = true
 				break
 			}
 		}
+		if isRead && isWebRead(toolLower) {
+			isRead = false
+		}
 	}
 	if isRead {
-		state.serverDataSeen[ev.Server] = true
+		state.serverDataSeen[ev.Server] = ev.Timestamp
 		return nil
 	}
-	// This is a write/send/network call. If a different server has already read data, flag it.
-	toolLower := strings.ToLower(ev.Tool)
+
 	isOutbound := false
 	for _, n := range networkToolNames {
 		if strings.Contains(toolLower, n) {
@@ -708,17 +733,29 @@ func checkAT015CrossServerDataChain(ev *logparse.Event, state *SessionState) []r
 	if !isOutbound {
 		return nil
 	}
-	for server := range state.serverDataSeen {
-		if server != ev.Server {
-			return []rules.Finding{{
-				RuleID:   "AT015",
-				Name:     "Cross-server data chain",
-				Severity: rules.SeverityMedium,
-				Detail:   "Data was read from server '" + server + "' and a network call was subsequently made via server '" + ev.Server + "'. Possible data exfiltration chain.",
-				Fix:      "Verify that data read from one server being sent via another is an intended workflow.",
-				Mapping:  "OWASP LLM02, ATLAS AML.T0057",
-			}}
+
+	// Flag once per (reader -> sender) pair, and only when the read was recent.
+	// Events without timestamps (older parsers, tests) are treated as recent.
+	for reader, readAt := range state.serverDataSeen {
+		if reader == ev.Server {
+			continue
 		}
+		if !readAt.IsZero() && !ev.Timestamp.IsZero() && ev.Timestamp.Sub(readAt) > crossServerWindow {
+			continue
+		}
+		key := reader + "\x00" + ev.Server
+		if state.chainFlagged[key] {
+			continue
+		}
+		state.chainFlagged[key] = true
+		return []rules.Finding{{
+			RuleID:   "AT015",
+			Name:     "Cross-server data chain",
+			Severity: rules.SeverityMedium,
+			Detail:   "Data was read from server '" + reader + "' and a network call was made via server '" + ev.Server + "' within " + crossServerWindow.String() + ". Possible data exfiltration chain.",
+			Fix:      "Verify that data read from one server being sent via another is an intended workflow.",
+			Mapping:  "OWASP LLM02, ATLAS AML.T0057",
+		}}
 	}
 	return nil
 }

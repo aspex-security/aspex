@@ -16,9 +16,9 @@
   <g fill="#e2e0ef">
     <text x="28" y="72"><tspan fill="#a78bfa" font-weight="bold">◆</tspan>  <tspan font-weight="bold" fill="#ffffff">Your AI agents, last 30 days</tspan>  <tspan fill="#6b6885">aspex v0.6.0</tspan></text>
 
-    <text x="28" y="106"><tspan fill="#a78bfa">▸</tspan> In the last 30 days your agents made <tspan fill="#ffffff" font-weight="bold">319 tool calls</tspan> to 12 MCP servers.</text>
-    <text x="28" y="128"><tspan fill="#a78bfa">▸</tspan> <tspan fill="#ffffff" font-weight="bold">315 of those calls</tspan> went to 11 servers <tspan fill="#fbbf24">no security scan had ever checked</tspan>.</text>
-    <text x="28" y="150"><tspan fill="#a78bfa">▸</tspan> <tspan fill="#f87171" font-weight="bold">103 calls</tspan> tripped a detection rule. Most common: cross-server data chain.</text>
+    <text x="28" y="106"><tspan fill="#a78bfa">▸</tspan> In the last 30 days your agents made <tspan fill="#ffffff" font-weight="bold">320 tool calls</tspan> to 12 MCP servers.</text>
+    <text x="28" y="128"><tspan fill="#a78bfa">▸</tspan> <tspan fill="#ffffff" font-weight="bold">316 of those calls</tspan> went to 11 servers <tspan fill="#fbbf24">no security scan had ever checked</tspan>.</text>
+    <text x="28" y="150"><tspan fill="#a78bfa">▸</tspan> <tspan fill="#f87171" font-weight="bold">2 calls</tspan> tripped a detection rule. Most common: cross-server data chain.</text>
     <text x="28" y="172"><tspan fill="#a78bfa">▸</tspan> 7 configured servers, overall security score <tspan fill="#ffffff" font-weight="bold">54/100</tspan>. Riskiest: github (39), not used.</text>
 
     <text x="44" y="212" xml:space="preserve">github                39  <tspan fill="#f87171">CRITICAL</tspan>  <tspan fill="#6b6885">not used</tspan></text>
@@ -28,8 +28,8 @@
     <text x="44" y="292" fill="#6b6885">+3 more</text>
 
     <text x="28" y="330"><tspan fill="#fbbf24" font-weight="bold">?</tspan> <tspan font-weight="bold" fill="#ffffff">In use, never scanned:</tspan></text>
-    <text x="44" y="352" xml:space="preserve">Claude_Browser                        196 calls  <tspan fill="#f87171">78 flagged</tspan></text>
-    <text x="44" y="372" xml:space="preserve">claude-in-chrome                       72 calls  <tspan fill="#f87171">23 flagged</tspan></text>
+    <text x="44" y="352" xml:space="preserve">Claude_Browser                        197 calls  <tspan fill="#f87171">1 flagged</tspan></text>
+    <text x="44" y="372" xml:space="preserve">claude-in-chrome                       72 calls</text>
     <text x="44" y="392" xml:space="preserve">bff806c1-bf52-44a3-ab2b-c289539c8694   12 calls</text>
     <text x="44" y="412" fill="#6b6885">+8 more</text>
 

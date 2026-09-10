@@ -18,7 +18,7 @@ brew install aspex-security/tap/aspex && aspex
 
 **Offline. No account. One binary. Nothing leaves your machine. Ever.**
 
-<img src="docs/snapshot.svg" width="820" alt="aspex snapshot: 319 tool calls in 30 days, 315 of them to servers no security scan had ever checked"/>
+<img src="docs/snapshot.svg" width="820" alt="aspex snapshot: 320 tool calls in 30 days, 316 of them to servers no security scan had ever checked"/>
 
 <sub>Real output from the maintainer's own machine, 1.9 seconds after typing <code>aspex</code>.</sub>
 
