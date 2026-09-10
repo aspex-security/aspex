@@ -143,12 +143,3 @@ func Uninstall(repoPath string) error {
 
 	return os.WriteFile(path, []byte(result), 0755)
 }
-
-// IsInstalled reports whether the hook is present in the repo at repoPath.
-func IsInstalled(repoPath string) bool {
-	data, err := os.ReadFile(hookPath(repoPath))
-	if err != nil {
-		return false
-	}
-	return strings.Contains(string(data), blockBegin)
-}

@@ -1638,9 +1638,13 @@ func runScan(gf globalFlags) error {
 		})
 	}
 
-	// SARIF output to stdout.
+	// SARIF output to stdout. The gate still applies: machine-readable output
+	// is exactly the mode CI uses, so it must be able to fail the build.
 	if gf.sarifOut {
-		return report.WriteSARIFScan(os.Stdout, out)
+		if err := report.WriteSARIFScan(os.Stdout, out); err != nil {
+			return err
+		}
+		return checkExitCode(failOn, overall)
 	}
 
 	// SARIF output to file.
@@ -1668,7 +1672,10 @@ func runScan(gf globalFlags) error {
 	}
 
 	if gf.jsonOut {
-		return report.WriteJSONScan(os.Stdout, out)
+		if err := report.WriteJSONScan(os.Stdout, out); err != nil {
+			return err
+		}
+		return checkExitCode(failOn, overall)
 	}
 
 	// Auto-save a JSON log to the user cache dir.

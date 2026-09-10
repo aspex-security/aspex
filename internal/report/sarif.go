@@ -69,20 +69,6 @@ type sarifArtifactLocation struct {
 	URI string `json:"uri"`
 }
 
-// severityToLevel converts a rules.Severity to a SARIF result level.
-func severityToLevel(s string) string {
-	switch s {
-	case "CRITICAL", "ERROR":
-		return "error"
-	case "HIGH":
-		return "warning"
-	case "MEDIUM":
-		return "note"
-	default:
-		return "none"
-	}
-}
-
 // severityFromFinding converts a rules.Severity value to a SARIF level.
 func severityRulesToLevel(s rules.Severity) string {
 	switch s {

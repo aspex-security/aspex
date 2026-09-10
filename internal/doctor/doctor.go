@@ -277,15 +277,6 @@ func walkForEnvSecrets(client, configPath string, v interface{}, seen map[string
 	return findings
 }
 
-func AnyCategory(findings []Finding, cat string) bool {
-	for _, f := range findings {
-		if f.Category == cat {
-			return true
-		}
-	}
-	return false
-}
-
 func CountBySeverity(findings []Finding, sev string) int {
 	n := 0
 	for _, f := range findings {

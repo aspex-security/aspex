@@ -62,6 +62,19 @@ jobs:
       - name: Build aspex-doctor
         run: go build -o /dev/null ./cmd/aspex-doctor
 
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l cmd internal)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needed on:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: staticcheck (unused code, correctness)
+        run: go run honnef.co/go/tools/cmd/staticcheck@2025.1.1 -checks U1000,SA1,SA4,SA5,SA6,SA9 ./...
+
+      - name: deadcode (unreachable functions, including from tests)
+        run: go run golang.org/x/tools/cmd/deadcode@v0.36.0 -test ./...
+
       - name: Run govulncheck
         run: |
           # Pinned: x/vuln v1.8.0+ requires Go 1.26 and this job pins GOTOOLCHAIN=local on 1.25.

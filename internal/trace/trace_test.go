@@ -20,25 +20,6 @@ func toolCall(tool string, args map[string]string) logparse.Event {
 	}
 }
 
-func resourceRead(server string, args map[string]string) logparse.Event {
-	return logparse.Event{
-		Timestamp: time.Date(2026, 6, 25, 14, 0, 0, 0, time.UTC),
-		Client:    "cursor",
-		Server:    server,
-		Event:     logparse.EventResourceRead,
-		Args:      args,
-	}
-}
-
-func errorEvent(server string) logparse.Event {
-	return logparse.Event{
-		Timestamp: time.Now(),
-		Client:    "cursor",
-		Server:    server,
-		Event:     logparse.EventError,
-	}
-}
-
 func assertTraceRule(t *testing.T, flagged []trace.FlaggedEvent, ruleID string, minSev rules.Severity) {
 	t.Helper()
 	for _, fe := range flagged {

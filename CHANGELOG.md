@@ -38,8 +38,15 @@ your agents actually did, then scan what they could do."
   the maintainer's machine went from 20.2s to 7.0s.
 - `aspex-scan doctor` subcommand; `aspex-doctor` remains as an alias.
 - JSON output gains `policy`, `suppressed`, `baselined`, and `activity` fields.
+- End-to-end tests (`cmd/aspex-scan/e2e_test.go`, `internal/snapshot`) drive the
+  real command tree against a fixture home with configs and agent logs; CI now
+  also runs gofmt, staticcheck, and deadcode. Four unreachable functions removed.
 
 ### Fixed
+- `--fail-on` was ignored whenever `--json` or `--sarif` was also passed: the
+  command returned after writing output and never reached the exit-code check.
+  Any CI job using machine-readable output could not fail. Found by the new
+  end-to-end tests. Both output modes now apply the gate.
 - AT015 (cross-server data chain) fired on every outbound call after any other
   server had done any read, with no time bound and no dedupe, and treated
   reading a web page as a data read. Thirty days of logs on the maintainer's

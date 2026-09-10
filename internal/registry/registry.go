@@ -114,10 +114,3 @@ func Lookup(pkg string) *Entry {
 	}
 	return nil
 }
-
-// All returns all entries in the registry.
-func All() []Entry {
-	result := make([]Entry, len(entries))
-	copy(result, entries)
-	return result
-}
