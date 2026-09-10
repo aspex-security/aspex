@@ -101,6 +101,11 @@ var items = []Item{
 	},
 }
 
+// Banner is printed above the menu on every render. The launcher sets it to
+// the activity snapshot so the first thing a person sees is what their agents
+// did, not a list of tools.
+var Banner string
+
 // keyEvent represents a terminal key press.
 type keyEvent int
 
@@ -276,16 +281,21 @@ func render(version string, sel int, inSub bool, subSel int) {
 
 	b.WriteString(clearScr)
 
-	// Header.
-	b.WriteString("\n")
-	b.WriteString(fmt.Sprintf("  %s%s◆%s  %s%sASPEX%s  %s%s%s\n",
-		purple, bold, reset,
-		white, bold, reset,
-		dim, "v"+version, reset))
-	b.WriteString(fmt.Sprintf("  %sMCP Security Toolkit  ·  offline  ·  no account  ·  free%s\n", dim, reset))
-	b.WriteString("\n")
-	b.WriteString(fmt.Sprintf("  %s%s%s\n", dim, strings.Repeat("─", 54), reset))
-	b.WriteString("\n")
+	if Banner != "" {
+		b.WriteString(Banner)
+		b.WriteString(fmt.Sprintf("  %s%s%s\n\n", dim, strings.Repeat("─", 54), reset))
+	} else {
+		// Header.
+		b.WriteString("\n")
+		b.WriteString(fmt.Sprintf("  %s%s◆%s  %s%sASPEX%s  %s%s%s\n",
+			purple, bold, reset,
+			white, bold, reset,
+			dim, "v"+version, reset))
+		b.WriteString(fmt.Sprintf("  %sMCP Security Toolkit  ·  offline  ·  no account  ·  free%s\n", dim, reset))
+		b.WriteString("\n")
+		b.WriteString(fmt.Sprintf("  %s%s%s\n", dim, strings.Repeat("─", 54), reset))
+		b.WriteString("\n")
+	}
 
 	if !inSub {
 		// Main menu.

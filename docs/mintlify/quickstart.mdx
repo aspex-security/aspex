@@ -101,26 +101,24 @@ Network      ✓ All servers use HTTPS
 
 </Step>
 
-<Step title="Interactive launcher">
+<Step title="See the whole picture">
 
-Run `aspex` with no arguments to open the interactive TUI menu.
+Run `aspex` with no arguments. It shows what your agents did in the last 30 days, joined with how risky each configured server is, then opens the tool menu.
 
 ```bash
 aspex
 ```
 
 ```
-  ┌─────────────────────────────────────────────────┐
-  │  aspex  MCP Security Suite                      │
-  │                                                 │
-  │  ▶  scan          Audit all MCP servers         │
-  │     trace         Analyse runtime logs          │
-  │     attack        Adversarial probe (opt-in)    │
-  │     doctor        Quick health check            │
-  │                                                 │
-  │  ↑↓ navigate · enter select · q quit            │
-  └─────────────────────────────────────────────────┘
+  ◆  Your AI agents, last 30 days
+
+  ▸ In the last 30 days your agents made 319 tool calls to 12 MCP servers.
+  ▸ 315 of those calls went to 11 servers no security scan had ever checked.
+  ▸ 103 calls tripped a detection rule. Most common: cross-server data chain (103).
+  ▸ 7 configured servers, overall security score 54/100.
 ```
+
+That is real output, 1.9 seconds after typing the command. `aspex share` prints the same headlines as a privacy-safe card (no names or paths) you can paste anywhere.
 
 </Step>
 

@@ -25,6 +25,8 @@ var knownRuntimes = map[string]bool{
 type Options struct {
 	// NoExec skips launching stdio servers; returns static-only results.
 	NoExec bool
+	// Concurrency bounds parallel inspection in InspectAll. 0 means DefaultConcurrency.
+	Concurrency int
 }
 
 // InspectServer inspects a single server entry and returns a populated Server model.

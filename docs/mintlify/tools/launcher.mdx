@@ -1,39 +1,63 @@
 ---
-title: "aspex (launcher)"
-description: "Interactive TUI menu for all Aspex tools. The easiest way to get started."
+title: "aspex (front door)"
+description: "Run aspex with no arguments: see what your agents did this month, then pick a tool."
 ---
 
-Run `aspex` with no arguments to open the interactive launcher - a terminal menu that puts all four tools at your fingertips without needing to remember any flags.
+`aspex` with no arguments answers the question before you ask it. It reads your MCP configs and your AI clients' own logs, joins them, and shows one screen. On the machine this was written on:
 
 ```sh
 aspex
 ```
 
 ```
-  ┌─────────────────────────────────────────────────┐
-  │  aspex  MCP Security Suite                      │
-  │                                                 │
-  │  ▶  scan          Audit all MCP servers         │
-  │     trace         Analyse runtime logs          │
-  │     attack        Adversarial probe (opt-in)    │
-  │     doctor        Quick health check            │
-  │                                                 │
-  │  ↑↓ navigate · enter select · q quit            │
-  └─────────────────────────────────────────────────┘
+  ◆  Your AI agents, last 30 days  aspex v0.5.5
+
+  ▸ In the last 30 days your agents made 319 tool calls to 12 MCP servers.
+  ▸ 315 of those calls went to 11 servers no security scan had ever checked.
+  ▸ 103 calls tripped a detection rule. Most common: cross-server data chain (103).
+  ▸ 7 configured servers, overall security score 54/100. Riskiest: github (39), not used in this period.
+
+    github                39  CRITICAL  not used
+    brave-search          39  CRITICAL  not used
+    playwright            90  MEDIUM    not used
+    slack                 95  clean     4 calls
+    +3 more
+
+  ? In use, never scanned:
+    Claude_Browser                         196 calls  78 flagged
+    claude-in-chrome                        72 calls  23 flagged
+    +9 more
+
+  aspex-scan for findings and fixes  ·  aspex-trace for the full audit trail  ·  aspex share to post this
 ```
 
-## Navigation
+It took 1.9 seconds. Then the tool menu opens underneath. Arrow keys to move, `Enter` to run, `→` for each tool's options, `q` to quit.
 
-| Key | Action |
+Everything on that screen comes from files already on your machine. Nothing is sent anywhere.
+
+## Share it
+
+```sh
+aspex share
+```
+
+Prints a Markdown card with the same headlines but **no server names, paths, or commands** - counts and score only. Paste it in Slack, a PR, or a post. If the numbers surprised you, they will surprise your team.
+
+## Just the snapshot
+
+```sh
+aspex snapshot      # no menu; good for a shell prompt, a cron job, or CI logs
+```
+
+## Direct commands
+
+| Command | Runs |
 |---|---|
-| `↑` / `↓` | Move between tools |
-| `Enter` | Run the selected tool |
-| `q` / `Ctrl+C` | Quit |
+| `aspex scan [...]` | `aspex-scan` - audit every configured server, 140+ rules |
+| `aspex trace [...]` | `aspex-trace` - full audit trail from client logs |
+| `aspex doctor` | `aspex-scan doctor` - 2-second pre-flight |
+| `aspex attack [...]` | `aspex-attack` - red-team a server you own (advanced) |
 
-Selecting a tool drops you into that tool's own interactive output. Press `q` or `Ctrl+C` to return to the launcher menu.
+## What "never scanned" means
 
-## Why use the launcher?
-
-The launcher is the recommended starting point if you're new to Aspex or want a quick overview of your security posture without memorizing flags. It runs each tool with sensible defaults and no required arguments.
-
-For automation, CI, or scripting - use the individual binaries (`aspex-scan`, `aspex-trace`, `aspex-attack`, `aspex-doctor`) directly with their full flag sets.
+Connectors added through claude.ai are configured in the cloud and have no local file, so no static scanner can score them. Aspex is honest about that: they appear as **in use, never scanned**, with their call counts, so you know exactly how much of your agents' activity runs through servers nobody has looked at. `aspex-scan inspect <url>` can scan one directly.

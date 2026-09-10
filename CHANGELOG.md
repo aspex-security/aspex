@@ -7,6 +7,51 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [Unreleased] - 0.6.0
+
+The release that turns Aspex from "a scanner with a trace tool" into "see what
+your agents actually did, then scan what they could do."
+
+### Added
+- `aspex` with no arguments now shows a 30-day snapshot first: tool calls your
+  agents made, how many went to servers no scan has checked, how many tripped a
+  detection rule, and the static score of every configured server. Then the menu.
+- `aspex share`: the same headlines as a privacy-safe Markdown card (counts and
+  score only, no server names, paths, or commands). `aspex snapshot` prints the
+  panel alone for scripts and CI logs.
+- `aspex-scan --with-trace`: joins static findings with observed activity from
+  aspex-trace logs, ranks servers by risk x use, and lists servers agents call
+  that appear in no scanned config. Log names are matched by normalized token
+  (`plugin_slack_slack` matches `slack`).
+- `.aspex.yaml` policy (`aspex-scan init`): accept a risk with a required reason
+  and optional expiry; override or disable any rule's severity; set a default
+  `fail_on`. Applied before scoring and before the gate. Expired ignores warn.
+- Finding baseline: `--save-baseline` / `--baseline` so only new findings fail
+  the gate on an estate with existing findings.
+- Claude Code discovery: `~/.claude.json` (user and per-project scopes), project
+  `.mcp.json`, and installed plugin `.mcp.json` files. Previously Claude Code
+  servers were not discovered at all.
+- Detection corpus (`testdata/corpus/`): known-malicious fixtures that must fire
+  named rules and popular benign servers that must stay below a stated
+  severity. Both run in CI.
+- Parallel server inspection (`-j/--concurrency`, default 8). A 7-server scan on
+  the maintainer's machine went from 20.2s to 7.0s.
+- `aspex-scan doctor` subcommand; `aspex-doctor` remains as an alias.
+- JSON output gains `policy`, `suppressed`, `baselined`, and `activity` fields.
+
+### Fixed
+- MCP020 matched `repl` as a substring and flagged the official Slack server's
+  `slack_reply_to_thread` as CRITICAL code execution. Now token-bounded.
+- MCP001 whitelisted U+200B entirely (a trivial bypass). A lone zero-width
+  space is still tolerated; three or more, or one splitting a word, is flagged.
+- MCP001 had no pattern for "ignore all previous instructions". Added.
+- MCP010 and doctor flagged OAuth-authenticated remote servers as having no
+  auth. `ServerEntry.OAuth` now records an `oauth` block.
+- `aspex-scan fix` can now remove project-scoped servers nested in
+  `~/.claude.json`, not just report them removed.
+- Docs: `--fail-on` takes a severity, not a score; Claude Code config paths were
+  wrong; aspex-trace reads logs, it does not intercept sessions.
+
 ## [0.5.5] - 2026-06-29
 
 ### Added

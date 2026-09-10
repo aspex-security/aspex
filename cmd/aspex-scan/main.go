@@ -87,6 +87,9 @@ type globalFlags struct {
 	// Correlate static findings with observed aspex-trace activity.
 	withTrace  bool
 	traceSince string
+
+	// Parallel server inspection.
+	concurrency int
 }
 
 func newRootCmd() *cobra.Command {
@@ -179,6 +182,7 @@ COMPARING OVER TIME
 	root.Flags().StringVar(&gf.saveBaseline, "save-baseline", "", "Write current findings to this file as a new baseline")
 	root.Flags().BoolVar(&gf.withTrace, "with-trace", false, "Correlate findings with observed agent activity from aspex-trace logs")
 	root.Flags().StringVar(&gf.traceSince, "trace-since", "7d", "Activity window for --with-trace (e.g. 24h, 7d, 4w)")
+	root.PersistentFlags().IntVarP(&gf.concurrency, "concurrency", "j", inspect.DefaultConcurrency, "How many servers to inspect in parallel")
 
 	root.AddCommand(newDoctorCmd())
 	root.AddCommand(newInitCmd())
@@ -260,7 +264,7 @@ func runInventory(gf *globalFlags, jsonOut bool) error {
 		fmt.Fprintf(os.Stderr, "  warning: %v\n", e)
 	}
 	ctx := context.Background()
-	opts := inspect.Options{NoExec: gf.noExec}
+	opts := inspect.Options{NoExec: gf.noExec, Concurrency: gf.concurrency}
 
 	type invServer struct {
 		Name       string   `json:"name"`
@@ -286,8 +290,8 @@ func runInventory(gf *globalFlags, jsonOut bool) error {
 	var inv []invServer
 	totalTools := 0
 
-	for _, entry := range servers {
-		srv := inspect.InspectServer(ctx, entry, opts)
+	for _, srv := range inspect.InspectAll(ctx, servers, opts, nil) {
+		entry := srv.Entry
 		clientSet[entry.Client] = struct{}{}
 
 		transport := "stdio"
@@ -432,13 +436,9 @@ func runAttackPaths(gf *globalFlags, jsonOut bool) error {
 		fmt.Fprintf(os.Stderr, "  warning: %v\n", e)
 	}
 	ctx := context.Background()
-	opts := inspect.Options{NoExec: gf.noExec}
+	opts := inspect.Options{NoExec: gf.noExec, Concurrency: gf.concurrency}
 
-	var inspected []*inspect.Server
-	for _, entry := range servers {
-		srv := inspect.InspectServer(ctx, entry, opts)
-		inspected = append(inspected, srv)
-	}
+	inspected := inspect.InspectAll(ctx, servers, opts, nil)
 
 	caps, chains := attackpath.Analyze(inspected)
 
@@ -665,12 +665,9 @@ func runShadow(gf *globalFlags, jsonOut bool) error {
 		fmt.Fprintf(os.Stderr, "  warning: %v\n", e)
 	}
 	ctx := context.Background()
-	opts := inspect.Options{NoExec: gf.noExec}
+	opts := inspect.Options{NoExec: gf.noExec, Concurrency: gf.concurrency}
 
-	var inspected []*inspect.Server
-	for _, entry := range servers {
-		inspected = append(inspected, inspect.InspectServer(ctx, entry, opts))
-	}
+	inspected := inspect.InspectAll(ctx, servers, opts, nil)
 
 	report := shadow.Analyze(inspected)
 
@@ -1084,7 +1081,7 @@ func newDiffCmd(gf *globalFlags) *cobra.Command {
 				fmt.Fprintf(os.Stderr, "  warning: %v\n", e)
 			}
 			ctx := context.Background()
-			opts := inspect.Options{NoExec: gf.noExec}
+			opts := inspect.Options{NoExec: gf.noExec, Concurrency: gf.concurrency}
 			var inspected []*inspect.Server
 			for _, entry := range servers {
 				srv := inspect.InspectServer(ctx, entry, opts)
@@ -1329,7 +1326,7 @@ func runRedTeam(gf *globalFlags, serverFlag string, timeoutSecs int, jsonOut boo
 		}
 
 		// Inspect to get tools list.
-		opts := inspect.Options{NoExec: gf.noExec}
+		opts := inspect.Options{NoExec: gf.noExec, Concurrency: gf.concurrency}
 		srv := inspect.InspectServer(ctx, entry, opts)
 
 		if srv.StaticOnly && !gf.noExec {
@@ -1518,21 +1515,18 @@ func runScan(gf globalFlags) error {
 	}
 
 	ctx := context.Background()
-	var inspected []*inspect.Server
-	opts := inspect.Options{NoExec: gf.noExec}
+	opts := inspect.Options{NoExec: gf.noExec, Concurrency: gf.concurrency}
 
 	var spin *report.Spinner
 	if showSpinner && len(servers) > 0 {
 		spin = report.NewSpinner(fmt.Sprintf("Scanning %d servers...", len(servers)), gf.noColor)
 	}
 
-	for _, entry := range servers {
+	inspected := inspect.InspectAll(ctx, servers, opts, func(name string) {
 		if spin != nil {
-			spin.Update(fmt.Sprintf("Connecting to %s...", entry.Name))
+			spin.Update(fmt.Sprintf("Connecting to %s...", name))
 		}
-		srv := inspect.InspectServer(ctx, entry, opts)
-		inspected = append(inspected, srv)
-	}
+	})
 
 	if spin != nil {
 		spin.Stop()
@@ -2122,7 +2116,7 @@ func runFix(gf *globalFlags, clients []string, dryRun bool, severityStr string, 
 	}
 
 	ctx := context.Background()
-	opts := inspect.Options{NoExec: gf.noExec}
+	opts := inspect.Options{NoExec: gf.noExec, Concurrency: gf.concurrency}
 
 	// Group entries by config file so we can produce one hardened config per file.
 	type configGroup struct {
@@ -2486,7 +2480,7 @@ func runCron(gf *globalFlags, intervalStr, notifyURL string, quiet bool) error {
 			fmt.Fprintf(os.Stderr, "  warning: %v\n", e)
 		}
 		ctx := context.Background()
-		opts := inspect.Options{NoExec: gf.noExec}
+		opts := inspect.Options{NoExec: gf.noExec, Concurrency: gf.concurrency}
 
 		newCount := 0
 		if len(seen) > 10000 {
@@ -2835,7 +2829,7 @@ func runExplainServer(gf *globalFlags, serverName string) error {
 	}
 
 	ctx := context.Background()
-	opts := inspect.Options{NoExec: gf.noExec}
+	opts := inspect.Options{NoExec: gf.noExec, Concurrency: gf.concurrency}
 	srv := inspect.InspectServer(ctx, *target, opts)
 	findings := rules.EvalServer(srv)
 	sc := score.ScoreServer(findings)
@@ -2975,7 +2969,7 @@ func runFixEnv(gf *globalFlags, clients []string, dryRun bool) error {
 	}
 
 	ctx := context.Background()
-	opts := inspect.Options{NoExec: gf.noExec}
+	opts := inspect.Options{NoExec: gf.noExec, Concurrency: gf.concurrency}
 
 	fmt.Fprintf(os.Stdout, "\n  %s  %s\n\n",
 		c(ansiBold+ansiPurple, "◆"),

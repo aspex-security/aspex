@@ -45,6 +45,7 @@ Framework coverage:
 | `--save-baseline` | Write current findings to this file as a new baseline |
 | `--with-trace` | Correlate findings with observed agent activity from aspex-trace logs |
 | `--trace-since` | Activity window for `--with-trace` (default `7d`) |
+| `-j`, `--concurrency` | Servers inspected in parallel (default 8). A scan takes about as long as the slowest server, not the sum |
 
 See [Policy, baselines and prioritization](/guides/policy) for how the last five fit together.
 
