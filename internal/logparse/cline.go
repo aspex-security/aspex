@@ -100,9 +100,9 @@ func parseClineCompatTasksDir(dir string, clientName string, since time.Time) ([
 
 // clineMessage is a single message in the Cline API conversation history.
 type clineMessage struct {
-	Role    string            `json:"role"`
-	Content json.RawMessage   `json:"content"`
-	TS      int64             `json:"ts"` // unix milliseconds, present in some versions
+	Role    string          `json:"role"`
+	Content json.RawMessage `json:"content"`
+	TS      int64           `json:"ts"` // unix milliseconds, present in some versions
 }
 
 // clineContentBlock is a content item inside a Cline message.

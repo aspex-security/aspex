@@ -19,11 +19,11 @@ import (
 
 // Chain is a detected multi-step attack pattern.
 type Chain struct {
-	Name        string     // "Exfiltration Trifecta"
-	Severity    string     // "critical" | "high" | "medium"
-	Description string     // narrative explanation
-	MITRETactic string     // MITRE ATT&CK tactic
-	MITRERef    string     // MITRE ATT&CK ref
+	Name        string // "Exfiltration Trifecta"
+	Severity    string // "critical" | "high" | "medium"
+	Description string // narrative explanation
+	MITRETactic string // MITRE ATT&CK tactic
+	MITRERef    string // MITRE ATT&CK ref
 	Steps       []ChainStep
 	WindowStart time.Time
 	WindowEnd   time.Time

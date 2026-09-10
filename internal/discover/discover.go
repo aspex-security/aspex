@@ -17,9 +17,9 @@ const (
 	ClientVSCode        = "vscode"
 	ClientWindsurf      = "windsurf"
 	ClientCline         = "cline"
-	ClientRooCline      = "roo-cline"  // Roo Code (fork of Cline), ext ID: RooVSCode.roo-cline
-	ClientContinue      = "continue"   // Continue.dev
-	ClientZed           = "zed"        // Zed editor context servers
+	ClientRooCline      = "roo-cline" // Roo Code (fork of Cline), ext ID: RooVSCode.roo-cline
+	ClientContinue      = "continue"  // Continue.dev
+	ClientZed           = "zed"       // Zed editor context servers
 )
 
 // ServerEntry represents one MCP server entry from a client config.
@@ -305,8 +305,8 @@ type continueConfig struct {
 
 // zedContextServerCommand is Zed's nested command spec for a context server.
 type zedContextServerCommand struct {
-	Path string   `json:"path"`
-	Args []string `json:"args"`
+	Path string            `json:"path"`
+	Args []string          `json:"args"`
 	Env  map[string]string `json:"env"`
 }
 

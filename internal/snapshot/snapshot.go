@@ -34,12 +34,12 @@ type ServerLine struct {
 
 // Snapshot is the computed picture.
 type Snapshot struct {
-	Version   string
-	Window    time.Duration
-	Static    bool // configs only, servers not launched
-	Servers   []ServerLine
-	Overall   score.OverallScore
-	Policy    string // path of .aspex.yaml applied, if any
+	Version    string
+	Window     time.Duration
+	Static     bool // configs only, servers not launched
+	Servers    []ServerLine
+	Overall    score.OverallScore
+	Policy     string // path of .aspex.yaml applied, if any
 	Suppressed int
 
 	Events        int

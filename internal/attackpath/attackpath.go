@@ -18,17 +18,17 @@ import (
 type Capability uint32
 
 const (
-	CapNone         Capability = 0
-	CapReadFile     Capability = 1 << iota // read arbitrary files
-	CapWriteFile                           // create or modify files
-	CapShellExec                           // execute arbitrary commands
-	CapNetworkSend                         // make outbound HTTP/network calls
-	CapCredentialRead                      // access credentials, tokens, secrets
-	CapPersistence                         // write to startup/autorun locations
-	CapPackageInstall                      // install packages or dependencies
-	CapReadEnv                             // read environment variables
-	CapDatabaseWrite                       // write to a database
-	CapEmailSend                           // send email or notifications
+	CapNone           Capability = 0
+	CapReadFile       Capability = 1 << iota // read arbitrary files
+	CapWriteFile                             // create or modify files
+	CapShellExec                             // execute arbitrary commands
+	CapNetworkSend                           // make outbound HTTP/network calls
+	CapCredentialRead                        // access credentials, tokens, secrets
+	CapPersistence                           // write to startup/autorun locations
+	CapPackageInstall                        // install packages or dependencies
+	CapReadEnv                               // read environment variables
+	CapDatabaseWrite                         // write to a database
+	CapEmailSend                             // send email or notifications
 )
 
 // String returns a short human label for a capability (implements fmt.Stringer).
@@ -63,10 +63,10 @@ func capabilityName(c Capability) string {
 
 // ServerCapabilities holds the detected capabilities for one MCP server.
 type ServerCapabilities struct {
-	ServerName   string
-	Client       string
-	Caps         Capability
-	CapTools     map[Capability][]string // capability -> contributing tool names
+	ServerName string
+	Client     string
+	Caps       Capability
+	CapTools   map[Capability][]string // capability -> contributing tool names
 }
 
 // Has returns true if this server has the given capability.

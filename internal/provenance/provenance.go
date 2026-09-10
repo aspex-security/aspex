@@ -42,25 +42,25 @@ type Attribution struct {
 	Findings        []rules.Finding
 
 	// The ingestion event that preceded it.
-	IngestionEvent logparse.Event
-	IngestionKind  string // "file_read" | "web_fetch" | "resource_read" | "browser_load"
+	IngestionEvent  logparse.Event
+	IngestionKind   string // "file_read" | "web_fetch" | "resource_read" | "browser_load"
 	IngestionSource string // file path, URL, or resource URI
 
 	// Temporal proximity.
-	Delta          time.Duration // time between ingestion and suspicious call
-	EventsApart    int           // number of events between them
+	Delta       time.Duration // time between ingestion and suspicious call
+	EventsApart int           // number of events between them
 
 	// Confidence assessment.
-	Confidence     string // "high" | "medium" | "low"
-	Explanation    string // human-readable explanation of why this is suspicious
+	Confidence  string // "high" | "medium" | "low"
+	Explanation string // human-readable explanation of why this is suspicious
 }
 
 // Report is the full provenance analysis result.
 type Report struct {
-	Attributions    []Attribution
-	TotalEvents     int
-	TotalFlagged    int
-	WithProvenance  int // flagged events that have a preceding ingestion event
+	Attributions   []Attribution
+	TotalEvents    int
+	TotalFlagged   int
+	WithProvenance int // flagged events that have a preceding ingestion event
 }
 
 // ingestionTool returns true and a kind label if the tool name looks like a

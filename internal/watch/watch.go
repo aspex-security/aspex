@@ -17,9 +17,9 @@ type fileState struct {
 
 // ConfigWatcher watches MCP client config files for changes and triggers rescans.
 type ConfigWatcher struct {
-	paths    []string
-	poll     time.Duration
-	mtimes   map[string]time.Time
+	paths  []string
+	poll   time.Duration
+	mtimes map[string]time.Time
 }
 
 // New creates a watcher for the given file paths, polling every interval.

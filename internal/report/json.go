@@ -11,9 +11,9 @@ import (
 
 // JSONScanOutput is the machine-readable form of a scan result.
 type JSONScanOutput struct {
-	Version string              `json:"version"`
-	Overall score.OverallScore  `json:"overall"`
-	Servers []JSONServerResult  `json:"servers"`
+	Version string             `json:"version"`
+	Overall score.OverallScore `json:"overall"`
+	Servers []JSONServerResult `json:"servers"`
 
 	// Policy path that was applied, if any.
 	Policy string `json:"policy,omitempty"`
@@ -37,12 +37,12 @@ type JSONSuppressed struct {
 
 // JSONServerResult is one server in the JSON scan output.
 type JSONServerResult struct {
-	Name       string             `json:"name"`
-	Client     string             `json:"client"`
-	Score      int                `json:"score"`
-	Band       string             `json:"band"`
-	StaticOnly bool               `json:"staticOnly"`
-	Findings   []JSONFinding      `json:"findings"`
+	Name       string        `json:"name"`
+	Client     string        `json:"client"`
+	Score      int           `json:"score"`
+	Band       string        `json:"band"`
+	StaticOnly bool          `json:"staticOnly"`
+	Findings   []JSONFinding `json:"findings"`
 }
 
 // JSONFinding is a single finding in JSON output.
@@ -64,20 +64,20 @@ func WriteJSONScan(w io.Writer, out JSONScanOutput) error {
 
 // JSONTraceOutput is the machine-readable form of a trace result.
 type JSONTraceOutput struct {
-	Version  string              `json:"version"`
-	Flagged  []JSONFlaggedEvent  `json:"flagged"`
-	Total    int                 `json:"totalEvents"`
+	Version string             `json:"version"`
+	Flagged []JSONFlaggedEvent `json:"flagged"`
+	Total   int                `json:"totalEvents"`
 }
 
 // JSONFlaggedEvent is a flagged event in JSON trace output.
 type JSONFlaggedEvent struct {
-	Timestamp string        `json:"ts"`
-	Client    string        `json:"client"`
-	Server    string        `json:"server"`
-	Event     string        `json:"event"`
-	Tool      string        `json:"tool,omitempty"`
+	Timestamp string            `json:"ts"`
+	Client    string            `json:"client"`
+	Server    string            `json:"server"`
+	Event     string            `json:"event"`
+	Tool      string            `json:"tool,omitempty"`
 	Args      map[string]string `json:"args,omitempty"`
-	Findings  []JSONFinding `json:"findings"`
+	Findings  []JSONFinding     `json:"findings"`
 }
 
 // WriteJSONTrace encodes the trace report as JSON to w.

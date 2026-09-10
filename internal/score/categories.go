@@ -16,10 +16,10 @@ const (
 
 // CategoryScore is the score for a single security dimension.
 type CategoryScore struct {
-	Category    Category
-	Score       int    // 0–100
-	Grade       string // A+ A A- B+ B B- C+ C D F
-	Driver      string // short explanation of the main contributor
+	Category     Category
+	Score        int    // 0–100
+	Grade        string // A+ A A- B+ B B- C+ C D F
+	Driver       string // short explanation of the main contributor
 	FindingCount int
 }
 

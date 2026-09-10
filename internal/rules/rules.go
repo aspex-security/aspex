@@ -1,8 +1,9 @@
 // Package rules implements the aspex-scan risk rule catalog.
 // Framework mappings:
-//   OWASP LLM Top 10 2025: LLM01-LLM10 (https://owasp.org/www-project-top-10-for-large-language-model-applications/)
-//   MITRE ATLAS: AML.Txxx (https://atlas.mitre.org/)
-//   CWE: CWE-N (https://cwe.mitre.org/)
+//
+//	OWASP LLM Top 10 2025: LLM01-LLM10 (https://owasp.org/www-project-top-10-for-large-language-model-applications/)
+//	MITRE ATLAS: AML.Txxx (https://atlas.mitre.org/)
+//	CWE: CWE-N (https://cwe.mitre.org/)
 package rules
 
 import (
@@ -19,7 +20,7 @@ import (
 type Severity int
 
 const (
-	SeverityInfo     Severity = iota
+	SeverityInfo Severity = iota
 	SeverityLow
 	SeverityMedium
 	SeverityHigh

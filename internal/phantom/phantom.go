@@ -37,14 +37,14 @@ type Change struct {
 
 // Result is the full phantom analysis for one server.
 type Result struct {
-	ServerName   string
-	Client       string
-	Transport    string
-	Changes      []Change
-	FirstCall    []mcpclient.Tool
-	SecondCall   []mcpclient.Tool
-	IntervalMS   int64
-	Err          error // if inspection failed on one of the calls
+	ServerName string
+	Client     string
+	Transport  string
+	Changes    []Change
+	FirstCall  []mcpclient.Tool
+	SecondCall []mcpclient.Tool
+	IntervalMS int64
+	Err        error // if inspection failed on one of the calls
 }
 
 // Clean returns true if no changes were detected.
@@ -54,9 +54,9 @@ func (r *Result) Clean() bool { return len(r.Changes) == 0 && r.Err == nil }
 // interval is the pause between the two calls.
 func Analyze(ctx context.Context, entry discover.ServerEntry, interval time.Duration) *Result {
 	res := &Result{
-		ServerName:  entry.Name,
-		Client:      entry.Client,
-		IntervalMS:  interval.Milliseconds(),
+		ServerName: entry.Name,
+		Client:     entry.Client,
+		IntervalMS: interval.Milliseconds(),
 	}
 
 	var err1, err2 error

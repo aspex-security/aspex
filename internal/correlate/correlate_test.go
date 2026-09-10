@@ -56,10 +56,10 @@ func TestNormalizeAndMatch(t *testing.T) {
 	}
 
 	act := map[string]*Activity{
-		"plugin_slack_slack":  {Server: "plugin_slack_slack", Calls: 4},
-		"claude_ai_ClickUp":   {Server: "claude_ai_ClickUp", Calls: 6},
-		"filesystem":          {Server: "filesystem", Calls: 88},
-		"slacker-tools":       {Server: "slacker-tools", Calls: 99},
+		"plugin_slack_slack": {Server: "plugin_slack_slack", Calls: 4},
+		"claude_ai_ClickUp":  {Server: "claude_ai_ClickUp", Calls: 6},
+		"filesystem":         {Server: "filesystem", Calls: 88},
+		"slacker-tools":      {Server: "slacker-tools", Calls: 99},
 	}
 	if a := Match(act, "filesystem"); a == nil || a.Calls != 88 {
 		t.Error("exact match failed")

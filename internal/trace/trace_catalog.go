@@ -169,11 +169,11 @@ var traceCatalogRules = []traceCatalogRule{
 
 	// AT031: Cloud storage upload in tool arguments
 	{
-		ruleID:  "AT031",
-		name:    "Cloud storage upload in tool arguments",
-		sev:     rules.SeverityHigh,
-		fix:     "An agent uploaded data to cloud storage. Verify the destination bucket and contents are authorised.",
-		mapping: "OWASP LLM08, CWE-200",
+		ruleID:    "AT031",
+		name:      "Cloud storage upload in tool arguments",
+		sev:       rules.SeverityHigh,
+		fix:       "An agent uploaded data to cloud storage. Verify the destination bucket and contents are authorised.",
+		mapping:   "OWASP LLM08, CWE-200",
 		toolNames: []string{"s3_upload", "s3_put", "gcs_upload", "blob_upload", "upload_file", "cloud_upload"},
 		argPatterns: []string{
 			"s3://", "gs://", "az://",
@@ -181,39 +181,39 @@ var traceCatalogRules = []traceCatalogRule{
 	},
 	// AT032: External webhook POST in tool arguments
 	{
-		ruleID:  "AT032",
-		name:    "Outbound webhook with external URL",
-		sev:     rules.SeverityHigh,
-		fix:     "Verify the webhook URL and payload are authorised. External webhooks can silently exfiltrate agent context.",
-		mapping: "OWASP LLM08, CWE-918",
+		ruleID:    "AT032",
+		name:      "Outbound webhook with external URL",
+		sev:       rules.SeverityHigh,
+		fix:       "Verify the webhook URL and payload are authorised. External webhooks can silently exfiltrate agent context.",
+		mapping:   "OWASP LLM08, CWE-918",
 		toolNames: []string{"webhook_post", "post_webhook", "send_webhook", "trigger_webhook", "http_post_data"},
 	},
 	// AT033: Outbound email send
 	{
-		ruleID:  "AT033",
-		name:    "Email sent by agent",
-		sev:     rules.SeverityMedium,
-		fix:     "Review the recipient and content of the email. Email sends can silently exfiltrate collected data.",
-		mapping: "OWASP LLM08, CWE-200",
+		ruleID:    "AT033",
+		name:      "Email sent by agent",
+		sev:       rules.SeverityMedium,
+		fix:       "Review the recipient and content of the email. Email sends can silently exfiltrate collected data.",
+		mapping:   "OWASP LLM08, CWE-200",
 		toolNames: []string{"send_email", "email_send", "smtp_send", "mail_send", "send_mail"},
 	},
 	// AT034: Pastebin / gist creation
 	{
-		ruleID:  "AT034",
-		name:    "Public paste or gist created by agent",
-		sev:     rules.SeverityMedium,
-		fix:     "Review the paste content. Public pastes are an exfiltration channel.",
-		mapping: "OWASP LLM08, CWE-200",
+		ruleID:    "AT034",
+		name:      "Public paste or gist created by agent",
+		sev:       rules.SeverityMedium,
+		fix:       "Review the paste content. Public pastes are an exfiltration channel.",
+		mapping:   "OWASP LLM08, CWE-200",
 		toolNames: []string{"paste_create", "pastebin_post", "create_paste", "gist_create", "create_gist"},
 	},
 	// AT035: FTP/SFTP upload
 	{
-		ruleID:  "AT035",
-		name:    "FTP or SFTP file upload by agent",
-		sev:     rules.SeverityHigh,
-		fix:     "Review the destination host and file contents. FTP/SFTP uploads can exfiltrate sensitive files.",
-		mapping: "OWASP LLM08, CWE-200",
-		toolNames: []string{"ftp_upload", "sftp_upload", "ftp_put", "sftp_put"},
+		ruleID:      "AT035",
+		name:        "FTP or SFTP file upload by agent",
+		sev:         rules.SeverityHigh,
+		fix:         "Review the destination host and file contents. FTP/SFTP uploads can exfiltrate sensitive files.",
+		mapping:     "OWASP LLM08, CWE-200",
+		toolNames:   []string{"ftp_upload", "sftp_upload", "ftp_put", "sftp_put"},
 		argPatterns: []string{"ftp://", "sftp://"},
 	},
 
@@ -285,11 +285,11 @@ var traceCatalogRules = []traceCatalogRule{
 
 	// AT041: Sudo invocation with password
 	{
-		ruleID:  "AT041",
-		name:    "Sudo invocation in tool arguments",
-		sev:     rules.SeverityHigh,
-		fix:     "Sudo commands elevate privilege and can bypass OS controls. Review whether the sudo call was expected.",
-		mapping: "OWASP LLM06, CWE-272",
+		ruleID:      "AT041",
+		name:        "Sudo invocation in tool arguments",
+		sev:         rules.SeverityHigh,
+		fix:         "Sudo commands elevate privilege and can bypass OS controls. Review whether the sudo call was expected.",
+		mapping:     "OWASP LLM06, CWE-272",
 		argPatterns: []string{"sudo ", "sudo\t"},
 	},
 	// AT042: SUID/capability manipulation
@@ -371,29 +371,29 @@ var traceCatalogRules = []traceCatalogRule{
 
 	// AT048: IAM role/policy modification
 	{
-		ruleID:  "AT048",
-		name:    "Cloud IAM modification by agent",
-		sev:     rules.SeverityCritical,
-		fix:     "IAM changes may grant persistent access. Review the change and revert if unauthorised.",
-		mapping: "OWASP LLM06, ATLAS AML.T0043, CWE-272",
+		ruleID:    "AT048",
+		name:      "Cloud IAM modification by agent",
+		sev:       rules.SeverityCritical,
+		fix:       "IAM changes may grant persistent access. Review the change and revert if unauthorised.",
+		mapping:   "OWASP LLM06, ATLAS AML.T0043, CWE-272",
 		toolNames: []string{"create_iam_role", "iam_create_role", "attach_iam_policy", "iam_policy_attach", "create_role_binding"},
 	},
 	// AT049: Cloud firewall/security group modification
 	{
-		ruleID:  "AT049",
-		name:    "Cloud firewall or security group modification by agent",
-		sev:     rules.SeverityCritical,
-		fix:     "Firewall changes may expose internal services. Review and revert if unauthorised.",
-		mapping: "OWASP LLM06, CWE-284",
+		ruleID:    "AT049",
+		name:      "Cloud firewall or security group modification by agent",
+		sev:       rules.SeverityCritical,
+		fix:       "Firewall changes may expose internal services. Review and revert if unauthorised.",
+		mapping:   "OWASP LLM06, CWE-284",
 		toolNames: []string{"add_security_group_rule", "security_group_authorize", "sg_ingress_add", "firewall_rule_add"},
 	},
 	// AT050: Cloud audit trail disable
 	{
-		ruleID:  "AT050",
-		name:    "Cloud audit trail disabled by agent",
-		sev:     rules.SeverityCritical,
-		fix:     "Disabling CloudTrail destroys forensic evidence. Re-enable immediately and investigate.",
-		mapping: "OWASP LLM06, ATLAS AML.T0054, CWE-223",
+		ruleID:    "AT050",
+		name:      "Cloud audit trail disabled by agent",
+		sev:       rules.SeverityCritical,
+		fix:       "Disabling CloudTrail destroys forensic evidence. Re-enable immediately and investigate.",
+		mapping:   "OWASP LLM06, ATLAS AML.T0054, CWE-223",
 		toolNames: []string{"cloudtrail_disable", "disable_cloudtrail", "audit_trail_disable"},
 	},
 
@@ -401,11 +401,11 @@ var traceCatalogRules = []traceCatalogRule{
 
 	// AT051: Container exec
 	{
-		ruleID:  "AT051",
-		name:    "Exec into running container",
-		sev:     rules.SeverityCritical,
-		fix:     "Container exec sessions can be used for lateral movement. Review the command executed.",
-		mapping: "OWASP LLM06, ATLAS AML.T0043, CWE-78",
+		ruleID:    "AT051",
+		name:      "Exec into running container",
+		sev:       rules.SeverityCritical,
+		fix:       "Container exec sessions can be used for lateral movement. Review the command executed.",
+		mapping:   "OWASP LLM06, ATLAS AML.T0043, CWE-78",
 		toolNames: []string{"docker_exec", "container_exec", "kubectl_exec", "kube_exec", "k8s_exec"},
 	},
 	// AT052: Privileged container launch
@@ -422,11 +422,11 @@ var traceCatalogRules = []traceCatalogRule{
 	},
 	// AT053: Kubernetes apply of privileged workload
 	{
-		ruleID:  "AT053",
-		name:    "Kubernetes apply executed by agent",
-		sev:     rules.SeverityHigh,
-		fix:     "Review the manifest that was applied. kubectl apply can deploy persistent workloads.",
-		mapping: "OWASP LLM06, ATLAS AML.T0043",
+		ruleID:    "AT053",
+		name:      "Kubernetes apply executed by agent",
+		sev:       rules.SeverityHigh,
+		fix:       "Review the manifest that was applied. kubectl apply can deploy persistent workloads.",
+		mapping:   "OWASP LLM06, ATLAS AML.T0043",
 		toolNames: []string{"kubectl_apply", "k8s_apply", "kube_apply"},
 	},
 
@@ -434,11 +434,11 @@ var traceCatalogRules = []traceCatalogRule{
 
 	// AT054: Vault secret read
 	{
-		ruleID:  "AT054",
-		name:    "Credential vault secret read by agent",
-		sev:     rules.SeverityHigh,
-		fix:     "Review the secret path read. Vault reads surface secrets in the LLM context window.",
-		mapping: "OWASP LLM02, CWE-522",
+		ruleID:    "AT054",
+		name:      "Credential vault secret read by agent",
+		sev:       rules.SeverityHigh,
+		fix:       "Review the secret path read. Vault reads surface secrets in the LLM context window.",
+		mapping:   "OWASP LLM02, CWE-522",
 		toolNames: []string{"vault_read", "vault_get", "vault_kv_get", "vault_lookup"},
 	},
 	// AT055: Private key material in arguments
@@ -558,29 +558,29 @@ var traceCatalogRules = []traceCatalogRule{
 
 	// AT064: Browser saved password access tool
 	{
-		ruleID:  "AT064",
-		name:    "Browser saved password access",
-		sev:     rules.SeverityCritical,
-		fix:     "Browser password store access exposes credentials for every saved site. Investigate.",
-		mapping: "OWASP LLM02, CWE-522",
+		ruleID:    "AT064",
+		name:      "Browser saved password access",
+		sev:       rules.SeverityCritical,
+		fix:       "Browser password store access exposes credentials for every saved site. Investigate.",
+		mapping:   "OWASP LLM02, CWE-522",
 		toolNames: []string{"browser_saved_passwords", "get_saved_passwords", "browser_credential_dump"},
 	},
 	// AT065: SQL injection via raw query tool
 	{
-		ruleID:  "AT065",
-		name:    "Potentially unsafe raw SQL execution",
-		sev:     rules.SeverityHigh,
-		fix:     "Raw SQL execution tools can be leveraged for SQL injection. Review the query for injection patterns.",
-		mapping: "OWASP LLM06, CWE-89",
+		ruleID:    "AT065",
+		name:      "Potentially unsafe raw SQL execution",
+		sev:       rules.SeverityHigh,
+		fix:       "Raw SQL execution tools can be leveraged for SQL injection. Review the query for injection patterns.",
+		mapping:   "OWASP LLM06, CWE-89",
 		toolNames: []string{"raw_sql", "execute_sql", "sql_exec", "execute_raw_sql"},
 	},
 	// AT066: Deserialization tool
 	{
-		ruleID:  "AT066",
-		name:    "Unsafe deserialization tool called",
-		sev:     rules.SeverityHigh,
-		fix:     "Deserialising untrusted data can lead to remote code execution. Ensure input is from a trusted source.",
-		mapping: "OWASP LLM06, CWE-502",
+		ruleID:    "AT066",
+		name:      "Unsafe deserialization tool called",
+		sev:       rules.SeverityHigh,
+		fix:       "Deserialising untrusted data can lead to remote code execution. Ensure input is from a trusted source.",
+		mapping:   "OWASP LLM06, CWE-502",
 		toolNames: []string{"deserialize", "unserialize", "unpickle", "object_deserialize"},
 		argPatterns: []string{
 			"pickle.loads", "yaml.load(", "marshal.loads",
@@ -591,11 +591,11 @@ var traceCatalogRules = []traceCatalogRule{
 
 	// AT067: Crypto transfer initiated
 	{
-		ruleID:  "AT067",
-		name:    "Cryptocurrency transfer initiated by agent",
-		sev:     rules.SeverityCritical,
-		fix:     "Agent-initiated fund transfers are an unacceptable financial risk without explicit human approval. Investigate.",
-		mapping: "OWASP LLM06, CWE-284",
+		ruleID:    "AT067",
+		name:      "Cryptocurrency transfer initiated by agent",
+		sev:       rules.SeverityCritical,
+		fix:       "Agent-initiated fund transfers are an unacceptable financial risk without explicit human approval. Investigate.",
+		mapping:   "OWASP LLM06, CWE-284",
 		toolNames: []string{"crypto_transfer", "send_crypto", "wallet_transfer", "eth_transfer", "btc_send", "token_transfer"},
 	},
 	// AT068: Wallet key or seed phrase in arguments
@@ -641,20 +641,20 @@ var traceCatalogRules = []traceCatalogRule{
 
 	// AT071: Domain recon tool
 	{
-		ruleID:  "AT071",
-		name:    "Domain or Active Directory recon by agent",
-		sev:     rules.SeverityHigh,
-		fix:     "Review the scope of the domain recon. AD enumeration provides a complete attack map.",
-		mapping: "OWASP LLM02, ATLAS AML.T0057",
+		ruleID:    "AT071",
+		name:      "Domain or Active Directory recon by agent",
+		sev:       rules.SeverityHigh,
+		fix:       "Review the scope of the domain recon. AD enumeration provides a complete attack map.",
+		mapping:   "OWASP LLM02, ATLAS AML.T0057",
 		toolNames: []string{"enumerate_domain", "domain_enumerate", "ldap_query", "ad_query", "active_directory_search"},
 	},
 	// AT072: Cloud resource enumeration
 	{
-		ruleID:  "AT072",
-		name:    "Cloud resource enumeration by agent",
-		sev:     rules.SeverityHigh,
-		fix:     "Cloud resource enumeration reveals infrastructure for targeting. Investigate the scope.",
-		mapping: "OWASP LLM02, ATLAS AML.T0057",
+		ruleID:    "AT072",
+		name:      "Cloud resource enumeration by agent",
+		sev:       rules.SeverityHigh,
+		fix:       "Cloud resource enumeration reveals infrastructure for targeting. Investigate the scope.",
+		mapping:   "OWASP LLM02, ATLAS AML.T0057",
 		toolNames: []string{"aws_enumerate", "cloud_enumerate", "aws_list_accounts", "gcp_enumerate", "azure_enumerate"},
 	},
 	// AT073: Arp/network discovery
@@ -673,11 +673,11 @@ var traceCatalogRules = []traceCatalogRule{
 
 	// AT074: Package install invoked
 	{
-		ruleID:  "AT074",
-		name:    "Package manager install executed by agent",
-		sev:     rules.SeverityHigh,
-		fix:     "Package installs run arbitrary post-install scripts. Verify the package name and source.",
-		mapping: "OWASP LLM06, CWE-829",
+		ruleID:    "AT074",
+		name:      "Package manager install executed by agent",
+		sev:       rules.SeverityHigh,
+		fix:       "Package installs run arbitrary post-install scripts. Verify the package name and source.",
+		mapping:   "OWASP LLM06, CWE-829",
 		toolNames: []string{"pip_install", "npm_install", "gem_install", "brew_install", "apt_install", "cargo_install"},
 	},
 	// AT075: Dependency confusion pattern in package install
@@ -709,11 +709,11 @@ var traceCatalogRules = []traceCatalogRule{
 
 	// AT077: Tor / onion access
 	{
-		ruleID:  "AT077",
-		name:    "Tor or onion address in tool arguments",
-		sev:     rules.SeverityHigh,
-		fix:     "Tor access in an agent session may indicate C2 communication. Investigate.",
-		mapping: "OWASP LLM06, CWE-918",
+		ruleID:      "AT077",
+		name:        "Tor or onion address in tool arguments",
+		sev:         rules.SeverityHigh,
+		fix:         "Tor access in an agent session may indicate C2 communication. Investigate.",
+		mapping:     "OWASP LLM06, CWE-918",
 		argPatterns: []string{".onion", "torproject.org", "tor2web"},
 	},
 	// AT078: Cryptocurrency mining pool
@@ -800,11 +800,11 @@ var traceCatalogRules = []traceCatalogRule{
 	},
 	// AT085: NTFS alternate data stream usage
 	{
-		ruleID:  "AT085",
-		name:    "NTFS alternate data stream usage in tool arguments",
-		sev:     rules.SeverityHigh,
-		fix:     "NTFS ADS can hide files and executable code from standard directory listings.",
-		mapping: "OWASP LLM06, ATLAS AML.T0054",
+		ruleID:      "AT085",
+		name:        "NTFS alternate data stream usage in tool arguments",
+		sev:         rules.SeverityHigh,
+		fix:         "NTFS ADS can hide files and executable code from standard directory listings.",
+		mapping:     "OWASP LLM06, ATLAS AML.T0054",
 		argPatterns: []string{":$data", "type nul > "},
 	},
 }

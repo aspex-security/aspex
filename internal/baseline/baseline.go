@@ -28,7 +28,7 @@ type ServerProfile struct {
 
 // Baseline holds profiles for all servers observed in a learn period.
 type Baseline struct {
-	CreatedAt  string                   // RFC3339 timestamp
+	CreatedAt  string // RFC3339 timestamp
 	ClientName string
 	Profiles   map[string]ServerProfile // keyed by server name
 }

@@ -43,8 +43,8 @@ type Prompt struct {
 
 // ServerInfo holds the metadata returned during MCP initialization.
 type ServerInfo struct {
-	Name         string `json:"name"`
-	Version      string `json:"version"`
+	Name         string                     `json:"name"`
+	Version      string                     `json:"version"`
 	Capabilities map[string]json.RawMessage `json:"capabilities,omitempty"`
 }
 
@@ -197,7 +197,7 @@ func (c *stdioClient) initialize() (ServerInfo, error) {
 		return ServerInfo{}, err
 	}
 	var result struct {
-		ServerInfo   ServerInfo             `json:"serverInfo"`
+		ServerInfo   ServerInfo                 `json:"serverInfo"`
 		Capabilities map[string]json.RawMessage `json:"capabilities"`
 	}
 	if err := json.Unmarshal(raw, &result); err != nil {

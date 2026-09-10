@@ -12,18 +12,18 @@ import (
 
 // ANSI escape codes.
 const (
-	reset     = "\033[0m"
-	bold      = "\033[1m"
-	dim       = "\033[2m"
-	purple    = "\033[35m"
-	brPurple  = "\033[95m"
-	cyan      = "\033[36m"
-	brCyan    = "\033[96m"
-	red       = "\033[31m"
-	yellow    = "\033[33m"
-	green     = "\033[32m"
-	brGreen   = "\033[92m"
-	white     = "\033[97m"
+	reset      = "\033[0m"
+	bold       = "\033[1m"
+	dim        = "\033[2m"
+	purple     = "\033[35m"
+	brPurple   = "\033[95m"
+	cyan       = "\033[36m"
+	brCyan     = "\033[96m"
+	red        = "\033[31m"
+	yellow     = "\033[33m"
+	green      = "\033[32m"
+	brGreen    = "\033[92m"
+	white      = "\033[97m"
 	hideCursor = "\033[?25l"
 	showCursor = "\033[?25h"
 	clearScr   = "\033[2J\033[H"
@@ -42,7 +42,7 @@ type Option struct {
 // Item is a top-level menu entry (one per tool).
 type Item struct {
 	ID          string
-	Binary      string   // the binary to exec (e.g. "aspex-scan")
+	Binary      string // the binary to exec (e.g. "aspex-scan")
 	Label       string
 	TagLine     string
 	Description string
@@ -167,9 +167,9 @@ func Run(version string) {
 
 	fmt.Print(hideCursor)
 
-	sel := 0      // selected top-level item
+	sel := 0       // selected top-level item
 	inSub := false // are we in the options submenu?
-	subSel := 0   // selected option within submenu
+	subSel := 0    // selected option within submenu
 
 	for {
 		render(version, sel, inSub, subSel)

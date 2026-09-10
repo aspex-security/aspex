@@ -12,13 +12,13 @@ import (
 // toolCatalogRule fires when ANY toolNames substring matches the tool name (case-insensitive),
 // OR when ANY descWords substring matches the description. A single rule cannot fire twice.
 type toolCatalogRule struct {
-	ruleID    string
-	name      string
-	sev       Severity
-	fix       string
-	mapping   string
-	toolNames []string // match any as substring in lowercase tool name
-	descWords []string // match any as substring in lowercase description
+	ruleID     string
+	name       string
+	sev        Severity
+	fix        string
+	mapping    string
+	toolNames  []string // match any as substring in lowercase tool name
+	descWords  []string // match any as substring in lowercase description
 	schemaKeys []string // match any as substring in JSON-serialised input schema
 }
 
@@ -1114,18 +1114,18 @@ var promptCatalogRules = []promptCatalogRule{
 		descWords: []string{"pretend you are", "act as if", "roleplay as", "you are now", "forget you are an ai", "disregard your training", "ignore your guidelines"},
 	},
 	{
-		ruleID:  "MCP154",
-		name:    "Prompt name suggests credential or authentication context",
-		sev:     SeverityMedium,
-		fix:     "Review this prompt to confirm it does not expose or request sensitive credentials.",
-		mapping: "OWASP LLM02, CWE-522",
+		ruleID:    "MCP154",
+		name:      "Prompt name suggests credential or authentication context",
+		sev:       SeverityMedium,
+		fix:       "Review this prompt to confirm it does not expose or request sensitive credentials.",
+		mapping:   "OWASP LLM02, CWE-522",
 		nameWords: []string{"credential", "authenticate", "login", "password_", "secret_", "auth_"},
 	},
 	{
-		ruleID: "MCP155",
-		name:   "Prompt description exceeds 2 000 characters (data-stuffing risk)",
-		sev:    SeverityMedium,
-		fix:    "Extremely long prompt descriptions may be used to smuggle instructions or data past LLM context filters. Review the content.",
+		ruleID:  "MCP155",
+		name:    "Prompt description exceeds 2 000 characters (data-stuffing risk)",
+		sev:     SeverityMedium,
+		fix:     "Extremely long prompt descriptions may be used to smuggle instructions or data past LLM context filters. Review the content.",
 		mapping: "OWASP LLM01, CWE-20",
 		minLen:  2000,
 	},
@@ -1291,4 +1291,3 @@ func EvalPromptCatalog(p *mcpclient.Prompt) []Finding {
 	}
 	return f
 }
-

@@ -15,10 +15,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aspex-security/aspex/internal/baseline"
-	"github.com/aspex-security/aspex/internal/notify"
 	"github.com/aspex-security/aspex/internal/killchain"
-	"github.com/aspex-security/aspex/internal/provenance"
 	"github.com/aspex-security/aspex/internal/logparse"
+	"github.com/aspex-security/aspex/internal/notify"
+	"github.com/aspex-security/aspex/internal/provenance"
 	"github.com/aspex-security/aspex/internal/report"
 	"github.com/aspex-security/aspex/internal/rules"
 	"github.com/aspex-security/aspex/internal/trace"
@@ -672,13 +672,13 @@ func runExport(since, clientFilter, format, outputPath string) error {
 
 	case "jsonl":
 		type jsonlEvent struct {
-			Timestamp  string          `json:"timestamp"`
-			Client     string          `json:"client"`
-			Server     string          `json:"server"`
-			Tool       string          `json:"tool"`
-			Args       json.RawMessage `json:"args,omitempty"`
-			RuleIDs    []string        `json:"rule_ids,omitempty"`
-			MaxSeverity string         `json:"max_severity,omitempty"`
+			Timestamp   string          `json:"timestamp"`
+			Client      string          `json:"client"`
+			Server      string          `json:"server"`
+			Tool        string          `json:"tool"`
+			Args        json.RawMessage `json:"args,omitempty"`
+			RuleIDs     []string        `json:"rule_ids,omitempty"`
+			MaxSeverity string          `json:"max_severity,omitempty"`
 		}
 		enc := json.NewEncoder(out)
 		for _, ev := range allEvents {

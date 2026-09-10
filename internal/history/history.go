@@ -99,7 +99,7 @@ func parseRecord(path string) (*Record, error) {
 	var ts time.Time
 	if len(base) >= len("scan-20060102-150405.json") {
 		// base is e.g. "scan-20060102-150405.json"
-		timeStr := base[len("scan-"):len(base)-len(".json")]
+		timeStr := base[len("scan-") : len(base)-len(".json")]
 		ts, _ = time.ParseInLocation("20060102-150405", timeStr, time.Local)
 	}
 

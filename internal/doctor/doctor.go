@@ -31,9 +31,9 @@ type ClientResult struct {
 }
 
 type JSONOutput struct {
-	Version  string        `json:"version"`
+	Version  string         `json:"version"`
 	Clients  []ClientResult `json:"clients"`
-	Findings []Finding     `json:"findings"`
+	Findings []Finding      `json:"findings"`
 	Summary  struct {
 		Critical int `json:"critical"`
 		Warning  int `json:"warning"`
@@ -186,9 +186,9 @@ func clientConfigExists(client string) bool {
 	paths := map[string][]string{
 		"claude":      {filepath.Join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json")},
 		"claude-code": {filepath.Join(home, ".claude.json")},
-		"cursor":   {filepath.Join(home, ".cursor", "mcp.json")},
-		"windsurf": {filepath.Join(home, ".codeium", "windsurf", "mcp_config.json")},
-		"continue": {filepath.Join(home, ".continue", "config.json")},
+		"cursor":      {filepath.Join(home, ".cursor", "mcp.json")},
+		"windsurf":    {filepath.Join(home, ".codeium", "windsurf", "mcp_config.json")},
+		"continue":    {filepath.Join(home, ".continue", "config.json")},
 	}
 	for _, p := range paths[client] {
 		if _, err := os.Stat(p); err == nil {

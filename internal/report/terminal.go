@@ -36,20 +36,20 @@ func SanitizeForTerminal(s string) string {
 
 // ANSI escape codes.
 const (
-	colorReset   = "\033[0m"
-	colorRed     = "\033[31m"
-	colorYellow  = "\033[33m"
-	colorGreen   = "\033[32m"
-	colorCyan    = "\033[36m"
-	colorBlue    = "\033[34m"
-	colorBold    = "\033[1m"
-	colorDim     = "\033[2m"
-	colorPurple  = "\033[35m"
+	colorReset    = "\033[0m"
+	colorRed      = "\033[31m"
+	colorYellow   = "\033[33m"
+	colorGreen    = "\033[32m"
+	colorCyan     = "\033[36m"
+	colorBlue     = "\033[34m"
+	colorBold     = "\033[1m"
+	colorDim      = "\033[2m"
+	colorPurple   = "\033[35m"
 	colorBrPurple = "\033[95m"
-	colorBrRed   = "\033[91m"
+	colorBrRed    = "\033[91m"
 	colorBrYellow = "\033[93m"
-	colorBrGreen = "\033[92m"
-	clearLine    = "\r\033[K"
+	colorBrGreen  = "\033[92m"
+	clearLine     = "\r\033[K"
 )
 
 // ScanReport is the full data for an aspex-scan terminal render.
@@ -64,10 +64,10 @@ type ScanReport struct {
 	HTMLPath        string // path to HTML report if one was written
 	LogPath         string // path to JSON log if one was written
 	Explain         bool   // show advisory details (why/exploit/impact/fix) per finding
-	PrevScore  int    // 0 if no history
-	PrevBand   string
-	ScoreDelta string // "+12", "-5", "=" or "" if no history
-	IsFirstRun bool
+	PrevScore       int    // 0 if no history
+	PrevBand        string
+	ScoreDelta      string // "+12", "-5", "=" or "" if no history
+	IsFirstRun      bool
 }
 
 // Spinner shows an animated progress indicator on stderr during scanning.

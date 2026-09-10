@@ -9,11 +9,11 @@ import (
 )
 
 const (
-	sarifVersion   = "2.1.0"
-	sarifSchema    = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
-	sarifDocsBase  = "https://github.com/aspex-security/aspex/blob/main/docs/rules/"
-	sarifInfoURI   = "https://github.com/aspex-security/aspex"
-	toolVersion    = "0.1.0"
+	sarifVersion  = "2.1.0"
+	sarifSchema   = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
+	sarifDocsBase = "https://github.com/aspex-security/aspex/blob/main/docs/rules/"
+	sarifInfoURI  = "https://github.com/aspex-security/aspex"
+	toolVersion   = "0.1.0"
 )
 
 // sarifLog is the top-level SARIF 2.1.0 document.
@@ -40,10 +40,10 @@ type sarifDriver struct {
 }
 
 type sarifRule struct {
-	ID               string          `json:"id"`
-	Name             string          `json:"name"`
-	ShortDescription sarifMessage    `json:"shortDescription"`
-	HelpURI          string          `json:"helpUri"`
+	ID               string       `json:"id"`
+	Name             string       `json:"name"`
+	ShortDescription sarifMessage `json:"shortDescription"`
+	HelpURI          string       `json:"helpUri"`
 }
 
 type sarifResult struct {
@@ -129,10 +129,10 @@ func WriteSARIFScan(w io.Writer, scan JSONScanOutput) error {
 	for _, srv := range scan.Servers {
 		for _, jf := range srv.Findings {
 			f := rules.Finding{
-				RuleID:   jf.RuleID,
-				Name:     jf.Name,
-				Detail:   jf.Detail,
-				Mapping:  jf.Mapping,
+				RuleID:  jf.RuleID,
+				Name:    jf.Name,
+				Detail:  jf.Detail,
+				Mapping: jf.Mapping,
 			}
 			// Map severity string back to rules.Severity for level conversion.
 			f.Severity = severityStringToRules(jf.Severity)

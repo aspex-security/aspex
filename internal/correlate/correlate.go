@@ -19,10 +19,10 @@ import (
 // Activity summarizes observed runtime behavior for one server.
 type Activity struct {
 	Server   string    `json:"server"`
-	Calls    int       `json:"calls"`          // tools/call events
-	Tools    []string  `json:"tools"`          // distinct tools invoked, sorted
-	Flagged  int       `json:"flagged"`        // events that tripped a trace rule
-	MaxSev   string    `json:"maxSeverity"`    // highest trace-rule severity seen, "" if none
+	Calls    int       `json:"calls"`       // tools/call events
+	Tools    []string  `json:"tools"`       // distinct tools invoked, sorted
+	Flagged  int       `json:"flagged"`     // events that tripped a trace rule
+	MaxSev   string    `json:"maxSeverity"` // highest trace-rule severity seen, "" if none
 	LastSeen time.Time `json:"lastSeen"`
 	Clients  []string  `json:"clients"`
 

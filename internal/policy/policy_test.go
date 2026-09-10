@@ -64,8 +64,8 @@ func TestSeverityOverrideAndOff(t *testing.T) {
 
 func TestValidation(t *testing.T) {
 	bad := []Config{
-		{Ignore: []IgnoreEntry{{Rule: "MCP004"}}},                        // no reason
-		{Ignore: []IgnoreEntry{{Reason: "x"}}},                           // no rule
+		{Ignore: []IgnoreEntry{{Rule: "MCP004"}}}, // no reason
+		{Ignore: []IgnoreEntry{{Reason: "x"}}},    // no rule
 		{Ignore: []IgnoreEntry{{Rule: "MCP004", Reason: "x", Expires: "soon"}}},
 		{Severity: map[string]string{"MCP001": "urgent"}},
 		{FailOn: "always"},

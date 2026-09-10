@@ -404,8 +404,8 @@ func run(serverFlag string, timeoutSecs int, categories []string, jsonOut, noCol
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(map[string]interface{}{
-			"version": version.Version,
-			"servers": jsonServers,
+			"version":         version.Version,
+			"servers":         jsonServers,
 			"vulnerabilities": allVulns,
 			"summary": map[string]int{
 				"servers":         len(servers),

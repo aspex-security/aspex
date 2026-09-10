@@ -8,11 +8,11 @@ import (
 
 // Server holds everything known about one MCP server after inspection.
 type Server struct {
-	Entry   discover.ServerEntry
-	Info    mcpclient.ServerInfo
-	Tools   []mcpclient.Tool
+	Entry     discover.ServerEntry
+	Info      mcpclient.ServerInfo
+	Tools     []mcpclient.Tool
 	Resources []mcpclient.Resource
-	Prompts []mcpclient.Prompt
+	Prompts   []mcpclient.Prompt
 
 	// Set if inspection failed.
 	InspectErr error

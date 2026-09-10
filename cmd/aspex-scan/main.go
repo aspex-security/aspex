@@ -18,17 +18,17 @@ import (
 
 	"github.com/aspex-security/aspex/internal/attackpath"
 	"github.com/aspex-security/aspex/internal/correlate"
-	"github.com/aspex-security/aspex/internal/doctor"
-	"github.com/aspex-security/aspex/internal/logparse"
-	"github.com/aspex-security/aspex/internal/policy"
 	"github.com/aspex-security/aspex/internal/diff"
-	"github.com/aspex-security/aspex/internal/history"
 	"github.com/aspex-security/aspex/internal/discover"
+	"github.com/aspex-security/aspex/internal/doctor"
+	"github.com/aspex-security/aspex/internal/history"
 	"github.com/aspex-security/aspex/internal/hook"
 	"github.com/aspex-security/aspex/internal/inspect"
+	"github.com/aspex-security/aspex/internal/logparse"
 	"github.com/aspex-security/aspex/internal/mcpclient"
 	"github.com/aspex-security/aspex/internal/notify"
 	"github.com/aspex-security/aspex/internal/phantom"
+	"github.com/aspex-security/aspex/internal/policy"
 	"github.com/aspex-security/aspex/internal/redteam"
 	"github.com/aspex-security/aspex/internal/registry"
 	"github.com/aspex-security/aspex/internal/report"
@@ -279,11 +279,11 @@ func runInventory(gf *globalFlags, jsonOut bool) error {
 		StaticOnly bool     `json:"static_only"`
 	}
 	type invOutput struct {
-		Version     string      `json:"version"`
-		TotalServers int        `json:"total_servers"`
-		TotalTools  int         `json:"total_tools"`
-		Clients     []string    `json:"clients"`
-		Servers     []invServer `json:"servers"`
+		Version      string      `json:"version"`
+		TotalServers int         `json:"total_servers"`
+		TotalTools   int         `json:"total_tools"`
+		Clients      []string    `json:"clients"`
+		Servers      []invServer `json:"servers"`
 	}
 
 	clientSet := map[string]struct{}{}
@@ -444,9 +444,9 @@ func runAttackPaths(gf *globalFlags, jsonOut bool) error {
 
 	if jsonOut || gf.jsonOut {
 		type jsonCap struct {
-			Server string            `json:"server"`
-			Client string            `json:"client"`
-			Caps   []string          `json:"capabilities"`
+			Server string              `json:"server"`
+			Client string              `json:"client"`
+			Caps   []string            `json:"capabilities"`
 			Tools  map[string][]string `json:"contributing_tools"`
 		}
 		type jsonChain struct {
@@ -544,8 +544,8 @@ func runAttackPaths(gf *globalFlags, jsonOut bool) error {
 
 	// Group chains by Name so repeated server-pair combinations collapse into one block.
 	type group struct {
-		chain        attackpath.AttackChain // representative entry (first seen)
-		serverPairs  []string               // all server combinations for this attack type
+		chain       attackpath.AttackChain // representative entry (first seen)
+		serverPairs []string               // all server combinations for this attack type
 	}
 	var groupOrder []string
 	groups := map[string]*group{}
@@ -1176,7 +1176,7 @@ func newVerifyCmd() *cobra.Command {
 		Short:   "Check a package name against the known-malicious registry",
 		Long:    "Look up a package name in Aspex's registry of known-malicious MCP server packages. Checks for exact matches, typosquats, and known CVEs.",
 		Example: "  aspex-scan verify @modelcontextprotocol/server-filesystem\n  aspex-scan verify my-mcp-package",
-		Args:  cobra.ExactArgs(1),
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			pkg := args[0]
 			entry := registry.Lookup(pkg)
@@ -1303,11 +1303,11 @@ func runRedTeam(gf *globalFlags, serverFlag string, timeoutSecs int, jsonOut boo
 		Response string   `json:"response,omitempty"`
 	}
 	type jsonServerResult struct {
-		Name       string     `json:"name"`
-		Client     string     `json:"client"`
-		ToolCount  int        `json:"tool_count"`
-		ProbeCount int        `json:"probe_count"`
-		Error      string     `json:"error,omitempty"`
+		Name       string `json:"name"`
+		Client     string `json:"client"`
+		ToolCount  int    `json:"tool_count"`
+		ProbeCount int    `json:"probe_count"`
+		Error      string `json:"error,omitempty"`
 	}
 
 	var allVulns []jsonVuln
@@ -1462,8 +1462,8 @@ func runRedTeam(gf *globalFlags, serverFlag string, timeoutSecs int, jsonOut boo
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(map[string]interface{}{
-			"version": version.Version,
-			"servers": jsonServers,
+			"version":         version.Version,
+			"servers":         jsonServers,
 			"vulnerabilities": allVulns,
 			"summary": map[string]int{
 				"servers":         len(servers),

@@ -174,7 +174,7 @@ func (c *httpClient) initialize(ctx context.Context) (ServerInfo, error) {
 		return ServerInfo{}, err
 	}
 	var result struct {
-		ServerInfo   ServerInfo                `json:"serverInfo"`
+		ServerInfo   ServerInfo                 `json:"serverInfo"`
 		Capabilities map[string]json.RawMessage `json:"capabilities"`
 	}
 	if err := json.Unmarshal(raw, &result); err != nil {
