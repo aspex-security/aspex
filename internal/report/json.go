@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 
+	"github.com/aspex-security/aspex/internal/correlate"
 	"github.com/aspex-security/aspex/internal/score"
 	"github.com/aspex-security/aspex/internal/trace"
 )
@@ -13,6 +14,25 @@ type JSONScanOutput struct {
 	Version string              `json:"version"`
 	Overall score.OverallScore  `json:"overall"`
 	Servers []JSONServerResult  `json:"servers"`
+
+	// Policy path that was applied, if any.
+	Policy string `json:"policy,omitempty"`
+	// Findings removed by .aspex.yaml ignore entries.
+	Suppressed []JSONSuppressed `json:"suppressed,omitempty"`
+	// Count of findings hidden by --baseline.
+	Baselined int `json:"baselined,omitempty"`
+	// Observed runtime activity per server (--with-trace).
+	Activity map[string]*correlate.Activity `json:"activity,omitempty"`
+}
+
+// JSONSuppressed is an accepted risk removed by policy.
+type JSONSuppressed struct {
+	Server   string `json:"server"`
+	RuleID   string `json:"ruleId"`
+	Name     string `json:"name"`
+	Severity string `json:"severity"`
+	Reason   string `json:"reason"`
+	Expires  string `json:"expires,omitempty"`
 }
 
 // JSONServerResult is one server in the JSON scan output.

@@ -1537,62 +1537,15 @@ func runTrace(tf traceFlags) error {
 
 // collectEvents loads events from all supported clients, optionally filtered.
 func collectEvents(clientFilter string, since time.Time) ([]logparse.Event, []string) {
-	clients := supportedClients
+	var clients []string
 	if clientFilter != "" {
 		clients = []string{clientFilter}
 	}
-
-	var allEvents []logparse.Event
-	var clientsFound []string
-
-	for _, cl := range clients {
-		var dirs []string
-		switch cl {
-		case "claude":
-			dirs = logparse.ClaudeLogPaths()
-		case "claude-code":
-			dirs = logparse.ClaudeCodeLogPaths()
-		case "cursor":
-			dirs = logparse.CursorLogPaths()
-		case "windsurf":
-			dirs = logparse.WindsurfLogPaths()
-		case "cline":
-			dirs = logparse.ClineLogPaths()
-		case "roo-cline":
-			dirs = logparse.RooCodeLogPaths()
-		}
-		found := false
-		for _, dir := range dirs {
-			var evs []logparse.Event
-			var parseErr error
-			switch cl {
-			case "claude":
-				evs, parseErr = logparse.ParseClaudeLogsDir(dir, since)
-			case "claude-code":
-				evs, parseErr = logparse.ParseClaudeCodeProjectsDir(dir, since)
-			case "cursor":
-				evs, parseErr = logparse.ParseCursorLogsDir(dir, since)
-			case "windsurf":
-				evs, parseErr = logparse.ParseWindsurfLogsDir(dir, since)
-			case "cline":
-				evs, parseErr = logparse.ParseClineTasksDir(dir, since)
-			case "roo-cline":
-				evs, parseErr = logparse.ParseRooCodeTasksDir(dir, since)
-			}
-			if parseErr != nil {
-				fmt.Fprintf(os.Stderr, "warning: %s logs (%s): %v\n", cl, dir, parseErr)
-				continue
-			}
-			if len(evs) > 0 {
-				found = true
-			}
-			allEvents = append(allEvents, evs...)
-		}
-		if found {
-			clientsFound = append(clientsFound, cl)
-		}
+	events, clientsFound, errs := logparse.CollectEvents(clients, since)
+	for _, err := range errs {
+		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
 	}
-	return allEvents, clientsFound
+	return events, clientsFound
 }
 
 func suppressCodingAgentNoise(flagged []trace.FlaggedEvent) []trace.FlaggedEvent {

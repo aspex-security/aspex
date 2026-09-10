@@ -123,6 +123,17 @@ Supports Claude Desktop, Claude Code, Cursor, Windsurf, Cline, Roo-Cline, Contin
 
 ---
 
+## Make it yours
+
+```sh
+aspex-scan init                                  # starter .aspex.yaml: accept risks with a reason, set your own severities
+aspex-scan --save-baseline aspex-baseline.json   # snapshot today's findings...
+aspex-scan --baseline aspex-baseline.json        # ...then fail only on NEW ones
+aspex-scan --with-trace                          # rank risky servers by how much your agents actually use them
+```
+
+Accepted risks need a reason and can expire, so nothing is silently forgotten. See [Policy, baselines and prioritization](https://aspex.mintlify.site/guides/policy).
+
 ## CI
 
 Fail a pipeline when a config change introduces a risky server:
@@ -133,7 +144,9 @@ Fail a pipeline when a config change introduces a risky server:
     fail-on: high
 ```
 
-Emits SARIF for GitHub Code Scanning. See the [CI guide](https://aspex.mintlify.site/guides/ci-integration).
+Reads `.aspex.yaml` and your baseline from the repo. Emits SARIF for GitHub Code Scanning. See the [CI guide](https://aspex.mintlify.site/guides/ci-integration).
+
+Detection is under contract: a corpus of known-malicious and popular known-benign MCP servers runs in CI, so a rule change can neither miss a known attack nor start flagging the official filesystem, GitHub, or Slack servers.
 
 ---
 

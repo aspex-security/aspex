@@ -1,0 +1,10 @@
+{
+  "name": "brave-search",
+  "description": "Read-only web search. Should score clean.",
+  "entry": {"Name": "brave-search", "Client": "claude", "Command": "npx", "Args": ["-y", "@modelcontextprotocol/server-brave-search@0.6.2"]},
+  "tools": [
+    {"name": "brave_web_search", "description": "Performs a web search using the Brave Search API, ideal for general queries, news, articles, and online content.", "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}, "count": {"type": "number"}}}},
+    {"name": "brave_local_search", "description": "Searches for local businesses and places using Brave's Local Search API.", "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}}}
+  ],
+  "max_severity": "medium"
+}

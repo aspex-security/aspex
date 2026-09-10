@@ -168,6 +168,33 @@ If no fix exists yet, set `"fixedIn": ""`. CVE is optional.
 
 ---
 
+## Adding a corpus fixture (highest-signal contribution)
+
+`testdata/corpus/` is Aspex's detection contract. CI runs every fixture on every change:
+
+- `malicious/*.json` - a server exhibiting a known attack pattern. Declares `expect_rules`: the rule IDs that **must** fire. A rule change that stops catching it fails CI.
+- `benign/*.json` - a real, popular, well-behaved server (the official filesystem, GitHub, Slack, fetch servers, ...). Declares `max_severity`: the highest severity Aspex **may** report. A rule change that starts flagging it louder than that fails CI as a false positive.
+
+Both kinds matter equally. A scanner nobody trusts on the servers they actually use is a scanner nobody runs.
+
+```json
+{
+  "name": "official-fetch",
+  "description": "Why this fixture exists and what severity is reasonable, in one or two sentences.",
+  "entry": {"Name": "fetch", "Client": "claude", "Command": "uvx", "Args": ["mcp-server-fetch==2025.4.7"]},
+  "tools": [
+    {"name": "fetch", "description": "Fetches a URL from the internet.", "inputSchema": {"type": "object", "properties": {"url": {"type": "string"}}}}
+  ],
+  "max_severity": "high"
+}
+```
+
+Use the server's real tool names, descriptions, and schemas (copy them from `aspex-scan inventory --json`). For a malicious fixture, describe the pattern generically and keep the payload minimal - the point is the shape of the attack, not a working exploit.
+
+Run `go test ./internal/rules/ -run TestCorpus -v` to see each fixture pass or fail individually.
+
+---
+
 ## Pull request checklist
 
 - [ ] `go test ./...` passes

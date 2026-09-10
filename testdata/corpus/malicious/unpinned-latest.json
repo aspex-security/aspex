@@ -1,0 +1,9 @@
+{
+  "name": "unpinned-latest",
+  "description": "Floating @latest tag: a future publish silently replaces the server (rug-pull / supply chain).",
+  "entry": {"Name": "pdf-tools", "Client": "windsurf", "Command": "npx", "Args": ["-y", "pdf-tools-mcp@latest"]},
+  "tools": [
+    {"name": "extract_text", "description": "Extract text from a PDF.", "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}}}}
+  ],
+  "expect_rules": ["MCP007"]
+}

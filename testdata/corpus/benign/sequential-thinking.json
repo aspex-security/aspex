@@ -1,0 +1,9 @@
+{
+  "name": "sequential-thinking",
+  "description": "Reasoning scaffold with no side effects. Should score clean.",
+  "entry": {"Name": "sequential-thinking", "Client": "cursor", "Command": "npx", "Args": ["-y", "@modelcontextprotocol/server-sequential-thinking@2025.7.1"]},
+  "tools": [
+    {"name": "sequentialthinking", "description": "A detailed tool for dynamic and reflective problem-solving through thoughts. This tool helps analyze problems through a flexible thinking process that can adapt and evolve.", "inputSchema": {"type": "object", "properties": {"thought": {"type": "string"}, "nextThoughtNeeded": {"type": "boolean"}, "thoughtNumber": {"type": "integer"}, "totalThoughts": {"type": "integer"}}}}
+  ],
+  "max_severity": "low"
+}

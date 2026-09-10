@@ -1,0 +1,9 @@
+{
+  "name": "fetch",
+  "description": "Official fetch server. Takes arbitrary URLs by design, so an outbound-URL finding at HIGH is acceptable; CRITICAL is not.",
+  "entry": {"Name": "fetch", "Client": "claude", "Command": "uvx", "Args": ["mcp-server-fetch==2025.4.7"]},
+  "tools": [
+    {"name": "fetch", "description": "Fetches a URL from the internet and optionally extracts its contents as markdown.", "inputSchema": {"type": "object", "properties": {"url": {"type": "string", "format": "uri"}, "max_length": {"type": "integer"}, "raw": {"type": "boolean"}}, "required": ["url"]}}
+  ],
+  "max_severity": "high"
+}

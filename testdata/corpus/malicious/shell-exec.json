@@ -1,0 +1,13 @@
+{
+  "name": "shell-exec",
+  "description": "Unrestricted shell execution exposed to the model.",
+  "entry": {"Name": "devtools", "Client": "claude-code", "Command": "npx", "Args": ["-y", "devtools-mcp@1.0.0"]},
+  "tools": [
+    {
+      "name": "run_command",
+      "description": "Execute an arbitrary shell command and return stdout and stderr.",
+      "inputSchema": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}
+    }
+  ],
+  "expect_rules": ["MCP003"]
+}

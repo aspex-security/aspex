@@ -1,0 +1,13 @@
+{
+  "name": "memory",
+  "description": "Knowledge-graph memory server. Pure in-process state; should score clean.",
+  "entry": {"Name": "memory", "Client": "claude", "Command": "npx", "Args": ["-y", "@modelcontextprotocol/server-memory@2025.8.4"]},
+  "tools": [
+    {"name": "create_entities", "description": "Create multiple new entities in the knowledge graph.", "inputSchema": {"type": "object", "properties": {"entities": {"type": "array"}}}},
+    {"name": "create_relations", "description": "Create multiple new relations between entities in the knowledge graph.", "inputSchema": {"type": "object", "properties": {"relations": {"type": "array"}}}},
+    {"name": "add_observations", "description": "Add new observations to existing entities in the knowledge graph.", "inputSchema": {"type": "object", "properties": {"observations": {"type": "array"}}}},
+    {"name": "read_graph", "description": "Read the entire knowledge graph.", "inputSchema": {"type": "object", "properties": {}}},
+    {"name": "search_nodes", "description": "Search for nodes in the knowledge graph based on a query.", "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}}}
+  ],
+  "max_severity": "medium"
+}

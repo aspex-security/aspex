@@ -1,0 +1,12 @@
+{
+  "name": "postgres-readonly",
+  "description": "Official postgres server exposing a read-only query tool. SQL capability is real, so HIGH is acceptable.",
+  "entry": {"Name": "postgres", "Client": "claude-code", "Command": "npx", "Args": ["-y", "@modelcontextprotocol/server-postgres@0.6.2", "postgresql://readonly@localhost/app"]},
+  "tools": [
+    {"name": "query", "description": "Run a read-only SQL query.", "inputSchema": {"type": "object", "properties": {"sql": {"type": "string"}}}}
+  ],
+  "resources": [
+    {"uri": "postgres://localhost/app/users/schema", "name": "\"users\" database schema", "mimeType": "application/json"}
+  ],
+  "max_severity": "high"
+}

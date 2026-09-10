@@ -1,0 +1,9 @@
+{
+  "name": "plaintext-http-no-auth",
+  "description": "Remote server over plaintext HTTP with no authentication - tool traffic is readable and spoofable on the wire.",
+  "entry": {"Name": "team-kb", "Client": "cursor", "URL": "http://kb.internal.example:8080/sse"},
+  "tools": [
+    {"name": "search_kb", "description": "Search the team knowledge base.", "inputSchema": {"type": "object", "properties": {"q": {"type": "string"}}}}
+  ],
+  "expect_rules": ["MCP021", "MCP010"]
+}

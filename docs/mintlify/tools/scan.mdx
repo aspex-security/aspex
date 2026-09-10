@@ -37,14 +37,23 @@ Framework coverage:
 | `--sarif` | Emit SARIF 2.1 output for GitHub Code Scanning |
 | `--html` | Write a self-contained HTML report |
 | `--watch` | Re-scan on config file changes |
-| `--fail-on` | Exit non-zero when score falls below threshold (e.g. `--fail-on 80`) |
+| `--fail-on` | Exit 1 when any finding reaches this severity: `critical`, `high`, `medium`, `low` (default `off`; `.aspex.yaml` can set a default) |
 | `--share` | Generate a privacy-safe Markdown summary suitable for sharing |
 | `--report` | Export compliance report (`soc2` or `iso27001`) |
+| `--config` | Path to `.aspex.yaml` policy (default: `./.aspex.yaml`, then `~/.config/aspex/config.yaml`) |
+| `--baseline` | Finding baseline to ratchet against: known findings are hidden and never fail the gate |
+| `--save-baseline` | Write current findings to this file as a new baseline |
+| `--with-trace` | Correlate findings with observed agent activity from aspex-trace logs |
+| `--trace-since` | Activity window for `--with-trace` (default `7d`) |
+
+See [Policy, baselines and prioritization](/guides/policy) for how the last five fit together.
 
 ## Commands
 
 | Subcommand | Description |
 |---|---|
+| `init` | Write a starter `.aspex.yaml` policy in the current directory |
+| `doctor` | 2-second offline pre-flight check: env secrets, config secrets, filesystem grants, network exposure |
 | `inspect <target>` | Scan a single server by command string or URL |
 | `inventory` | List every detected MCP server and all their tools |
 | `attack-paths` | Cross-server kill chain analysis mapped to MITRE ATT&CK |

@@ -1,0 +1,13 @@
+{
+  "name": "slack",
+  "description": "Official Slack server. Posting messages is an outbound channel, so HIGH is acceptable; flagging the official server CRITICAL would be a false positive.",
+  "entry": {"Name": "slack", "Client": "claude", "Command": "npx", "Args": ["-y", "@modelcontextprotocol/server-slack@2025.4.25"]},
+  "tools": [
+    {"name": "slack_list_channels", "description": "List public channels in the workspace with pagination.", "inputSchema": {"type": "object", "properties": {"limit": {"type": "number"}}}},
+    {"name": "slack_post_message", "description": "Post a new message to a Slack channel.", "inputSchema": {"type": "object", "properties": {"channel_id": {"type": "string"}, "text": {"type": "string"}}}},
+    {"name": "slack_reply_to_thread", "description": "Reply to a specific message thread in Slack.", "inputSchema": {"type": "object", "properties": {"channel_id": {"type": "string"}, "thread_ts": {"type": "string"}, "text": {"type": "string"}}}},
+    {"name": "slack_get_channel_history", "description": "Get recent messages from a channel.", "inputSchema": {"type": "object", "properties": {"channel_id": {"type": "string"}}}},
+    {"name": "slack_get_users", "description": "Get a list of all users in the workspace with their basic profile information.", "inputSchema": {"type": "object", "properties": {}}}
+  ],
+  "max_severity": "high"
+}

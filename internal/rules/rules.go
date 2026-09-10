@@ -146,6 +146,11 @@ func checkMCP001StaticDescription(srv *inspect.Server) []Finding {
 // OWASP LLM01 | ATLAS AML.T0051 | CWE-77
 
 var injectionPhrasePatterns = []*regexp.Regexp{
+	// Generic instruction-override: an override verb, then a scope word, then a
+	// target noun, each within a short bounded gap so "ignore all previous
+	// instructions", "disregard the prior rules", "forget your above guidelines"
+	// all match without matching ordinary prose across sentence boundaries.
+	regexp.MustCompile(`(?i)\b(ignore|disregard|forget|override|bypass)\b[^.!?\n]{0,40}\b(previous|prior|above|earlier|preceding|all|any|your)\b[^.!?\n]{0,40}\b(instructions?|prompts?|rules?|guidelines?|directives?|constraints?)\b`),
 	regexp.MustCompile(`(?i)ignore\s+(previous|prior|above|all)\s+(instructions?|prompts?|context|rules?)`),
 	regexp.MustCompile(`(?i)disregard\s+(your|all|any|previous|prior)`),
 	regexp.MustCompile(`(?i)you\s+(are|must|should|will|shall)\s+(now\s+)?(act|behave|respond)\s+as`),
@@ -187,15 +192,58 @@ func checkMCP001PromptInjection(t *mcpclient.Tool) []Finding {
 	return nil
 }
 
+// containsHiddenUnicode reports format (Cf) or private-use (Co) code points in s.
+// A lone zero-width space (U+200B) is tolerated because Markdown renderers and
+// copy-paste from web pages introduce one legitimately. Several of them, or one
+// wedged inside a word, is not legitimate: that is how instructions get smuggled
+// past a human reading the description, so it is flagged.
 func containsHiddenUnicode(s string) bool {
-	for _, r := range s {
-		if unicode.Is(unicode.Cf, r) || unicode.Is(unicode.Co, r) {
-			if r != '​' { // zero-width space can appear in legitimate Markdown; skip
-				return true
-			}
+	const zwsp = '​'
+	zwspCount := 0
+	runes := []rune(s)
+	for i, r := range runes {
+		if !unicode.Is(unicode.Cf, r) && !unicode.Is(unicode.Co, r) {
+			continue
+		}
+		if r != zwsp {
+			return true
+		}
+		zwspCount++
+		if zwspCount >= 3 {
+			return true
+		}
+		// ZWSP between two word characters splits a word invisibly.
+		if i > 0 && i < len(runes)-1 && isWordRune(runes[i-1]) && isWordRune(runes[i+1]) {
+			return true
 		}
 	}
 	return false
+}
+
+func isWordRune(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }
+
+// containsToken reports whether tok occurs in name as a whole token: bounded by
+// the string edges or by non-letters. "repl" matches "python_repl" and "repl2"
+// but not "reply" or "replace"; plain substring matching produced exactly that
+// false positive on the official Slack server's slack_reply_to_thread.
+func containsToken(name, tok string) bool {
+	if name == tok {
+		return true
+	}
+	for start := 0; ; {
+		i := strings.Index(name[start:], tok)
+		if i < 0 {
+			return false
+		}
+		i += start
+		end := i + len(tok)
+		before := i == 0 || !unicode.IsLetter(rune(name[i-1]))
+		after := end == len(name) || !unicode.IsLetter(rune(name[end]))
+		if before && after {
+			return true
+		}
+		start = i + 1
+	}
 }
 
 // ---- MCP002: Deceptive tool name / homoglyph attack ----------------------------
@@ -864,7 +912,7 @@ var evalSchemaPatterns = []*regexp.Regexp{
 func checkMCP020ArbitraryCodeExecution(t *mcpclient.Tool) []Finding {
 	nameLower := strings.ToLower(t.Name)
 	for _, n := range evalToolNames {
-		if nameLower == n || strings.Contains(nameLower, n) {
+		if containsToken(nameLower, n) {
 			return []Finding{{
 				RuleID:   "MCP020",
 				Name:     "Arbitrary code execution (eval/interpreter)",

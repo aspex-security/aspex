@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -15,7 +17,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/aspex-security/aspex/internal/attackpath"
+	"github.com/aspex-security/aspex/internal/correlate"
 	"github.com/aspex-security/aspex/internal/doctor"
+	"github.com/aspex-security/aspex/internal/logparse"
+	"github.com/aspex-security/aspex/internal/policy"
 	"github.com/aspex-security/aspex/internal/diff"
 	"github.com/aspex-security/aspex/internal/history"
 	"github.com/aspex-security/aspex/internal/discover"
@@ -73,6 +78,15 @@ type globalFlags struct {
 	explain      bool
 	shareMode    bool
 	reportFormat string
+
+	// Policy and ratchet (.aspex.yaml, finding baseline).
+	configPath   string
+	baselineFile string
+	saveBaseline string
+
+	// Correlate static findings with observed aspex-trace activity.
+	withTrace  bool
+	traceSince string
 }
 
 func newRootCmd() *cobra.Command {
@@ -160,8 +174,14 @@ COMPARING OVER TIME
 	root.PersistentFlags().BoolVar(&gf.explain, "explain", false, "Show why each finding is a risk, how it could be exploited, and how to fix it")
 	root.Flags().BoolVar(&gf.shareMode, "share", false, "Print a privacy-safe shareable summary (no server names or values)")
 	root.Flags().StringVar(&gf.reportFormat, "report", "", "Generate compliance report: soc2, iso27001")
+	root.PersistentFlags().StringVar(&gf.configPath, "config", "", "Path to .aspex.yaml policy (default: ./.aspex.yaml, then ~/.config/aspex/config.yaml)")
+	root.Flags().StringVar(&gf.baselineFile, "baseline", "", "Finding baseline to ratchet against: known findings are hidden and never fail the gate")
+	root.Flags().StringVar(&gf.saveBaseline, "save-baseline", "", "Write current findings to this file as a new baseline")
+	root.Flags().BoolVar(&gf.withTrace, "with-trace", false, "Correlate findings with observed agent activity from aspex-trace logs")
+	root.Flags().StringVar(&gf.traceSince, "trace-since", "7d", "Activity window for --with-trace (e.g. 24h, 7d, 4w)")
 
 	root.AddCommand(newDoctorCmd())
+	root.AddCommand(newInitCmd())
 	root.AddCommand(newInspectCmd(&gf))
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newDiffCmd(&gf))
@@ -1538,6 +1558,64 @@ func runScan(gf globalFlags) error {
 		allFindings = append(allFindings, findings)
 	}
 
+	// Policy (.aspex.yaml): accepted risks and per-rule severity overrides.
+	// Applied before scoring so the score and the gate reflect the team's policy.
+	cfg, err := policy.Load(gf.configPath)
+	if err != nil {
+		return err
+	}
+	var suppressed []policy.Suppressed
+	var expiredIgnores []policy.IgnoreEntry
+	now := time.Now()
+	for i, srv := range inspected {
+		kept, sup, exp := cfg.Apply(srv.Entry.Name, allFindings[i], now)
+		allFindings[i] = kept
+		suppressed = append(suppressed, sup...)
+		expiredIgnores = append(expiredIgnores, exp...)
+	}
+	failOn := gf.failOn
+	if failOn == "off" && cfg != nil && cfg.FailOn != "" {
+		failOn = cfg.FailOn
+	}
+
+	// Baseline ratchet: snapshot the post-policy state if asked, then hide
+	// findings that were already present when the baseline was taken.
+	serverNames := make([]string, len(inspected))
+	for i, srv := range inspected {
+		serverNames[i] = srv.Entry.Name
+	}
+	if gf.saveBaseline != "" {
+		if err := policy.NewBaseline(version.Version, serverNames, allFindings).Save(gf.saveBaseline); err != nil {
+			return fmt.Errorf("saving baseline: %w", err)
+		}
+	}
+	baselined := 0
+	if gf.baselineFile != "" {
+		base, err := policy.LoadBaseline(gf.baselineFile)
+		if err != nil {
+			return fmt.Errorf("loading baseline: %w", err)
+		}
+		for i, name := range serverNames {
+			fresh, known := base.Filter(name, allFindings[i])
+			allFindings[i] = fresh
+			baselined += len(known)
+		}
+	}
+
+	// Observed activity from aspex-trace logs, keyed by server name.
+	var activity map[string]*correlate.Activity
+	if gf.withTrace {
+		window, err := parseWindow(gf.traceSince)
+		if err != nil {
+			return err
+		}
+		events, _, collectErrs := logparse.CollectEvents(nil, now.Add(-window))
+		for _, e := range collectErrs {
+			errStrings = append(errStrings, e.Error())
+		}
+		activity = correlate.Summarize(events)
+	}
+
 	var scores []score.ServerScore
 	for _, findings := range allFindings {
 		scores = append(scores, score.ScoreServer(findings))
@@ -1550,9 +1628,20 @@ func runScan(gf globalFlags) error {
 		jsonServers = append(jsonServers, toJSONServer(srv, scores[i]))
 	}
 	out := report.JSONScanOutput{
-		Version: version.Version,
-		Overall: overall,
-		Servers: jsonServers,
+		Version:   version.Version,
+		Overall:   overall,
+		Servers:   jsonServers,
+		Baselined: baselined,
+		Activity:  activity,
+	}
+	if cfg != nil {
+		out.Policy = cfg.Path
+	}
+	for _, s := range suppressed {
+		out.Suppressed = append(out.Suppressed, report.JSONSuppressed{
+			Server: s.Server, RuleID: s.Finding.RuleID, Name: s.Finding.Name,
+			Severity: s.Finding.Severity.String(), Reason: s.Reason, Expires: s.Expires,
+		})
 	}
 
 	// SARIF output to stdout.
@@ -1634,7 +1723,181 @@ func runScan(gf globalFlags) error {
 		r.PrevBand = prev.Band
 	}
 	report.PrintScanReport(os.Stdout, r)
-	return checkExitCode(gf.failOn, overall)
+	printPolicySummary(os.Stdout, gf.noColor, cfg, suppressed, expiredIgnores, baselined, gf.baselineFile)
+	if gf.withTrace {
+		printActivity(os.Stdout, gf.noColor, inspected, scores, activity, gf.traceSince)
+	}
+	return checkExitCode(failOn, overall)
+}
+
+// printPolicySummary tells the user what the policy and baseline removed, so a
+// clean run is never mistaken for "nothing was found".
+func printPolicySummary(w io.Writer, noColor bool, cfg *policy.Config, suppressed []policy.Suppressed, expired []policy.IgnoreEntry, baselined int, baselineFile string) {
+	c := func(code, s string) string {
+		if noColor {
+			return s
+		}
+		return code + s + ansiReset
+	}
+	if cfg == nil && baselined == 0 {
+		return
+	}
+	if cfg != nil {
+		fmt.Fprintf(w, "  %s %s\n", c(ansiDim, "policy:"), c(ansiDim, cfg.Path))
+		if len(suppressed) > 0 {
+			fmt.Fprintf(w, "  %s %d accepted risk(s) suppressed by policy:\n", c(ansiDim, "·"), len(suppressed))
+			for _, s := range suppressed {
+				exp := ""
+				if s.Expires != "" {
+					exp = "  until " + s.Expires
+				}
+				fmt.Fprintf(w, "      %s  %-8s %-18s %s%s\n",
+					c(ansiDim, s.Finding.Severity.String()), s.Finding.RuleID, s.Server,
+					c(ansiDim, report.SanitizeForTerminal(s.Reason)), c(ansiDim, exp))
+			}
+		}
+		for _, e := range expired {
+			fmt.Fprintf(w, "  %s ignore for %s on %q expired %s - finding is active again. Re-review or extend it.\n",
+				c(ansiYellow, "warn:"), e.Rule, e.Server, e.Expires)
+		}
+	}
+	if baselined > 0 {
+		fmt.Fprintf(w, "  %s %d pre-existing finding(s) hidden by baseline %s. New findings only are shown and gated.\n",
+			c(ansiDim, "·"), baselined, c(ansiDim, baselineFile))
+	}
+	fmt.Fprintln(w)
+}
+
+// printActivity joins static findings with what aspex-trace observed. The
+// "prioritize" list is the point: servers that are both risky and actually used.
+func printActivity(w io.Writer, noColor bool, inspected []*inspect.Server, scores []score.ServerScore, activity map[string]*correlate.Activity, window string) {
+	c := func(code, s string) string {
+		if noColor {
+			return s
+		}
+		return code + s + ansiReset
+	}
+	fmt.Fprintf(w, "  %s  %s  %s\n\n", c(ansiPurple+ansiBold, "◆"), c(ansiBold, "Observed activity"), c(ansiDim, "last "+window+", from aspex-trace logs"))
+
+	type row struct {
+		name     string
+		static   rules.Severity
+		act      *correlate.Activity
+		priority int
+	}
+	var rows []row
+	matched := map[*correlate.Activity]bool{}
+	for i, srv := range inspected {
+		var maxSev rules.Severity
+		for _, f := range scores[i].Findings {
+			if f.Severity > maxSev {
+				maxSev = f.Severity
+			}
+		}
+		a := correlate.Match(activity, srv.Entry.Name)
+		if a != nil {
+			matched[a] = true
+		}
+		rows = append(rows, row{srv.Entry.Name, maxSev, a, correlate.Priority(maxSev, a)})
+	}
+
+	// Activity on servers the scan never saw: remote connectors registered by
+	// ID, or servers configured somewhere aspex-scan does not read. Agents are
+	// using them and nothing has scored them - that is a visibility gap.
+	var unseen []*correlate.Activity
+	for name, a := range activity {
+		if !matched[a] && !correlate.IsClientBuiltin(name) && a.Calls > 0 {
+			unseen = append(unseen, a)
+		}
+	}
+	sort.Slice(unseen, func(i, j int) bool { return unseen[i].Calls > unseen[j].Calls })
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].priority > rows[j].priority })
+
+	for _, r := range rows {
+		calls := c(ansiDim, "not seen")
+		flagged := ""
+		if r.act != nil && r.act.Calls > 0 {
+			calls = fmt.Sprintf("%d calls · %d tools", r.act.Calls, len(r.act.Tools))
+			if r.act.Flagged > 0 {
+				flagged = c(ansiRed, fmt.Sprintf("  %d flagged (%s)", r.act.Flagged, r.act.MaxSev))
+			}
+		}
+		sev := c(ansiDim, "clean")
+		if r.static > 0 {
+			sev = r.static.String()
+		}
+		fmt.Fprintf(w, "  %-20s %-9s %s%s\n", r.name, sev, calls, flagged)
+	}
+
+	if len(unseen) > 0 {
+		fmt.Fprintf(w, "\n  %s  %s\n", c(ansiYellow+ansiBold, "?"), c(ansiBold, "In use but not in any scanned config - unscored:"))
+		for _, a := range unseen {
+			flag := ""
+			if a.Flagged > 0 {
+				flag = c(ansiRed, fmt.Sprintf("  %d flagged (%s)", a.Flagged, a.MaxSev))
+			}
+			fmt.Fprintf(w, "     %-38s %d calls · %d tools · via %s%s\n",
+				report.SanitizeForTerminal(a.Server), a.Calls, len(a.Tools), strings.Join(a.Clients, ","), flag)
+		}
+		fmt.Fprintf(w, "     %s\n", c(ansiDim, "Remote connectors and per-project configs are not discovered yet. Scan one directly: aspex-scan inspect <url|command>"))
+	}
+
+	var prio []row
+	for _, r := range rows {
+		if r.static >= rules.SeverityHigh && r.act != nil && r.act.Calls > 0 {
+			prio = append(prio, r)
+		}
+	}
+	fmt.Fprintln(w)
+	if len(prio) == 0 {
+		fmt.Fprintf(w, "  %s\n\n", c(ansiDim, "No high-risk server was invoked in this window. Risky-but-unused servers are latent: remove them or scope them down."))
+		return
+	}
+	fmt.Fprintf(w, "  %s  %s\n", c(ansiRed+ansiBold, "▲"), c(ansiBold, "Prioritize - risky AND in active use:"))
+	for _, r := range prio {
+		fmt.Fprintf(w, "     %s  %s  %s\n", c(ansiRed, r.static.String()), c(ansiBold, r.name),
+			c(ansiDim, fmt.Sprintf("%d calls, tools: %s", r.act.Calls, strings.Join(r.act.Tools, ", "))))
+	}
+	fmt.Fprintln(w)
+}
+
+// parseWindow parses 24h / 7d / 4w style durations.
+func parseWindow(s string) (time.Duration, error) {
+	if d, err := time.ParseDuration(s); err == nil {
+		return d, nil
+	}
+	if len(s) > 1 {
+		n, err := strconv.Atoi(s[:len(s)-1])
+		if err == nil {
+			switch s[len(s)-1] {
+			case 'd':
+				return time.Duration(n) * 24 * time.Hour, nil
+			case 'w':
+				return time.Duration(n) * 7 * 24 * time.Hour, nil
+			}
+		}
+	}
+	return 0, fmt.Errorf("invalid window %q (use 24h, 7d, 4w)", s)
+}
+
+func newInitCmd() *cobra.Command {
+	var force bool
+	cmd := &cobra.Command{
+		Use:   "init",
+		Short: "Write a starter .aspex.yaml policy in the current directory",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if _, err := os.Stat(policy.FileName); err == nil && !force {
+				return fmt.Errorf("%s already exists (use --force to overwrite)", policy.FileName)
+			}
+			if err := os.WriteFile(policy.FileName, []byte(policy.Example()), 0o644); err != nil {
+				return err
+			}
+			fmt.Fprintf(os.Stdout, "Wrote %s - edit the ignore/severity entries, then run aspex-scan.\n", policy.FileName)
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&force, "force", false, "Overwrite an existing .aspex.yaml")
+	return cmd
 }
 
 func runWatch(gf globalFlags) error {

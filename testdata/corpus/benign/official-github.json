@@ -1,0 +1,15 @@
+{
+  "name": "official-github",
+  "description": "GitHub MCP server, pinned, token supplied via keychain lookup (not a plaintext env value). Can write to repos, so HIGH is acceptable.",
+  "entry": {"Name": "github", "Client": "claude-code", "Command": "npx", "Args": ["-y", "@modelcontextprotocol/server-github@2025.4.8"]},
+  "tools": [
+    {"name": "search_repositories", "description": "Search for GitHub repositories.", "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}}},
+    {"name": "get_file_contents", "description": "Get the contents of a file or directory from a GitHub repository.", "inputSchema": {"type": "object", "properties": {"owner": {"type": "string"}, "repo": {"type": "string"}, "path": {"type": "string"}}}},
+    {"name": "create_or_update_file", "description": "Create or update a single file in a GitHub repository.", "inputSchema": {"type": "object", "properties": {"owner": {"type": "string"}, "repo": {"type": "string"}, "path": {"type": "string"}, "content": {"type": "string"}, "message": {"type": "string"}, "branch": {"type": "string"}}}},
+    {"name": "create_issue", "description": "Create a new issue in a GitHub repository.", "inputSchema": {"type": "object", "properties": {"owner": {"type": "string"}, "repo": {"type": "string"}, "title": {"type": "string"}, "body": {"type": "string"}}}},
+    {"name": "create_pull_request", "description": "Create a new pull request in a GitHub repository.", "inputSchema": {"type": "object", "properties": {"owner": {"type": "string"}, "repo": {"type": "string"}, "title": {"type": "string"}, "head": {"type": "string"}, "base": {"type": "string"}}}},
+    {"name": "list_commits", "description": "Get list of commits of a branch in a GitHub repository.", "inputSchema": {"type": "object", "properties": {"owner": {"type": "string"}, "repo": {"type": "string"}}}},
+    {"name": "search_code", "description": "Search for code across GitHub repositories.", "inputSchema": {"type": "object", "properties": {"q": {"type": "string"}}}}
+  ],
+  "max_severity": "high"
+}
