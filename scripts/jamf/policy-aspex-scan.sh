@@ -14,7 +14,7 @@
 #     $5 = Minimum severity to notify on (critical|high|medium|low, default: high)
 #
 # Log output location (collected by Jamf File Collection or read by other EAs):
-#   /Library/Logs/Onyx/aspex-scan-<username>.json
+#   /Library/Logs/Aspex/aspex-scan-<username>.json
 #
 # Exit codes:
 #   0  Success (scan ran, even if findings were found)
@@ -27,7 +27,7 @@ set -euo pipefail
 BINARY_NAMES=("aspex-scan")
 SEARCH_PATHS=("/usr/local/bin" "/opt/homebrew/bin" "/opt/local/bin")
 TIMEOUT_SECS=120
-LOG_DIR="/Library/Logs/Onyx"
+LOG_DIR="/Library/Logs/Aspex"
 WEBHOOK_URL="${4:-}"          # Jamf parameter $4
 MIN_SEVERITY="${5:-high}"     # Jamf parameter $5
 

@@ -1,6 +1,6 @@
-name: "Onyx MCP Scan"
+name: "Aspex Scan"
 description: "Scan MCP server configurations for security risks and upload SARIF results."
-author: "Onyx Security"
+author: "aspex-security"
 
 branding:
   icon: shield
@@ -104,7 +104,7 @@ runs:
         echo "score=$SCORE" >> "$GITHUB_OUTPUT"
         echo "band=$BAND" >> "$GITHUB_OUTPUT"
 
-        echo "### Onyx MCP Scan Results" >> "$GITHUB_STEP_SUMMARY"
+        echo "### Aspex Scan Results" >> "$GITHUB_STEP_SUMMARY"
         echo "| Score | Band |" >> "$GITHUB_STEP_SUMMARY"
         echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
         echo "| $SCORE / 100 | $BAND |" >> "$GITHUB_STEP_SUMMARY"

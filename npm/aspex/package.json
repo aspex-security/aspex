@@ -1,0 +1,35 @@
+{
+  "name": "aspex",
+  "version": "0.0.0-dev",
+  "description": "See what your AI agents actually did, then scan what they could do. MCP security from logs, no proxy. Offline, one binary.",
+  "keywords": ["mcp", "security", "ai-agents", "claude-code", "cursor", "llm-security", "prompt-injection", "audit", "devsecops"],
+  "homepage": "https://aspex.mintlify.site",
+  "bugs": "https://github.com/aspex-security/aspex/issues",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aspex-security/aspex.git",
+    "directory": "npm/aspex"
+  },
+  "bin": {
+    "aspex": "bin/aspex.js",
+    "aspex-scan": "bin/aspex-scan.js",
+    "aspex-trace": "bin/aspex-trace.js",
+    "aspex-attack": "bin/aspex-attack.js",
+    "aspex-doctor": "bin/aspex-doctor.js"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "files": [
+    "bin/",
+    "install.js",
+    "run.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "os": ["darwin", "linux", "win32"],
+  "cpu": ["x64", "arm64"]
+}

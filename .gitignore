@@ -9,9 +9,10 @@ bin/
 /aspex-trace
 /mcp-scan
 /agent-trace
-# npm binary wrappers
-npm/mcp-scan/bin/
-npm/agent-trace/bin/
+# npm package: binaries are downloaded at install time
+npm/aspex/vendor/
+npm/aspex/node_modules/
+npm/aspex/*.tgz
 # macOS metadata
 .DS_Store
 **/.DS_Store

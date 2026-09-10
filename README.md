@@ -117,4 +117,4 @@ Security issues: do not open a public issue. Email steven.d@onyx.security.
 
 ## License
 
-Apache-2.0. Sponsored by [Onyx Security](https://onyx.security). Free forever, and it stays offline.
+Apache-2.0. Free forever, and it stays offline.

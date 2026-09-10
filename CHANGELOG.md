@@ -7,6 +7,24 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [Unreleased]
+
+### Added
+- npm package `aspex`: `npx aspex` / `npm i -g aspex`. Downloads the matching
+  release archive at install time, verifies it against `checksums.txt`, and
+  exposes all five commands through Node shims. Replaces the never-published
+  `@aspex/scan` and `@aspex/trace` packages. Publishing runs only when
+  `NPM_TOKEN` is set and uses npm provenance.
+
+### Fixed
+- Release: `version.Version` and `BuildDate` were consts, so GoReleaser's `-X`
+  ldflags were silently ignored and binaries reported "built dev". Now vars.
+- Release: npm publish never authenticated because the workflow lacked
+  `setup-node` with `registry-url`; the package version was also hardcoded
+  instead of taken from the tag.
+- Homebrew formula text (description, caveats) in `.goreleaser.yaml` now matches
+  the trace-first positioning.
+
 ## [0.6.0] - 2026-09-10
 
 The release that turns Aspex from "a scanner with a trace tool" into "see what

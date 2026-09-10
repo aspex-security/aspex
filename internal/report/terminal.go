@@ -504,11 +504,7 @@ func PrintScanReport(w io.Writer, r ScanReport) {
 		)
 	}
 
-	fmt.Fprintf(w, "  %s\n", c(colorDim, "This scanned 1 machine."))
-	fmt.Fprintf(w, "  %s %s\n\n",
-		c(colorDim, "Continuous fleet-wide monitoring and enforcement by Onyx Security:"),
-		c(colorPurple, "https://onyx.security"),
-	)
+	fmt.Fprintln(w)
 }
 
 type serverResult struct {

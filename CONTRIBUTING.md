@@ -1,6 +1,6 @@
 # Contributing to Aspex
 
-Thank you for taking the time to contribute. This project is maintained by [Onyx Security](https://onyx.security) and open to community contributions under the Apache-2.0 license.
+Thank you for taking the time to contribute. This project is open to community contributions under the Apache-2.0 license.
 
 The highest-value contributions are:
 
@@ -214,7 +214,7 @@ Run `go test ./internal/rules/ -run TestCorpus -v` to see each fixture pass or f
 - **Comments explain why, not what.** Only add a comment when the reason for the code is non-obvious to a future reader.
 - **No telemetry.** No network calls in rule, parser, or report code. The tools must work fully offline.
 - **Tests must be deterministic.** Use fixture files in `testdata/`. Do not use live network calls, live filesystem paths outside the test's temp dir, or time-dependent behavior.
-- **Keep the OSS/paid line.** Discovery, inspection, scoring, and audit on one machine: OSS. Continuous, fleet-wide, enforcing: Onyx Security SaaS. Do not add features that blur this line.
+- **Stay local.** Everything runs on one machine against local configs and logs. Do not add features that need a server, an account, or a hosted service.
 
 ---
 

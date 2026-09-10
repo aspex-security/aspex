@@ -222,8 +222,7 @@ func PrintTraceReport(w io.Writer, r TraceReport) {
 			c(colorCyan, "aspex-trace stats"),
 		)
 	}
-	fmt.Fprintf(w, "  %sThis traced 1 machine. See continuous agent activity across your%s\n", c(colorDim, ""), c(colorReset, ""))
-	fmt.Fprintf(w, "  %sorg: https://onyx.security  (this tool is and will remain free)%s\n\n", c(colorDim, ""), c(colorReset, ""))
+	fmt.Fprintln(w)
 }
 
 // printSummaryOnly renders the compact --summary view.

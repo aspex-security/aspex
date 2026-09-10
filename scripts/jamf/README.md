@@ -58,7 +58,7 @@ FAIL CLIENTS=3 ENV_SECRETS=0 CONFIG_SECRETS=1 FS_ISSUES=0 NETWORK=1
 
 ## Policy Script: Scheduled Full Scan
 
-`policy-aspex-scan.sh` runs a full scan on a schedule, writes a JSON log to `/Library/Logs/Onyx/aspex-scan-<username>.json`, and optionally posts findings to a Slack/webhook URL.
+`policy-aspex-scan.sh` runs a full scan on a schedule, writes a JSON log to `/Library/Logs/Aspex/aspex-scan-<username>.json`, and optionally posts findings to a Slack/webhook URL.
 
 ### Setup
 
@@ -81,7 +81,7 @@ FAIL CLIENTS=3 ENV_SECRETS=0 CONFIG_SECRETS=1 FS_ISSUES=0 NETWORK=1
 To pull the JSON results back into Jamf for deeper reporting:
 
 1. Computers - Management Framework - **File Collection**
-2. Add path: `/Library/Logs/Onyx/aspex-scan-*.json`
+2. Add path: `/Library/Logs/Aspex/aspex-scan-*.json`
 3. Collect at inventory update
 
 ---

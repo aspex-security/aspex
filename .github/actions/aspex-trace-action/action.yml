@@ -1,6 +1,6 @@
-name: "Onyx Agent Trace"
+name: "Aspex Trace"
 description: "Audit MCP agent activity from stored log artifacts and flag anomalies."
-author: "Onyx Security"
+author: "aspex-security"
 
 branding:
   icon: activity
@@ -97,7 +97,7 @@ runs:
         FLAGGED=$(echo "$RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('flagged', [])))" 2>/dev/null || echo "0")
         echo "flagged=$FLAGGED" >> "$GITHUB_OUTPUT"
 
-        echo "### Onyx Agent Trace Results" >> "$GITHUB_STEP_SUMMARY"
+        echo "### Aspex Trace Results" >> "$GITHUB_STEP_SUMMARY"
         echo "Flagged events: $FLAGGED" >> "$GITHUB_STEP_SUMMARY"
 
         if [ "$EXIT" -ne 0 ] && [ "$INPUT_FAIL_ON" != "none" ]; then
