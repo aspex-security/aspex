@@ -86,6 +86,10 @@ runs:
         # Use an array so each flag value is a distinct argument (no word-splitting).
         ARGS=(--json --since "$INPUT_SINCE")
         if [ -n "$INPUT_CLIENT" ]; then ARGS+=(--client "$INPUT_CLIENT"); fi
+        # The gate must reach the binary, not just the failure message below.
+        if [ -n "$INPUT_FAIL_ON" ] && [ "$INPUT_FAIL_ON" != "none" ] && [ "$INPUT_FAIL_ON" != "off" ]; then
+          ARGS+=(--fail-on "$INPUT_FAIL_ON")
+        fi
 
         set +e
         RESULT=$(aspex-trace "${ARGS[@]}" 2>&1)

@@ -1,67 +1,57 @@
 ---
-title: "VS Code & Cursor Extension"
-description: "MCP security scanning in your editor"
+title: "VS Code and Cursor"
+description: "aspex-scan findings as editor diagnostics, plus the SARIF viewer and pre-commit hook routes that work today."
 ---
 
-The aspex VS Code extension brings MCP security scanning directly into your editor. It works in VS Code, Cursor, and any VS Code-based editor (Windsurf, VSCodium, etc.).
+There are three ways to get Aspex findings into your editor. The first is an extension that lives in the main repository and is not yet on the Marketplace; the other two need nothing but the CLI.
 
-## How it works
+## The extension (build from source)
 
-The extension shells out to the `aspex` CLI and surfaces results as native editor diagnostics.
+`extensions/vscode-aspex/` in the [aspex repository](https://github.com/aspex-security/aspex/tree/main/extensions/vscode-aspex) is a small extension that runs `aspex-scan --json` and shows findings in the Problems panel. It works in VS Code, Cursor, Windsurf, and other VS Code-based editors.
 
-- **Scan on save** - whenever you save an MCP config file (`claude_desktop_config.json`, `.cursor/mcp.json`, etc.), the extension runs `aspex-scan` in the background.
-- **Inline squiggles** - findings appear as warning or error underlines on the relevant line in the config file.
-- **Problems panel** - all findings are listed in the standard VS Code Problems panel (`View → Problems`) with severity, rule ID, and a one-line description. Clicking a problem jumps to the offending line.
+What it does:
 
-For findings with an available fix (for example, a hardcoded credential that can be migrated to the macOS Keychain), a lightbulb code action appears inline.
+- **Scan on save**: when you save an MCP config file, it runs `aspex-scan` and refreshes diagnostics.
+- **Problems panel**: each finding becomes a diagnostic with its severity and rule ID.
+- **Two commands** in the palette (`Cmd+Shift+P`): `Aspex: Scan MCP Configuration` and `Aspex: Scan All MCP Configurations`.
 
-## Install
+| Setting | Default | Description |
+|---|---|---|
+| `aspex.binaryPath` | `aspex-scan` | Path to the binary if it is not on your `PATH` |
+| `aspex.scanOnSave` | `true` | Re-scan when an MCP config file is saved |
+| `aspex.minSeverity` | `medium` | Lowest severity shown: `critical`, `high`, `medium`, `low` |
 
-The extension is not yet published to the VS Code Marketplace. Build it from source:
+Build and install:
 
-```bash
-# Prerequisites: Node.js 18+, vsce
-npm install -g @vscode/vsce
-
-# Clone and build
-git clone https://github.com/aspex-security/aspex-vscode
-cd aspex-vscode
-npm install
-vsce package          # produces aspex-vscode-*.vsix
-
-# Install the .vsix
-code --install-extension aspex-vscode-*.vsix
+```sh
+brew install aspex-security/tap/aspex      # the extension shells out to aspex-scan
+git clone https://github.com/aspex-security/aspex
+cd aspex/extensions/vscode-aspex
+npm install && npm run compile
+npx @vscode/vsce package                   # produces vscode-aspex-0.1.0.vsix
+code --install-extension vscode-aspex-0.1.0.vsix
 ```
 
-You also need the `aspex` CLI on your `PATH`:
-
-```bash
-brew install aspex-security/tap/aspex
-```
-
-Or set a custom binary path in settings (see below).
-
-## Settings
-
-| Setting | Type | Default | Description |
-|---|---|---|---|
-| `aspex.binaryPath` | `string` | `"aspex"` | Absolute path to the aspex binary. Set this if aspex is not on your `PATH`. |
-| `aspex.scanOnSave` | `boolean` | `true` | Run a scan automatically whenever an MCP config file is saved. |
-| `aspex.minSeverity` | `string` | `"medium"` | Minimum severity to surface as a diagnostic. One of `low`, `medium`, `high`, `critical`. |
-
-## Command palette
-
-Open the command palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and search for **aspex**:
-
-| Command | Description |
-|---|---|
-| `aspex: Scan workspace` | Run a full scan of all MCP configs in the workspace. |
-| `aspex: Scan current file` | Scan only the active editor file. |
-| `aspex: Show report` | Open the last scan's HTML report in a webview panel. |
-| `aspex: Explain finding` | Show the full security advisory (WHY, EXPLOIT, IMPACT, CONFIDENCE) for the finding under the cursor. |
-| `aspex: Fix credential` | Migrate a hardcoded token in the current file to the macOS Keychain. |
-| `aspex: Clear diagnostics` | Remove all aspex squiggles and Problems panel entries. |
+For Cursor, use `cursor --install-extension` with the same file.
 
 <Note>
-All scanning is fully offline. No data is sent anywhere. The extension only invokes the local `aspex` binary - there is no telemetry and no account required.
+The extension is deliberately thin: it does not add quick fixes or a report view. `aspex-scan --explain` and `aspex-scan --html` in the terminal remain the richest way to read a finding.
 </Note>
+
+## SARIF in the editor
+
+`aspex-scan` writes SARIF 2.1.0, and the [SARIF Viewer](https://marketplace.visualstudio.com/items?itemName=MS-SarifVSCode.sarif-viewer) extension renders it with inline annotations:
+
+```sh
+aspex-scan --sarif-output aspex.sarif
+```
+
+Open `aspex.sarif` in VS Code. This route needs no Aspex-specific extension and is the same file the [CI integration](/guides/ci-integration) uploads to GitHub code scanning.
+
+## Pre-commit hook
+
+```sh
+aspex-scan install-hook
+```
+
+Installs a Git hook that runs `aspex-scan --no-exec --fail-on high` before each commit and blocks the commit on a HIGH or CRITICAL finding. The hook reads your `.aspex.yaml`, so accepted risks and severity overrides apply. `aspex-scan uninstall-hook` removes it; `git commit --no-verify` bypasses it once.

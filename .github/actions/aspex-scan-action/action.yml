@@ -12,7 +12,7 @@ inputs:
     required: false
     default: "latest"
   config:
-    description: "Path to a specific MCP config file to scan"
+    description: "Path to an .aspex.yaml policy (accepted risks, severity overrides). Default: ./.aspex.yaml in the checkout if present"
     required: false
     default: ""
   fail-on:
@@ -85,11 +85,17 @@ runs:
         INPUT_NO_EXEC: ${{ inputs.no-exec }}
         INPUT_CONFIG: ${{ inputs.config }}
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_UPLOAD_SARIF: ${{ inputs.upload-sarif }}
       run: |
         # Use an array so each flag value is a distinct argument (no word-splitting).
         ARGS=(--json)
         if [ "$INPUT_NO_EXEC" = "true" ]; then ARGS+=(--no-exec); fi
         if [ -n "$INPUT_CONFIG" ]; then ARGS+=(--config "$INPUT_CONFIG"); fi
+        # The gate must reach the scanner, not just the failure message below.
+        if [ -n "$INPUT_FAIL_ON" ] && [ "$INPUT_FAIL_ON" != "none" ] && [ "$INPUT_FAIL_ON" != "off" ]; then
+          ARGS+=(--fail-on "$INPUT_FAIL_ON")
+        fi
+        if [ "$INPUT_UPLOAD_SARIF" = "true" ]; then ARGS+=(--sarif-output aspex.sarif); fi
 
         set +e
         RESULT=$(aspex-scan "${ARGS[@]}" 2>&1)
@@ -109,7 +115,16 @@ runs:
         echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
         echo "| $SCORE / 100 | $BAND |" >> "$GITHUB_STEP_SUMMARY"
 
-        if [ "$EXIT" -ne 0 ] && [ "$INPUT_FAIL_ON" != "none" ]; then
+        if [ "$EXIT" -ne 0 ] && [ "$INPUT_FAIL_ON" != "none" ] && [ "$INPUT_FAIL_ON" != "off" ]; then
           echo "Scan found findings at or above --fail-on=$INPUT_FAIL_ON."
           exit 1
         fi
+
+    # Runs even when the scan step failed the gate, so findings still reach the
+    # Security tab. The caller's job needs `security-events: write`.
+    - name: Upload SARIF to GitHub code scanning
+      if: ${{ always() && inputs.upload-sarif == 'true' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: aspex.sarif
+        category: aspex-scan

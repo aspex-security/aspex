@@ -336,7 +336,7 @@ Use `--watch` instead of `cron` for lightweight filesystem-event-driven rescanni
 
 ```yaml GitHub Actions (composite action)
 - name: Scan MCP servers
-  uses: aspex-security/aspex-action@v1
+  uses: aspex-security/aspex/.github/actions/aspex-scan-action@main
   with:
     fail-on: 80
     sarif: true
