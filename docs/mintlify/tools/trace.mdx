@@ -24,7 +24,7 @@ aspex-trace provenance       # where did an injected instruction come from?
 | `--baseline <file>` | Flag deviations from a learned behavioral baseline (see below) |
 | `--json` | Machine-readable output |
 | `--sarif` | SARIF 2.1.0 for GitHub Advanced Security |
-| `--fail-on <sev>` | Exit 1 when findings reach this severity: `critical`, `high`, `medium`, `low` |
+| `--fail-on <sev>` | Exit 1 when findings reach this severity: `critical`, `high`, `medium`, `low`. Default `high`, so an interactive run with HIGH findings exits 1; pass `--fail-on off` for a report-only exit code |
 | `--no-color` | Plain text for logs and scripts |
 
 ## Commands

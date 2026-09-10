@@ -7,7 +7,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-## [Unreleased]
+## [0.6.1] - 2026-09-10
 
 ### Added
 - npm package `aspex`: `npx aspex` / `npm i -g aspex`. Downloads the matching
@@ -16,7 +16,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   `@aspex/scan` and `@aspex/trace` packages. Publishing runs only when
   `NPM_TOKEN` is set and uses npm provenance.
 
+### Removed
+- All vendor footers and links from aspex-scan, aspex-trace, the HTML report,
+  README, docs, Homebrew caveats, GitHub Actions and the Jamf script. Aspex is
+  an independent open-source project.
+
 ### Fixed
+- `aspex` launcher no longer exits when a tool it ran returns non-zero.
+  aspex-trace defaults to `--fail-on high`, so any HIGH finding ended the
+  whole menu session. The launcher now reports the status and returns.
+- aspex-trace footer hint printed `--since 24h0m0s`; now `--since 24h`.
+- GitHub Actions: `--fail-on` is passed to the binaries (it was only used in
+  the failure message, so neither action could fail a build); the scan action
+  writes and uploads SARIF when `upload-sarif` is true (the input was dead).
 - Release: `version.Version` and `BuildDate` were consts, so GoReleaser's `-X`
   ldflags were silently ignored and binaries reported "built dev". Now vars.
 - Release: npm publish never authenticated because the workflow lacked

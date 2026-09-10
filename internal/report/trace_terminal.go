@@ -212,7 +212,7 @@ func PrintTraceReport(w io.Writer, r TraceReport) {
 		fmt.Fprintf(w, "  %s Drill into a session:       %s\n",
 			c(colorDim, "→"), c(colorCyan, "aspex-trace session"))
 		fmt.Fprintf(w, "  %s Look for attack patterns:   %s\n",
-			c(colorDim, "→"), c(colorCyan, "aspex-trace killchain --since "+r.Since.String()))
+			c(colorDim, "→"), c(colorCyan, "aspex-trace killchain --since "+SinceFlag(r.Since)))
 		fmt.Fprintf(w, "  %s Export for SIEM:            %s\n\n",
 			c(colorDim, "→"), c(colorCyan, "aspex-trace export --format jsonl"))
 	} else {
@@ -393,4 +393,18 @@ func printTraceSeveritySection(w io.Writer, c colorFn, severity string, events [
 		}
 		fmt.Fprintln(w)
 	}
+}
+
+// SinceFlag renders a duration the way a person types it on the command line:
+// 24h, 7d, 90m - never 24h0m0s.
+func SinceFlag(d time.Duration) string {
+	switch {
+	case d >= 24*time.Hour && d%(24*time.Hour) == 0:
+		return fmt.Sprintf("%dd", int(d/(24*time.Hour)))
+	case d >= time.Hour && d%time.Hour == 0:
+		return fmt.Sprintf("%dh", int(d/time.Hour))
+	case d >= time.Minute && d%time.Minute == 0:
+		return fmt.Sprintf("%dm", int(d/time.Minute))
+	}
+	return d.String()
 }

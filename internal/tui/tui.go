@@ -393,8 +393,9 @@ func launch(binary string, args []string) {
 			}
 		}
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: %s not found in PATH\n", binary)
-			os.Exit(1)
+			// Report and return to the menu; never take the launcher down.
+			fmt.Fprintf(os.Stderr, "\n  %serror: %s not found in PATH%s\n", red, binary, reset)
+			return
 		}
 	}
 
@@ -403,9 +404,15 @@ func launch(binary string, args []string) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
+		// A non-zero exit here is usually the tool's own --fail-on gate firing
+		// (aspex-trace defaults to high), not a failure of the launcher. Say so
+		// and go back to the menu instead of exiting with the tool's code.
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			os.Exit(exitErr.ExitCode())
+			fmt.Fprintf(os.Stderr, "\n  %s%s exited with status %d (findings at or above its --fail-on threshold)%s\n",
+				dim, binary, exitErr.ExitCode(), reset)
+			return
 		}
+		fmt.Fprintf(os.Stderr, "\n  %serror running %s: %v%s\n", red, binary, err, reset)
 	}
 }
 
