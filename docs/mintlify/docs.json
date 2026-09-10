@@ -1,0 +1,62 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Aspex",
+  "colors": {
+    "primary": "#7c5cfc",
+    "light": "#a78bfa",
+    "dark": "#5b44c3"
+  },
+  "favicon": "/favicon.svg",
+  "logo": {
+    "light": "/logo/logo.svg",
+    "dark": "/logo/logo.svg"
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Docs",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": ["introduction", "quickstart"]
+          },
+          {
+            "group": "Core Tools",
+            "pages": ["tools/launcher", "tools/scan", "tools/trace"]
+          },
+          {
+            "group": "Advanced",
+            "pages": ["tools/attack", "tools/doctor"]
+          },
+          {
+            "group": "Guides",
+            "pages": ["guides/policy", "guides/ci-integration", "guides/daily-workflow", "guides/vscode"]
+          },
+          {
+            "group": "Reference",
+            "pages": ["reference/rules", "reference/clients", "privacy"]
+          }
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/aspex-security/aspex"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Install",
+      "href": "https://github.com/aspex-security/aspex/releases"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/aspex-security/aspex"
+    }
+  }
+}

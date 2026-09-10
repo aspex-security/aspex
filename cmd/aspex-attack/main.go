@@ -57,7 +57,7 @@ servers you own or have explicit written permission to test.`,
 	cmd.Flags().StringVar(&serverFlag, "server", "", "Probe only this server (by name)")
 	cmd.Flags().IntVar(&timeoutSecs, "timeout", 10, "Timeout per probe in seconds")
 	cmd.Flags().StringSliceVar(&categories, "categories", nil,
-		"Limit to these probe categories (prompt-injection,path-traversal,ssrf,command-injection,error-disclosure,prompt-leakage)")
+		"Limit to these probe categories (prompt-injection,path-traversal,ssrf,error-disclosure,schema-abuse,prompt-leakage)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
 	cmd.Flags().BoolVar(&noColor, "no-color", false, "Plain-text output (useful in CI)")
 	cmd.Flags().StringSliceVar(&clients, "clients", discover.AllClients,

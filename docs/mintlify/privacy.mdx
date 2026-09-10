@@ -15,13 +15,13 @@ Aspex never:
 - Phones home or checks for updates after install
 - Collects usage metrics, crash reports, or analytics
 - Requires an account, login, or license key
-- Reads credentials — only key names and file locations are reported, never values
+- Reads credentials - only key names and file locations are reported, never values
 - Transmits environment variables, config files, or filesystem paths off-device
 - Persists any data outside your local machine
 
 ## aspex-attack: The One Exception
 
-`aspex-attack` (and the `aspex-scan redteam` subcommand) actively calls live MCP tools with adversarial payloads. This is the only component that sends data over the network — and it sends data **to your own MCP servers**, not to Aspex or any third party.
+`aspex-attack` (and the `aspex-scan redteam` subcommand) actively calls live MCP tools with adversarial payloads. This is the only component that sends data over the network - and it sends data **to your own MCP servers**, not to Aspex or any third party.
 
 Explicit opt-in consent is required before any probe is sent. Only probe servers you own or have authorization to test.
 
@@ -35,7 +35,7 @@ brew install aspex-security/tap/aspex
 curl -fsSL https://raw.githubusercontent.com/aspex-security/aspex/main/install.sh | sh
 ```
 
-Once installed, Aspex makes no outbound network connections during normal operation — including `aspex-scan`, `aspex-trace`, and `aspex-doctor`.
+Once installed, Aspex makes no outbound network connections during normal operation - including `aspex-scan`, `aspex-trace`, and `aspex-doctor`.
 
 ## Release Integrity
 

@@ -9,9 +9,9 @@ The aspex VS Code extension brings MCP security scanning directly into your edit
 
 The extension shells out to the `aspex` CLI and surfaces results as native editor diagnostics.
 
-- **Scan on save** — whenever you save an MCP config file (`claude_desktop_config.json`, `.cursor/mcp.json`, etc.), the extension runs `aspex-scan` in the background.
-- **Inline squiggles** — findings appear as warning or error underlines on the relevant line in the config file.
-- **Problems panel** — all findings are listed in the standard VS Code Problems panel (`View → Problems`) with severity, rule ID, and a one-line description. Clicking a problem jumps to the offending line.
+- **Scan on save** - whenever you save an MCP config file (`claude_desktop_config.json`, `.cursor/mcp.json`, etc.), the extension runs `aspex-scan` in the background.
+- **Inline squiggles** - findings appear as warning or error underlines on the relevant line in the config file.
+- **Problems panel** - all findings are listed in the standard VS Code Problems panel (`View → Problems`) with severity, rule ID, and a one-line description. Clicking a problem jumps to the offending line.
 
 For findings with an available fix (for example, a hardcoded credential that can be migrated to the macOS Keychain), a lightbulb code action appears inline.
 
@@ -63,5 +63,5 @@ Open the command palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and search for **aspex
 | `aspex: Clear diagnostics` | Remove all aspex squiggles and Problems panel entries. |
 
 <Note>
-All scanning is fully offline. No data is sent anywhere. The extension only invokes the local `aspex` binary — there is no telemetry and no account required.
+All scanning is fully offline. No data is sent anywhere. The extension only invokes the local `aspex` binary - there is no telemetry and no account required.
 </Note>

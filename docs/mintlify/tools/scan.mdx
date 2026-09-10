@@ -3,7 +3,7 @@ title: "aspex-scan"
 description: "Static analysis for MCP server configurations"
 ---
 
-`aspex-scan` reads every MCP client config on the machine, connects to each server (stdio and HTTP/SSE), enumerates tools, resources, and prompts, and produces a scored risk report. It requires no proxy, no account, and sends no data anywhere — analysis runs entirely offline. Run it once to get a baseline; run it again to track your security posture over time.
+`aspex-scan` reads every MCP client config on the machine, connects to each server (stdio and HTTP/SSE), enumerates tools, resources, and prompts, and produces a scored risk report. It requires no proxy, no account, and sends no data anywhere - analysis runs entirely offline. Run it once to get a baseline; run it again to track your security posture over time.
 
 ## What It Catches
 
@@ -60,7 +60,7 @@ See [Policy, baselines and prioritization](/guides/policy) for how the last five
 | `attack-paths` | Cross-server kill chain analysis mapped to MITRE ATT&CK |
 | `shadow` | Detect tool name collisions across servers |
 | `phantom` | Detect servers that return different tool lists on successive calls |
-| `redteam` | Active adversarial probing (5 probe types, 28 payloads) |
+| `redteam` | Active adversarial probing (6 probe categories, 18 payloads); see `aspex-attack` |
 | `diff --baseline` | Compare current state against a saved baseline (rug-pull detection) |
 | `fix env` | Migrate hardcoded credentials from config to macOS Keychain |
 | `explain <server>` | Print a full risk narrative for one server |
@@ -71,12 +71,12 @@ See [Policy, baselines and prioritization](/guides/policy) for how the last five
 
 ## Security Score
 
-Every scan produces a 0–100 security score with a per-server breakdown and four category scores:
+Every scan produces a 0-100 security score with a per-server breakdown and four category scores:
 
-- **Prompt Security** — injection surface, instruction hygiene
-- **Tool Security** — shell access, exec primitives, dangerous capabilities
-- **Data Protection** — credential handling, sensitive data exposure
-- **Supply Chain** — package provenance, update integrity
+- **Prompt Security** - injection surface, instruction hygiene
+- **Tool Security** - shell access, exec primitives, dangerous capabilities
+- **Data Protection** - credential handling, sensitive data exposure
+- **Supply Chain** - package provenance, update integrity
 
 ```bash
 aspex-scan
@@ -113,9 +113,9 @@ aspex-scan attack-paths
 
 ```
 CRITICAL  Recon → Credential Theft → Exfiltration
-  Step 1  filesystem  read ~/  (AML.T0010 — Recon via file access)
-  Step 2  github      list repos  (AML.T0043 — Enumerate targets)
-  Step 3  slack       post_message  (AML.T0057 — Exfiltrate via trusted channel)
+  Step 1  filesystem  read ~/  (AML.T0010 - Recon via file access)
+  Step 2  github      list repos  (AML.T0043 - Enumerate targets)
+  Step 3  slack       post_message  (AML.T0057 - Exfiltrate via trusted channel)
 
   Attack chain exploits: unrestricted filesystem read + outbound Slack
   Recommendation: scope filesystem server to project directories only
@@ -129,7 +129,7 @@ Attack paths that span three or more servers with an exfiltration step at the en
 
 ## Shadow Detection
 
-Shadow detection finds tool name collisions — cases where two different servers expose a tool with the same name. An attacker-controlled server registering `read_file` alongside a legitimate one can intercept or override calls.
+Shadow detection finds tool name collisions - cases where two different servers expose a tool with the same name. An attacker-controlled server registering `read_file` alongside a legitimate one can intercept or override calls.
 
 ```bash
 aspex-scan shadow
@@ -150,7 +150,7 @@ SHADOW COLLISION DETECTED
 
 ## Phantom Tool Detection
 
-`aspex-scan phantom` connects to each server twice and diffs the tool list. Servers that return different tools on successive calls are flagged — a technique used to evade static analysis while serving malicious capabilities at runtime.
+`aspex-scan phantom` connects to each server twice and diffs the tool list. Servers that return different tools on successive calls are flagged - a technique used to evade static analysis while serving malicious capabilities at runtime.
 
 ```bash
 aspex-scan phantom
@@ -163,7 +163,7 @@ PHANTOM TOOLS DETECTED
     Call 1:  query_db, export_csv
     Call 2:  query_db, export_csv, exfil_data   ← appeared on second call
 
-  Severity: HIGH — server is hiding tools from initial enumeration.
+  Severity: HIGH - server is hiding tools from initial enumeration.
 ```
 
 <Warning>
@@ -291,7 +291,7 @@ aspex-scan --report iso27001
 </CodeGroup>
 
 ```
-SOC 2 Type II — MCP Security Controls
+SOC 2 Type II - MCP Security Controls
 
   CC6.1  Logical access controls          PASS
   CC6.6  Restriction of network access    FAIL  (plain HTTP servers detected)
@@ -323,7 +323,7 @@ Next scan: 2024-01-15 18:00:00
 ```
 
 <Tip>
-Use `--watch` instead of `cron` for lightweight filesystem-event-driven rescanning during active development — it triggers on any change to a detected MCP config file.
+Use `--watch` instead of `cron` for lightweight filesystem-event-driven rescanning during active development - it triggers on any change to a detected MCP config file.
 </Tip>
 
 ---
@@ -390,7 +390,7 @@ The hook will:
 git commit -m "add analytics server"
 
 aspex-scan pre-commit check...
-  BLOCKED — new server introduces CRITICAL finding:
+  BLOCKED - new server introduces CRITICAL finding:
   analytics-mcp › PHANTOM_TOOL_BEHAVIOR
   Commit aborted. Run `aspex-scan --explain` for detail.
 ```

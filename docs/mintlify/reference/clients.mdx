@@ -12,16 +12,16 @@ The table below shows which MCP clients each Aspex tool works with.
 | Claude Desktop | ✓ | ✓ | auto-detected |
 | Claude Code | ✓ | ✓ | auto-detected |
 | Cursor | ✓ | ✓ | auto-detected |
-| VS Code | ✓ | — | auto-detected |
+| VS Code | ✓ | - | auto-detected |
 | Windsurf | ✓ | ✓ | auto-detected |
 | Cline | ✓ | ✓ | auto-detected |
 | Roo-Cline | ✓ | ✓ | auto-detected |
-| Continue | ✓ | — | auto-detected |
-| Zed | ✓ | — | auto-detected |
+| Continue | ✓ | - | auto-detected |
+| Zed | ✓ | - | auto-detected |
 
-**aspex-doctor** detects all installed clients automatically by probing their config file paths — no flags required.
+**aspex-doctor** detects all installed clients automatically by probing their config file paths - no flags required.
 
-**aspex-trace** reads the log files each client already writes to disk - no proxy, no interception. Clients marked `—` do not yet write MCP tool calls to a parseable log.
+**aspex-trace** reads the log files each client already writes to disk - no proxy, no interception. Clients marked `-` do not yet write MCP tool calls to a parseable log.
 
 ---
 
@@ -118,7 +118,7 @@ MCP servers are declared under `"context_servers"` in Zed's `settings.json`.
 ## Notes
 
 - `aspex-scan` reads all config files **read-only** and never modifies them.
-- The `env` block values inside config files are never read or reported — only key names are surfaced in findings, so secrets stay local.
+- The `env` block values inside config files are never read or reported - only key names are surfaced in findings, so secrets stay local.
 - Paths marked above are for default single-profile installs. Custom `--user-data-dir` or multi-profile setups may differ.
 
 ---
@@ -127,4 +127,4 @@ MCP servers are declared under `"context_servers"` in Zed's `settings.json`.
 
 Don't see your client listed? Open a [GitHub issue](https://github.com/aspex-security/aspex/issues/new?template=client-support-request.md) with the client name and its config file path.
 
-If you'd like to contribute support yourself, see [CONTRIBUTING.md](https://github.com/aspex-security/aspex/blob/main/CONTRIBUTING.md) — adding a new client typically means adding its config path to the detector and a fixture file to `testdata/configs/`.
+If you'd like to contribute support yourself, see [CONTRIBUTING.md](https://github.com/aspex-security/aspex/blob/main/CONTRIBUTING.md) - adding a new client typically means adding its config path to the detector and a fixture file to `testdata/configs/`.

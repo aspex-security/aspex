@@ -7,11 +7,11 @@ description: "Block risky MCP configs in your pipeline"
 
 Aspex integrates directly into CI/CD pipelines to catch risky MCP server configurations before they reach production. The key primitives are:
 
-- **`--fail-on`** — exit with a non-zero code when findings exceed a threshold
-- **SARIF output** — feed results into GitHub code scanning
-- **Baseline diff** — detect rug-pulls between commits
-- **Shadow check** — catch tool name collisions across servers
-- **Pre-commit hook** — block risky changes before they are committed
+- **`--fail-on`** - exit with a non-zero code when findings exceed a threshold
+- **SARIF output** - feed results into GitHub code scanning
+- **Baseline diff** - detect rug-pulls between commits
+- **Shadow check** - catch tool name collisions across servers
+- **Pre-commit hook** - block risky changes before they are committed
 
 ## Getting Started
 
@@ -31,7 +31,7 @@ Or download a binary from [GitHub Releases](https://github.com/aspex-security/as
 aspex-scan --json
 ```
 
-This reads every MCP client config on the machine, connects to each server, enumerates tools, resources, and prompts, and produces a scored risk report (0–100).
+This reads every MCP client config on the machine, connects to each server, enumerates tools, resources, and prompts, and produces a scored risk report (0-100).
 
 ### Add the GitHub Actions composite action
 
@@ -132,7 +132,7 @@ aspex-scan --sarif aspex.sarif --html aspex-report.html
 
 ## Baseline Diff for Rug-Pull Detection
 
-A rug-pull occurs when an MCP server silently changes its tool definitions between runs — adding dangerous capabilities or altering behavior after an initial review.
+A rug-pull occurs when an MCP server silently changes its tool definitions between runs - adding dangerous capabilities or altering behavior after an initial review.
 
 Save a baseline on the main branch:
 
@@ -171,7 +171,7 @@ git add baseline.json && git commit -m "chore: update aspex baseline"
 
 ## Shadow Check in CI
 
-Shadow detection identifies tool name collisions across servers — where two servers expose a tool with the same name, enabling one to silently intercept calls meant for the other.
+Shadow detection identifies tool name collisions across servers - where two servers expose a tool with the same name, enabling one to silently intercept calls meant for the other.
 
 Run the shadow check standalone:
 
