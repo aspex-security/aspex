@@ -9,7 +9,8 @@ bin/
 /aspex-trace
 /mcp-scan
 /agent-trace
-# npm package: binaries are downloaded at install time
+# npm package: binaries are downloaded at install time; the JS shims in bin/ are source
+!npm/aspex/bin/
 npm/aspex/vendor/
 npm/aspex/node_modules/
 npm/aspex/*.tgz
