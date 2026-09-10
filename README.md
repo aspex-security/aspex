@@ -13,7 +13,7 @@
 [![MCP-scanned by Aspex](https://img.shields.io/badge/MCP--scanned-by%20Aspex-5B44C3)](https://github.com/aspex-security/aspex)
 
 ```sh
-brew install aspex-security/tap/aspex && aspex
+brew install aspex-security/tap/aspex && aspex     # or: npx aspex
 ```
 
 **Offline. No account. One binary. Nothing leaves your machine. Ever.**
@@ -100,10 +100,12 @@ Findings map to OWASP LLM Top 10, MITRE ATLAS, and CWE. [All 225+ rules](https:/
 
 ```sh
 brew install aspex-security/tap/aspex                                                  # macOS / Linux
+npx aspex                                                                              # anywhere with Node, no install
+npm install -g aspex                                                                   # all five commands on PATH
 curl -fsSL https://raw.githubusercontent.com/aspex-security/aspex/main/install.sh | sh  # Linux / WSL
 ```
 
-Or download a binary from [releases](https://github.com/aspex-security/aspex/releases). Every release ships SHA-256 checksums and an SPDX SBOM.
+Or download a binary from [releases](https://github.com/aspex-security/aspex/releases). Every release ships SHA-256 checksums and an SPDX SBOM; the npm package verifies the binary it downloads against them and is published with provenance from this repository's release workflow.
 
 ## Documentation
 

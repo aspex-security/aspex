@@ -41,27 +41,19 @@ jobs:
 
       # npm: the `aspex` package downloads the matching release archive at install
       # time, so it is published after GoReleaser has uploaded the assets.
-      # setup-node with registry-url writes the .npmrc that makes NODE_AUTH_TOKEN
-      # effective; without it npm publish can never authenticate.
-      - name: Check for NPM_TOKEN
-        id: npm
-        run: echo "present=${{ secrets.NPM_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
-
+      # Authentication is npm Trusted Publishing (OIDC via id-token: write), configured
+      # on the package at npmjs.com for this repo and workflow. No token, nothing to
+      # rotate, and every version carries provenance back to this run.
+      # Trusted Publishing needs npm >= 11.5; the npm bundled with Node 22 is older.
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        if: steps.npm.outputs.present == 'true'
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
 
       - name: Publish npm package (aspex)
-        if: steps.npm.outputs.present == 'true'
         working-directory: npm/aspex
         run: |
+          npm install -g npm@latest
+          npm --version
           npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version
           npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: npm publish skipped
-        if: steps.npm.outputs.present != 'true'
-        run: echo "NPM_TOKEN not set; skipping npm publish. Set it in repo secrets to publish the aspex package."

@@ -7,6 +7,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [Unreleased]
+
+### Changed
+- npm publishing uses npm Trusted Publishing (OIDC from the release workflow)
+  instead of a stored token. `aspex@0.6.1` was the first version on npm.
+
 ## [0.6.1] - 2026-09-10
 
 ### Added

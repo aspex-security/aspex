@@ -12,7 +12,7 @@ Every MCP security tool so far answers one question: *what could this server do?
 ## Start here
 
 ```sh
-brew install aspex-security/tap/aspex && aspex
+brew install aspex-security/tap/aspex && aspex     # or, with Node: npx aspex
 ```
 
 `aspex` with no arguments reads your MCP configs and your AI clients' own logs, joins them, and shows one screen: how many tool calls your agents made in the last 30 days, how many went to servers no security scan had ever checked, how many tripped a detection rule, and the score of every configured server. Then a menu. Real output from the maintainer's machine:
