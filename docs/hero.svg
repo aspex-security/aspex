@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="420" viewBox="0 0 960 420" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="14">
+  <rect width="960" height="420" fill="#201e1d"/>
+  <rect x="0" y="0" width="960" height="2" fill="#ec3013"/>
+  <text x="40" y="44" fill="#9b9797" font-size="12" letter-spacing="1.5">$ aspex</text>
+  <line x1="40" y1="60" x2="920" y2="60" stroke="#444141" stroke-width="2"/>
+  <g fill="#f3f2f2">
+    <text x="40" y="96" font-size="15"><tspan fill="#ec3013" font-weight="700">■</tspan>  <tspan font-weight="700">Your AI agents, last 30 days</tspan></text>
+    <text x="40" y="130" xml:space="preserve"><tspan fill="#ec3013">▸</tspan>  Your agents made <tspan font-weight="700">333 tool calls</tspan> to 12 MCP servers.</text>
+    <text x="40" y="156" xml:space="preserve"><tspan fill="#ec3013">▸</tspan>  329 of those calls went to 11 servers no security scan had ever checked.</text>
+    <text x="40" y="182" xml:space="preserve"><tspan fill="#ec3013">▸</tspan>  1 call tripped a detection rule. Most common: cross-server data chain (1).</text>
+    <text x="40" y="208" xml:space="preserve"><tspan fill="#ec3013">▸</tspan>  7 configured servers, overall security score 39/100.</text>
+    <text x="72" y="250" xml:space="preserve" fill="#d9d6d5">desktop-commander     80  <tspan fill="#ff9783" font-weight="700">HIGH</tspan>      not used</text>
+    <text x="72" y="274" xml:space="preserve" fill="#d9d6d5">filesystem            80  <tspan fill="#ff9783" font-weight="700">HIGH</tspan>      not used</text>
+    <text x="72" y="298" xml:space="preserve" fill="#d9d6d5">github                80  <tspan fill="#ff9783" font-weight="700">HIGH</tspan>      not used</text>
+    <text x="72" y="322" xml:space="preserve" fill="#d9d6d5">brave-search          80  <tspan fill="#ff9783" font-weight="700">HIGH</tspan>      not used</text>
+    <text x="72" y="346" xml:space="preserve" fill="#d9d6d5">playwright            90  <tspan fill="#f3f2f2" font-weight="700">MEDIUM</tspan>    not used</text>
+    <text x="72" y="370" fill="#9b9797">+1 more</text>
+  </g>
+  <text x="40" y="400" fill="#9b9797" font-size="12">2.3s  ·  read from local configs and logs  ·  nothing sent anywhere</text>
+</svg>

@@ -1,9 +1,9 @@
 ---
 title: "Policy, baselines and prioritization"
-description: "Make aspex-scan enforce your team's rules, adopt it on an estate with existing findings, and fix the risky servers that are actually in use first."
+description: "Make aspex scan enforce your team's rules, adopt it on an estate with existing findings, and fix the risky servers that are actually in use first."
 ---
 
-Three features turn `aspex-scan` from a scanner a developer runs into a control a security team owns.
+Three features turn `aspex scan` from a scanner a developer runs into a control a security team owns.
 
 | Problem | Feature |
 |---|---|
@@ -15,10 +15,10 @@ Three features turn `aspex-scan` from a scanner a developer runs into a control 
 ## Policy file: `.aspex.yaml`
 
 ```sh
-aspex-scan init      # writes a starter .aspex.yaml in the current directory
+aspex scan init      # writes a starter .aspex.yaml in the current directory
 ```
 
-`aspex-scan` looks for `./.aspex.yaml`, then `~/.config/aspex/config.yaml`. Pass `--config <path>` to use a specific file. Commit the project-local file so the whole team and CI share one policy.
+`aspex scan` looks for `./.aspex.yaml`, then `~/.config/aspex/config.yaml`. Pass `--config <path>` to use a specific file. Commit the project-local file so the whole team and CI share one policy.
 
 ```yaml
 # Accept a specific risk. Every entry needs a reason.
@@ -50,7 +50,7 @@ Rules:
 
 Suppressed findings are always listed at the end of the report and in `--json` output under `suppressed`, so a clean run is never mistaken for "nothing found".
 
-Attack paths (`AP001`...`AP006`, see [aspex-scan](/tools/scan#attack-paths)) are governed the same way: `- rule: AP003` with a `reason` accepts a path, optionally scoped with `server:` to one of the servers on it. Baselines record paths too, so `--baseline` hides pre-existing compositions and only new ones fail the gate.
+Attack paths (`AP001`...`AP006`, see [Capabilities and attack paths](/concepts/capabilities-and-attack-paths)) are governed the same way: `- rule: AP003` with a `reason` accepts a path, optionally scoped with `server:` to one of the servers on it. Baselines record paths too, so `--baseline` hides pre-existing compositions and only new ones fail the gate.
 
 ## Baseline: adopt on an existing estate
 
@@ -58,10 +58,10 @@ Turning on `--fail-on high` against 30 servers with 90 existing findings fails f
 
 ```sh
 # Day one: snapshot the current state
-aspex-scan --save-baseline aspex-baseline.json
+aspex scan --save-baseline aspex-baseline.json
 
 # From then on: only new findings are shown and gated
-aspex-scan --baseline aspex-baseline.json --fail-on high
+aspex scan --baseline aspex-baseline.json --fail-on high
 ```
 
 Commit `aspex-baseline.json`. Re-run `--save-baseline` after you fix things to shrink it. Findings are keyed by server and rule ID, so the same rule appearing on a new server is correctly treated as new.
@@ -72,15 +72,15 @@ Use `--baseline` for the transition and `.aspex.yaml` ignores for permanent, exp
 
 ## Prioritize with `--with-trace`
 
-`aspex-scan` knows what a server **can** do. `aspex-trace` knows what your agents **did**. `--with-trace` joins them:
+`aspex scan` knows what a server **can** do. `aspex trace` knows what your agents **did**. `--with-trace` joins them:
 
 ```sh
-aspex-scan --with-trace                 # last 7 days of agent activity
-aspex-scan --with-trace --trace-since 30d
+aspex scan --with-trace                 # last 7 days of agent activity
+aspex scan --with-trace --trace-since 30d
 ```
 
 ```
-  ◆  Observed activity  last 7d, from aspex-trace logs
+  ◆  Observed activity  last 7d, from aspex trace logs
 
   postgres             CRITICAL  340 calls · 3 tools  12 flagged (critical)
   filesystem           CRITICAL  88 calls · 6 tools

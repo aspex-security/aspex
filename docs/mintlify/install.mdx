@@ -1,0 +1,31 @@
+---
+title: "Install"
+description: "One Go binary for macOS, Linux and Windows. The download is the only network call Aspex ever makes."
+---
+
+```sh
+brew install aspex-security/tap/aspex                                                  # macOS (Homebrew cask, no Gatekeeper prompt)
+npx aspex                                                                              # anywhere with Node, no install
+npm install -g aspex                                                                   # every command on PATH
+curl -fsSL https://raw.githubusercontent.com/aspex-security/aspex/main/install.sh | sh  # Linux / WSL
+```
+
+Or download a static binary for macOS, Linux or Windows from [Releases](https://github.com/aspex-security/aspex/releases).
+
+## Integrity
+
+Every release ships SHA-256 checksums. The npm package verifies the archive it downloads against them and is published with provenance from the repository's release workflow.
+
+## What gets installed
+
+`aspex` is the front door and routes every command. It ships alongside `aspex-scan`, `aspex-trace` and `aspex-attack`; you never need to know which binary owns a command. [Every command →](/tools/launcher)
+
+## Uninstall
+
+```sh
+brew uninstall aspex        # Homebrew
+npm uninstall -g aspex      # npm
+sudo rm /usr/local/bin/aspex*   # install.sh (default INSTALL_DIR)
+```
+
+State Aspex writes: scan logs and environment snapshots under your user cache directory (`~/Library/Caches/aspex/` on macOS, `~/.cache/aspex/` on Linux), an optional `.aspex.yaml` policy and `.aspex.lock` in your project, and the trace baseline under `~/.config/aspex/` if you learn one.

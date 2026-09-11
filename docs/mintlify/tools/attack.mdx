@@ -7,7 +7,7 @@ description: "Red-team a live MCP server with adversarial inputs. Advanced, opt-
 **Authorization required.** `aspex-attack` calls real tools with malicious payloads. Only run it against servers you own or have explicit written permission to test. Unauthorized probing may violate computer-misuse law. The tool asks you to confirm before sending anything.
 </Warning>
 
-`aspex-scan` tells you what a server *could* do. `aspex-attack` checks whether it actually falls for it: it connects to your configured servers, enumerates their tools, sends adversarial inputs to matching parameters, and inspects the responses for signs of success (reflected injection text, file contents that should not be readable, cloud metadata, stack traces).
+`aspex scan` tells you what a server *could* do. `aspex-attack` checks whether it actually falls for it: it connects to your configured servers, enumerates their tools, sends adversarial inputs to matching parameters, and inspects the responses for signs of success (reflected injection text, file contents that should not be readable, cloud metadata, stack traces).
 
 ```sh
 aspex-attack                          # every configured server, after a y/N confirmation
@@ -28,7 +28,7 @@ aspex-attack --json --fail-on high    # CI
 | `--fail-on <sev>` | Exit 1 when findings reach this severity: `critical`, `high`, `medium`, `low`, `off` (default `high`) |
 | `--no-color` | Plain-text output |
 
-There is no positional target. `aspex-attack` probes servers it discovers in your client configs, the same way `aspex-scan` does. To test a server that is not configured yet, add it to a client config first (or to a project `.mcp.json`).
+There is no positional target. `aspex-attack` probes servers it discovers in your client configs, the same way `aspex scan` does. To test a server that is not configured yet, add it to a client config first (or to a project `.mcp.json`).
 
 ## What it sends
 
@@ -73,6 +73,6 @@ Only against a staging or test deployment, never production.
   run: aspex-attack --server my-server --categories ssrf,path-traversal --json --fail-on high
 ```
 
-## Relationship to aspex-scan
+## Relationship to aspex scan
 
-`aspex-scan redteam` runs the same probes from inside the scanner and is kept for compatibility; `aspex-attack` is the standalone binary with the confirmation prompt and its own exit code. Use `aspex-scan` for everyday auditing and reach for `aspex-attack` when you need proof, not a score.
+`aspex scan redteam` runs the same probes from inside the scanner and is kept for compatibility; `aspex-attack` is the standalone binary with the confirmation prompt and its own exit code. Use `aspex scan` for everyday auditing and reach for `aspex-attack` when you need proof, not a score.

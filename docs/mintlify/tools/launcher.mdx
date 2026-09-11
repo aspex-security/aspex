@@ -10,7 +10,7 @@ aspex            # or, without installing anything: npx aspex
 ```
 
 ```
-  ◆  Your AI agents, last 30 days  aspex v0.6.0
+  ◆  Your AI agents, last 30 days  aspex v0.8.1
 
   ▸ In the last 30 days your agents made 320 tool calls to 12 MCP servers.
   ▸ 316 of those calls went to 11 servers no security scan had ever checked.
@@ -28,7 +28,7 @@ aspex            # or, without installing anything: npx aspex
     claude-in-chrome                        72 calls
     +9 more
 
-  aspex-scan for findings and fixes  ·  aspex-trace for the full audit trail  ·  aspex share to post this
+  aspex scan for findings and fixes  ·  aspex trace for the full audit trail  ·  aspex share to post this
 ```
 
 It took 1.9 seconds. Then the tool menu opens underneath. Arrow keys to move, `Enter` to run, `→` for each tool's options, `q` to quit.
@@ -53,14 +53,14 @@ aspex snapshot      # no menu; good for a shell prompt, a cron job, or CI logs
 
 | Command | Runs |
 |---|---|
-| `aspex scan [...]` | `aspex-scan` - audit every configured server, 140+ rules |
-| `aspex trace [...]` | `aspex-trace` - full audit trail from client logs |
-| `aspex doctor` | `aspex-scan doctor` - 2-second pre-flight |
+| `aspex scan [...]` | `aspex scan` - audit every configured server, 140+ rules |
+| `aspex trace [...]` | `aspex trace` - full audit trail from client logs |
+| `aspex doctor` | `aspex scan doctor` - 2-second pre-flight |
 | `aspex attack [...]` | `aspex-attack` - red-team a server you own (advanced) |
 
 ## What "never scanned" means
 
-Connectors added through claude.ai are configured in the cloud and have no local file, so no static scanner can score them. Aspex is honest about that: they appear as **in use, never scanned**, with their call counts, so you know exactly how much of your agents' activity runs through servers nobody has looked at. `aspex-scan inspect <url>` can scan one directly.
+Connectors added through claude.ai are configured in the cloud and have no local file, so no static scanner can score them. Aspex is honest about that: they appear as **in use, never scanned**, with their call counts, so you know exactly how much of your agents' activity runs through servers nobody has looked at. `aspex scan inspect <url>` can scan one directly.
 
 ## Every command through `aspex`
 

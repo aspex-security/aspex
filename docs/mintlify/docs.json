@@ -3,9 +3,16 @@
   "theme": "mint",
   "name": "Aspex",
   "colors": {
-    "primary": "#7c5cfc",
-    "light": "#a78bfa",
-    "dark": "#5b44c3"
+    "primary": "#ec3013",
+    "light": "#ff9783",
+    "dark": "#ae1800"
+  },
+  "fonts": {
+    "family": "Archivo"
+  },
+  "styling": {
+    "codeblocks": "dark",
+    "eyebrows": "section"
   },
   "favicon": "/favicon.svg",
   "logo": {
@@ -13,77 +20,72 @@
     "dark": "/logo/logo.svg"
   },
   "navigation": {
-    "tabs": [
+    "groups": [
       {
-        "tab": "Docs",
-        "groups": [
-          {
-            "group": "Getting Started",
-            "pages": [
-              "introduction",
-              "quickstart"
-            ]
-          },
-          {
-            "group": "Core Tools",
-            "pages": [
-              "tools/launcher",
-              "tools/scan",
-              "tools/trace",
-              "tools/change-detection",
-              "tools/explain",
-              "tools/explore",
-              "tools/tighten",
-              "tools/bom",
-              "tools/mcp"
-            ]
-          },
-          {
-            "group": "Advanced",
-            "pages": [
-              "tools/attack",
-              "tools/doctor"
-            ]
-          },
-          {
-            "group": "Guides",
-            "pages": [
-              "guides/policy",
-              "guides/ci-integration",
-              "guides/daily-workflow",
-              "guides/vscode"
-            ]
-          },
-          {
-            "group": "Reference",
-            "pages": [
-              "reference/security-model",
-              "reference/rules",
-              "reference/clients",
-              "privacy",
-              "reference/corpus"
-            ]
-          }
+        "group": "Start",
+        "pages": ["introduction", "quickstart", "install"]
+      },
+      {
+        "group": "Concepts",
+        "pages": [
+          "concepts/how-aspex-reasons",
+          "concepts/capabilities-and-attack-paths",
+          "concepts/observed-vs-inferred",
+          "concepts/score-and-blast-radius"
+        ]
+      },
+      {
+        "group": "Commands",
+        "pages": [
+          "tools/launcher",
+          "tools/scan",
+          "tools/scan-subcommands",
+          "tools/trace",
+          "tools/explain",
+          "tools/change-detection",
+          "tools/explore",
+          "tools/tighten",
+          "tools/bom",
+          "tools/mcp",
+          "tools/doctor",
+          "tools/attack"
+        ]
+      },
+      {
+        "group": "Guides",
+        "pages": [
+          "guides/daily-workflow",
+          "guides/ci-integration",
+          "guides/policy",
+          "guides/vscode"
+        ]
+      },
+      {
+        "group": "Reference",
+        "pages": [
+          "reference/rules",
+          "reference/clients",
+          "reference/corpus",
+          "privacy"
         ]
       }
     ]
   },
   "navbar": {
     "links": [
-      {
-        "label": "GitHub",
-        "href": "https://github.com/aspex-security/aspex"
-      }
+      { "label": "GitHub", "href": "https://github.com/aspex-security/aspex" },
+      { "label": "Changelog", "href": "https://github.com/aspex-security/aspex/blob/main/CHANGELOG.md" }
     ],
     "primary": {
       "type": "button",
       "label": "Install",
-      "href": "https://github.com/aspex-security/aspex/releases"
+      "href": "/install"
     }
   },
   "footer": {
-    "socials": {
-      "github": "https://github.com/aspex-security/aspex"
-    }
-  }
+    "socials": { "github": "https://github.com/aspex-security/aspex" }
+  },
+  "redirects": [
+    { "source": "/reference/security-model", "destination": "/concepts/how-aspex-reasons" }
+  ]
 }
