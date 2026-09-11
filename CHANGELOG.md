@@ -7,7 +7,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-## [Unreleased]
+## [0.8.0] - 2026-09-11
 
 Aspex becomes a local security debugger for AI agents: know what your agents
 can do, what they actually did, what changed, and what could happen next.

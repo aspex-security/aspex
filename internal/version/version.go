@@ -6,7 +6,7 @@
 package version
 
 // Version is the semantic version. Overridden by GoReleaser from the git tag.
-var Version = "0.7.1"
+var Version = "0.8.0"
 
 // BuildDate is the release build date. Overridden by GoReleaser.
 var BuildDate = "dev"
