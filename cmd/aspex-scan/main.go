@@ -1311,7 +1311,8 @@ func runRedTeam(gf *globalFlags, serverFlag string, timeoutSecs int, jsonOut boo
 			c(bold, "Red Team Probe"),
 		)
 		fmt.Fprintf(os.Stdout, "  %s This command calls live MCP tools with adversarial payloads.\n", c(yellow, "!"))
-		fmt.Fprintf(os.Stdout, "  Only run against servers you own or have explicit written permission to test.\n\n")
+		fmt.Fprintf(os.Stdout, "  Only run against servers you own or have explicit written permission to test.\n")
+		fmt.Fprintf(os.Stdout, "  Probes run each server from a throwaway directory, but a networked or\n  stateful server can still cause real side effects.\n\n")
 		fmt.Fprintf(os.Stdout, "  Scope: %s server(s) · timeout %ds per probe\n", c(bold, fmt.Sprintf("%d", len(servers))), timeoutSecs)
 		for _, s := range servers {
 			fmt.Fprintf(os.Stdout, "    %s %s\n", c(dim, "·"), s.Name)

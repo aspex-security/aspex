@@ -7,6 +7,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [Unreleased]
+
+### Security
+- Hardening from a self-audit (no shipping vulnerability was found):
+  - `aspex attack` / `aspex-scan redteam` now run each probed MCP server from a
+    throwaway directory, so a payload that induces the server to write a file
+    no longer lands in your working directory; the warning notes the residual
+    side-effect risk.
+  - Log parsing caps a single line at 8 MiB and resumes at the next line, so a
+    malformed or hostile log line cannot exhaust memory.
+  - Git revisions passed to `diff` are rejected if they begin with `-` and are
+    passed after `--end-of-options`, preventing argument injection into git.
+
 ## [0.9.0] - 2026-09-11
 
 The release that turns Aspex into a security debugger for AI agents: know what

@@ -2,6 +2,7 @@ package agentenv_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -327,4 +328,18 @@ func TestCursorAndWindsurfRuleFilesAreInstructions(t *testing.T) {
 
 func discoverEntry(name, command string, args []string) discover.ServerEntry {
 	return discover.ServerEntry{Name: name, Client: "claude-code", Command: command, Args: args}
+}
+
+func TestBuildRevisionRejectsDashRevisions(t *testing.T) {
+	// A revision that could be read as a git option must be refused before git
+	// runs, defending against argument injection.
+	for _, bad := range []string{"--output=/tmp/x", "-n", "--upload-pack=evil"} {
+		if _, err := agentenv.BuildRevision(context.Background(), t.TempDir(), bad, home); err == nil {
+			t.Errorf("dash revision %q must be rejected", bad)
+		}
+	}
+	// An ordinary but nonexistent revision fails with the unknown-revision error, not a panic.
+	if _, err := agentenv.BuildRevision(context.Background(), t.TempDir(), "HEAD", home); err == nil {
+		t.Error("HEAD in a non-repo should error cleanly")
+	}
 }

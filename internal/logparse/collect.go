@@ -1,6 +1,7 @@
 package logparse
 
 import (
+	"bufio"
 	"fmt"
 	"time"
 )
@@ -53,4 +54,29 @@ func CollectEvents(clients []string, since time.Time) (events []Event, clientsFo
 		}
 	}
 	return events, clientsFound, errs
+}
+
+// maxLogLine bounds a single log line. Client logs are one JSON object per
+// line; a line far larger than this is malformed or hostile. Reading it whole
+// would let one bad line exhaust memory, so the tail past the cap is skipped.
+const maxLogLine = 8 << 20 // 8 MiB
+
+// readLineCapped reads one line from r, up to maxLogLine bytes. If a line is
+// longer, it returns the capped prefix and discards the rest of that line, so
+// parsing continues at the next line instead of growing without bound. The
+// returned error matches bufio.Reader.ReadString semantics (io.EOF at end).
+func readLineCapped(r *bufio.Reader) (string, error) {
+	var b []byte
+	for {
+		chunk, err := r.ReadSlice('\n')
+		if len(b)+len(chunk) <= maxLogLine {
+			b = append(b, chunk...)
+		} else if len(b) < maxLogLine {
+			b = append(b, chunk[:maxLogLine-len(b)]...)
+		}
+		if err == bufio.ErrBufferFull {
+			continue
+		}
+		return string(b), err
+	}
 }

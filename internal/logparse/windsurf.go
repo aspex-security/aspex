@@ -78,7 +78,7 @@ func ParseWindsurfLogReader(r io.Reader, since time.Time) ([]Event, error) {
 	var events []Event
 	reader := bufio.NewReaderSize(r, 64*1024)
 	for {
-		line, err := reader.ReadString('\n')
+		line, err := readLineCapped(reader)
 		line = strings.TrimRight(line, "\r\n")
 		if line != "" {
 			// Reuse the Cursor line parser — same JSON schema.

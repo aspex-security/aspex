@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 	"sync/atomic"
@@ -510,8 +511,14 @@ func parseSSEForID(r io.Reader, id int64) (json.RawMessage, error) {
 }
 
 // callToolStdio launches a stdio server, does the MCP handshake, and calls a tool.
-func callToolStdio(ctx context.Context, command string, cmdArgs []string, toolName string, toolArgs map[string]interface{}) (string, error) {
+func callToolStdio(ctx context.Context, command string, cmdArgs []string, toolName string, toolArgs map[string]interface{}, workDir string) (string, error) {
 	cmd := exec.CommandContext(ctx, command, cmdArgs...)
+	// Active probing sends live payloads to a live server: some induce the
+	// server to write files (path-traversal, injection payloads used as paths).
+	// Run it from a throwaway directory so nothing lands in the user's cwd.
+	if workDir != "" {
+		cmd.Dir = workDir
+	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return "", fmt.Errorf("stdin pipe: %w", err)
@@ -621,6 +628,13 @@ func extractContent(raw json.RawMessage) string {
 func RunProbes(ctx context.Context, entry discover.ServerEntry, tool mcpclient.Tool, probes []Probe) []ProbeResult {
 	var results []ProbeResult
 
+	// A per-run scratch directory contains any side effects the probes provoke.
+	// Removed when the run ends. HTTP targets need no local dir.
+	workDir, err := os.MkdirTemp("", "aspex-attack-")
+	if err == nil {
+		defer os.RemoveAll(workDir)
+	}
+
 	for _, probe := range probes {
 		var response string
 		var callErr error
@@ -628,7 +642,7 @@ func RunProbes(ctx context.Context, entry discover.ServerEntry, tool mcpclient.T
 		if entry.URL != "" {
 			response, callErr = callToolHTTP(ctx, entry.URL, tool.Name, probe.Args)
 		} else if entry.Command != "" {
-			response, callErr = callToolStdio(ctx, entry.Command, entry.Args, tool.Name, probe.Args)
+			response, callErr = callToolStdio(ctx, entry.Command, entry.Args, tool.Name, probe.Args, workDir)
 		} else {
 			callErr = fmt.Errorf("no command or URL for server %s", entry.Name)
 		}

@@ -66,12 +66,12 @@ func (d dirSource) List(dirRel string) []string {
 type gitSource struct{ root, rev string }
 
 func (g gitSource) Read(rel string) ([]byte, bool) {
-	out, err := exec.Command("git", "-C", g.root, "show", g.rev+":"+rel).Output()
+	out, err := exec.Command("git", "-C", g.root, "show", "--end-of-options", g.rev+":"+rel).Output()
 	return out, err == nil
 }
 
 func (g gitSource) List(dirRel string) []string {
-	out, err := exec.Command("git", "-C", g.root, "ls-tree", "-r", "--name-only", g.rev, "--", dirRel).Output()
+	out, err := exec.Command("git", "-C", g.root, "ls-tree", "-r", "--name-only", "--end-of-options", g.rev, "--", dirRel).Output()
 	if err != nil {
 		return nil
 	}
@@ -156,7 +156,13 @@ func BuildWorkingTree(ctx context.Context, root, home string) Environment {
 
 // BuildRevision builds the project environment at a git revision.
 func BuildRevision(ctx context.Context, root, rev, home string) (Environment, error) {
-	if err := exec.Command("git", "-C", root, "rev-parse", "--verify", rev+"^{commit}").Run(); err != nil {
+	// A revision is passed to git as an argument. Reject a leading dash so it
+	// can never be interpreted as a git option (argument injection), and
+	// require rev-parse to confirm it names a real commit.
+	if rev == "" || strings.HasPrefix(rev, "-") {
+		return Environment{}, fmt.Errorf("invalid git revision %q", rev)
+	}
+	if err := exec.Command("git", "-C", root, "rev-parse", "--verify", "--end-of-options", rev+"^{commit}").Run(); err != nil {
 		return Environment{}, fmt.Errorf("unknown git revision %q", rev)
 	}
 	return BuildProject(ctx, root, gitSource{root, rev}, home), nil
