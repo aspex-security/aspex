@@ -29,7 +29,31 @@ func newServer(servers ...*inspect.Server) *aspexmcp.Server {
 	load := func(ctx context.Context) agentenv.Environment {
 		return agentenv.Build(servers, agentenv.Options{Home: home, SkipLocalState: true})
 	}
-	return aspexmcp.New(load, "test", nil)
+	return aspexmcp.New(load, "test", nil).WithInputs(func(ctx context.Context) agentenv.Inputs {
+		return agentenv.Inputs{Servers: servers, Options: agentenv.Options{Home: home, SkipLocalState: true}}
+	})
+}
+
+func TestSimulateAndExplainPathThroughMCP(t *testing.T) {
+	s := newServer(
+		srv("filesystem", []string{"-y", "@modelcontextprotocol/server-filesystem@0.6.2", home}, "read_file", "write_file"),
+		srv("fetch", []string{"-y", "mcp-server-fetch"}, "fetch"),
+	)
+	text, isErr := call(t, s, "aspex_simulate_change", map[string]string{"changes": "deny-network=*"})
+	if isErr || !strings.Contains(text, `"attack_paths_removed"`) || !strings.Contains(text, "No configuration was modified") {
+		t.Errorf("simulate: %v %s", isErr, text)
+	}
+	text, isErr = call(t, s, "aspex_explain_path", map[string]string{"id": "AP001"})
+	if isErr || !strings.Contains(text, `"present_in_environment": true`) || !strings.Contains(text, "OBSERVED CONFIGURATION") {
+		t.Errorf("explain_path: %v %s", isErr, text[:200])
+	}
+	text, _ = call(t, s, "aspex_data_flow", map[string]string{"direction": "forward", "subject": "~/.aws"})
+	if !strings.Contains(text, `"sinks"`) {
+		t.Errorf("data_flow: %s", text[:200])
+	}
+	if _, isErr := call(t, s, "aspex_simulate_change", map[string]string{"changes": "delete-everything=now"}); !isErr {
+		t.Error("unknown change kind must error, never act")
+	}
 }
 
 func call(t *testing.T, s *aspexmcp.Server, tool string, args map[string]string) (text string, isError bool) {

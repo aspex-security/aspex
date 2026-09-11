@@ -25,6 +25,11 @@ import (
 // machine and the CLI can honor --no-exec / --clients.
 type Loader func(ctx context.Context) agentenv.Environment
 
+// InputsLoader returns the inspected inputs so simulation can rebuild
+// before/after through the same pipeline. Optional; without it the
+// simulation tools report unavailability.
+type InputsLoader func(ctx context.Context) agentenv.Inputs
+
 // Server is a minimal MCP server (initialize, tools/list, tools/call).
 type Server struct {
 	load    Loader
@@ -34,6 +39,14 @@ type Server struct {
 	// and the agent typically asks several questions in a row.
 	env    *agentenv.Environment
 	logger io.Writer
+	loadIn InputsLoader
+	inputs *agentenv.Inputs
+}
+
+// WithInputs enables the simulation-backed tools.
+func (s *Server) WithInputs(l InputsLoader) *Server {
+	s.loadIn = l
+	return s
 }
 
 // New creates a server.
@@ -89,6 +102,9 @@ var Tools = []Tool{
 	{"aspex_explain", "Answer a security question about this environment deterministically from the capability graph, e.g. 'Can external content reach my AWS credentials?'. Returns YES / NO COMPLETE PATH with conditions and what is not proven.", schema(map[string]string{"question": "The question in plain English"}, "question")},
 	{"aspex_verify", "Compare the current environment with a lockfile (default .aspex.lock in the working directory) and report security-classified drift.", schema(map[string]string{"lockfile": "Path to the lockfile (optional)"})},
 	{"aspex_security_impact", "Before you change agent configuration: pass the proposed .mcp.json content (and optionally the proposed .claude/settings.json) and get the security impact versus the current environment: new capabilities, new attack paths, blast radius before and after.", schema(map[string]string{"mcp_json": "Proposed .mcp.json content (Claude Code / Cursor mcpServers format)", "settings_json": "Proposed .claude/settings.json content with hooks (optional)"}, "mcp_json")},
+	{"aspex_simulate_change", "Counterfactual: what would removing or restricting something do? Pass one or more changes as 'remove-server=NAME', 'restrict-filesystem=[SERVER=]ROOT', 'deny-network=[SERVER|*]', 'remove-tool=SERVER.TOOL', 'remove-hook=EVENT', 'remove-skill=NAME' (comma-separated). Returns blast radius before/after, attack paths removed/added, capability deltas. Nothing is modified.", schema(map[string]string{"changes": "Comma-separated change specs"}, "changes")},
+	{"aspex_explain_path", "Explain a finding id (AP001-AP006): what it is, why Aspex reports it in this environment with OBSERVED CONFIGURATION / INFERRED / NOT OBSERVED evidence, and the concrete controls that break it, each simulated.", schema(map[string]string{"id": "Attack path id, e.g. AP003"}, "id")},
+	{"aspex_data_flow", "Follow the data. direction 'forward' with a resource ('~/.aws/credentials', 'ssh keys', 'database') lists every sink it could reach; direction 'reverse' with a destination ('Slack', 'github', 'the internet') lists the sensitive resources that could reach it. Flows are POTENTIAL unless the trace shows the tool was invoked; Aspex never claims data moved.", schema(map[string]string{"direction": "forward | reverse", "subject": "resource or destination"}, "direction", "subject")},
 }
 
 // Serve reads JSON-RPC messages line by line from r and writes responses to w.
@@ -165,8 +181,15 @@ func (s *Server) handle(ctx context.Context, req rpcReq) rpcResp {
 
 func (s *Server) environment(ctx context.Context) agentenv.Environment {
 	if s.env == nil {
-		e := s.load(ctx)
-		s.env = &e
+		if s.loadIn != nil {
+			in := s.loadIn(ctx)
+			s.inputs = &in
+			e := agentenv.Build(in.Servers, in.Options)
+			s.env = &e
+		} else {
+			e := s.load(ctx)
+			s.env = &e
+		}
 	}
 	return *s.env
 }
@@ -233,6 +256,53 @@ func (s *Server) call(ctx context.Context, name string, args json.RawMessage) (s
 		return pretty(map[string]interface{}{"drift": !d.Empty(), "worst": d.Worst(), "result": d})
 	case "aspex_security_impact":
 		return s.securityImpact(ctx, env, a["mcp_json"], a["settings_json"])
+	case "aspex_simulate_change":
+		if s.inputs == nil {
+			return "", fmt.Errorf("simulation inputs unavailable in this server mode")
+		}
+		var changes []agentenv.HypotheticalChange
+		for _, spec := range strings.Split(a["changes"], ",") {
+			spec = strings.TrimSpace(spec)
+			if spec == "" {
+				continue
+			}
+			k, v, _ := strings.Cut(spec, "=")
+			ch, err := agentenv.ParseChange(agentenv.ChangeKind(k), v)
+			if err != nil {
+				return "", err
+			}
+			changes = append(changes, ch)
+		}
+		if len(changes) == 0 {
+			return "", fmt.Errorf("no changes given")
+		}
+		sim := agentenv.Simulate(*s.inputs, changes)
+		return pretty(map[string]interface{}{
+			"changes": sim.Changes, "unmatched": sim.Unmatched,
+			"blast_radius_before": sim.Before.BlastRadius.Level, "blast_radius_after": sim.After.BlastRadius.Level,
+			"attack_paths_before": len(sim.Before.AttackPaths), "attack_paths_after": len(sim.After.AttackPaths),
+			"attack_paths_removed": sim.Drift.PathsRemoved, "attack_paths_added": sim.Drift.PathsAdded,
+			"capability_changes": sim.Capabilities, "note": "No configuration was modified.",
+		})
+	case "aspex_explain_path":
+		fe, ok := agentenv.ExplainFinding(env, a["id"], "")
+		if !ok {
+			return "", fmt.Errorf("unknown path id %q (AP001-AP006)", a["id"])
+		}
+		if fe.Present && s.inputs != nil {
+			for i := range fe.Instances {
+				fe.Controls = agentenv.Evaluate(*s.inputs, fe.Instances[i], fe.Controls)
+			}
+		}
+		return pretty(fe)
+	case "aspex_data_flow":
+		switch a["direction"] {
+		case "forward":
+			return pretty(agentenv.Forward(env, a["subject"], nil))
+		case "reverse":
+			return pretty(agentenv.Reverse(env, a["subject"], nil))
+		}
+		return "", fmt.Errorf("direction must be forward or reverse")
 	}
 	return "", fmt.Errorf("unknown tool %q", name)
 }
