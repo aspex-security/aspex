@@ -24,6 +24,23 @@ type Options struct {
 	Window   time.Duration // how far back the events reach
 	MinCalls int           // below this many calls to a server, tool recommendations are marked weak
 	Home     string
+	// Inputs, when set, lets each recommendation be simulated so the report
+	// shows the security impact (blast radius, attack paths removed) next to
+	// the functional impact (observed accesses that would be blocked).
+	Inputs *agentenv.Inputs
+}
+
+// Impact is the simulated security effect of applying a recommendation.
+type Impact struct {
+	BlastBefore  string   `json:"blast_before"`
+	BlastAfter   string   `json:"blast_after"`
+	PathsRemoved []string `json:"paths_removed"`
+	PathsBefore  int      `json:"paths_before"`
+	PathsAfter   int      `json:"paths_after"`
+	// FunctionalNote states whether observed accesses would be blocked, or
+	// that history is insufficient to tell.
+	FunctionalNote string `json:"functional_note"`
+	Simulate       string `json:"simulate_command"`
 }
 
 // ToolRec is the allowlist recommendation for one server.
@@ -41,6 +58,10 @@ type ServerRec struct {
 	Recommended   []string `json:"recommended_roots,omitempty"`
 	Reduction     string   `json:"scope_reduction,omitempty"` // qualitative
 	Note          string   `json:"note,omitempty"`
+	// RootImpact is the simulated effect of the root recommendation; RemoveImpact
+	// of removing an unobserved server. Nil when there is nothing to simulate.
+	RootImpact   *Impact `json:"root_impact,omitempty"`
+	RemoveImpact *Impact `json:"remove_impact,omitempty"`
 }
 
 // Report is the full recommendation set.
@@ -75,6 +96,11 @@ func Analyze(env agentenv.Environment, events []logparse.Event, opts Options) Re
 					rec.Unobserved = append(rec.Unobserved, t.Name)
 				}
 			}
+			if opts.Inputs != nil {
+				rec.RemoveImpact = simulateImpact(*opts.Inputs, agentenv.HypotheticalChange{Kind: agentenv.RemoveServer, Server: s.Name},
+					"Insufficient runtime history to determine functional impact: no calls to this server were observed in the window.",
+					"aspex simulate --remove-server "+s.Name)
+			}
 			r.Servers = append(r.Servers, rec)
 			continue
 		}
@@ -104,6 +130,15 @@ func Analyze(env agentenv.Environment, events []logparse.Event, opts Options) Re
 		if len(s.Roots) > 0 && capHas(s, "file-read") {
 			rec.ObservedPaths = pathsByServer[correlate.Normalize(s.Name)]
 			rec.Recommended, rec.NeverObserved, rec.Reduction = recommendRoots(s.Roots, rec.ObservedPaths, opts.Home, act.Calls >= opts.MinCalls)
+			if opts.Inputs != nil && len(rec.Recommended) > 0 {
+				roots := expandRoots(rec.Recommended, opts.Home)
+				note := fmt.Sprintf("No observed access would be blocked: all %d observed paths fall under the recommended roots.", len(rec.ObservedPaths))
+				if act.Calls < opts.MinCalls {
+					note = fmt.Sprintf("Weak evidence (%d calls): observed paths fit the recommended roots, but the window may not be representative.", act.Calls)
+				}
+				rec.RootImpact = simulateImpact(*opts.Inputs, agentenv.HypotheticalChange{Kind: agentenv.RestrictFilesystem, Server: s.Name, Roots: roots}, note,
+					"aspex simulate --restrict-filesystem "+s.Name+"="+strings.Join(rec.Recommended, ","))
+			}
 		}
 		r.Servers = append(r.Servers, rec)
 	}
@@ -118,6 +153,29 @@ func Analyze(env agentenv.Environment, events []logparse.Event, opts Options) Re
 	})
 	sort.Strings(r.NoActivity)
 	return r
+}
+
+// simulateImpact runs one hypothetical change and summarizes the result.
+func simulateImpact(in agentenv.Inputs, ch agentenv.HypotheticalChange, functional, cmd string) *Impact {
+	sim := agentenv.Simulate(in, []agentenv.HypotheticalChange{ch})
+	im := &Impact{BlastBefore: sim.Before.BlastRadius.Level, BlastAfter: sim.After.BlastRadius.Level,
+		PathsBefore: len(sim.Before.AttackPaths), PathsAfter: len(sim.After.AttackPaths), FunctionalNote: functional, Simulate: cmd}
+	for _, p := range sim.Drift.PathsRemoved {
+		im.PathsRemoved = append(im.PathsRemoved, p.Name+" ("+strings.Join(p.Servers, " + ")+")")
+	}
+	return im
+}
+
+// expandRoots turns "~/x" recommendations back into absolute paths.
+func expandRoots(recs []string, home string) []string {
+	var out []string
+	for _, r := range recs {
+		if strings.HasPrefix(r, "~/") && home != "" {
+			r = path.Join(filepath.ToSlash(home), r[2:])
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 func boolInt(b bool) int {
@@ -330,6 +388,9 @@ func Print(w io.Writer, r Report, noColor bool) {
 				}
 				fmt.Fprintf(w, "     %s %s\n", c(dim, "Blast-radius reduction:"), c(bold, s.Reduction))
 			}
+			if s.RootImpact != nil {
+				printImpact(w, c, s.RootImpact)
+			}
 		}
 		if s.Note != "" {
 			fmt.Fprintf(w, "     %s\n", c(dim, s.Note))
@@ -338,7 +399,13 @@ func Print(w io.Writer, r Report, noColor bool) {
 	}
 	if len(r.NoActivity) > 0 {
 		fmt.Fprintf(w, "  %s %s\n", c(bold, "No activity in this window:"), strings.Join(r.NoActivity, ", "))
-		fmt.Fprintf(w, "  %s\n\n", c(dim, "Candidates for removal if the window is representative. Absence in traces is not proof of disuse."))
+		fmt.Fprintf(w, "  %s\n", c(dim, "Candidates for removal if the window is representative. Absence in traces is not proof of disuse."))
+		for _, s := range r.Servers {
+			if s.Evidence == "none" && s.RemoveImpact != nil && len(s.RemoveImpact.PathsRemoved) > 0 {
+				fmt.Fprintf(w, "     %s  %s\n", c(cyan, s.Server), c(dim, fmt.Sprintf("removing it: blast radius %s → %s, %d attack path(s) removed", s.RemoveImpact.BlastBefore, s.RemoveImpact.BlastAfter, len(s.RemoveImpact.PathsRemoved))))
+			}
+		}
+		fmt.Fprintln(w)
 	}
 	fmt.Fprintf(w, "  %s\n\n", c(dim, "Aspex recommends; it never edits your config. Apply changes in your client, then re-run aspex-scan lock."))
 }
@@ -355,4 +422,14 @@ func firstN(in []string, n int) []string {
 		return in
 	}
 	return in[:n]
+}
+
+func printImpact(w io.Writer, c func(string, string) string, im *Impact) {
+	fmt.Fprintf(w, "     %s\n", c(dim, "Security impact (simulated, nothing modified):"))
+	fmt.Fprintf(w, "       blast radius %s → %s · attack paths %d → %d\n", c(bold, im.BlastBefore), c(bold, im.BlastAfter), im.PathsBefore, im.PathsAfter)
+	for _, p := range im.PathsRemoved {
+		fmt.Fprintf(w, "       %s %s\n", c(green, "✓"), p)
+	}
+	fmt.Fprintf(w, "     %s %s\n", c(dim, "Functional impact:"), im.FunctionalNote)
+	fmt.Fprintf(w, "     %s %s\n", c(dim, "Evaluate yourself:"), im.Simulate)
 }
