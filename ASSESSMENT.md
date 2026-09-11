@@ -1,84 +1,82 @@
-# Aspex engineering assessment
+# Aspex: current-state assessment
 
-Date: 2026-09-11. Baseline: v0.6.1 (commit 0546e49). Kept deliberately short;
-this document exists to justify implementation choices, not to replace them.
+Updated 2026-09-11, before the "local security debugger" milestones. Concise by
+design; the code is the detail.
 
-## Current architecture
+## Existing functionality
 
-Go, two dependencies (cobra, yaml). Five binaries share `internal/`:
-
-```
-cmd/aspex-scan      discover -> inspect (parallel) -> rules -> score -> report
-cmd/aspex-trace     logparse -> trace rules / killchain / provenance -> report
-cmd/aspex           snapshot (scan x trace join) -> TUI
-internal/discover   9 client config formats -> ServerEntry (name, cmd, args, env keys, url)
-internal/inspect    connects to a server (stdio/HTTP) or stays static -> Server{Entry, Tools}
-internal/rules      152 scan rules: 36 hand-written checks + 116 table-driven substring rules
-internal/attackpath capability bitmask per server -> pairwise "chains"
-internal/score      per-server deductions, worst-weighted overall
-internal/trace      85 per-event rules + 3 stateful; killchain, provenance separate
-internal/policy     .aspex.yaml ignore/severity/fail_on, finding baseline
-internal/correlate  joins scan servers with trace activity by normalized name
-```
-
-Adding a rule: a Go function or a table row plus a test. Adding a client: a
-path function and a parser. Adding a trace source: a parser returning
-`logparse.Event`. All three are straightforward. There is no normalized
-capability model: `rules` reasons about tools directly, `attackpath` has its
-own bitmask, `trace` has its own name lists. The same idea ("this tool sends
-data out") is encoded three times with three different word lists.
+- `aspex-scan`: discovers 9 clients' MCP configs, inspects servers live or
+  statically, 150+ rules (116 as YAML data), 0-100 score, policy (.aspex.yaml),
+  finding baseline, SARIF/JSON/HTML, `--with-trace` correlation, `hooks`,
+  `doctor`, `inventory`, `shadow`, `phantom`, `redteam`, `diff --baseline`
+  (finding-level), `--watch` (mtime poll + rescan), `cron`, pre-commit hook.
+- `internal/attackpath`: evidence-backed capability model (bitmask, Evidence,
+  FileScope from allowed roots, agent-state write targets) and six
+  compositions AP001-AP006 with severity from composition, confidence from
+  evidence. Feeds the default report, score cap, gate, policy, baseline.
+- `aspex-trace`: parses 6 clients' logs, 85+ rules, per-session analysis,
+  kill chains with OBSERVED/INFERRED/POSSIBLE evidence, provenance
+  (ingestion -> suspicious call, timed confidence), behavioral baseline,
+  live tail, export.
+- `aspex` launcher: 30-day snapshot, menu, `share`, passthrough.
+- Corpus: `testdata/corpus/{malicious,benign}` server fixtures with
+  `expect_rules` / `max_severity`, run in CI.
+- Release: GoReleaser, Homebrew, npm (OIDC), GitHub Actions (scan, trace).
 
 ## Strengths
 
-- Local-first, offline, single binary. Nothing to deploy, nothing phones home.
-- Discovery covers every mainstream client, including Claude Code's three scopes.
-- Trace from native logs with no proxy is genuinely differentiated; killchain
-  and provenance already reason about sequences and sources.
-- Policy, baseline, corpus tests, e2e tests, CI lint gates: the project has a
-  contract with its users about what it will and will not flag.
+- The capability + evidence model in `attackpath` is the right foundation:
+  scoped, tested, conservative wording, static inference at lower confidence.
+- Trace evidence semantics already separate observed from inferred.
+- Detection contract (corpus) prevents regressions and false positives.
+- Local-first is real: no network calls except downloads; no telemetry.
 
-## Weaknesses (ordered by security impact)
+## Missing pieces (spec mapping)
 
-1. **Attack-path analysis is the most valuable idea in the codebase and the
-   weakest implementation.** Any `read_file` plus any tool whose name contains
-   `fetch`, `http`, or `request` is CRITICAL "Data Exfiltration", regardless of
-   the filesystem server's allowed roots. The official filesystem server scoped
-   to one project plus the official fetch server, a normal setup, scores
-   CRITICAL. A shell-exec server alone is reported as a "chain". Steps contain
-   attacker fiction rather than evidence. Substring matching turns a
-   `user_profile` tool into "persistence". There are no tests. And none of it
-   reaches the default `aspex-scan` output, the score, or `--fail-on`.
-2. **Capability is conflated with risk.** MCP006 rates any token-shaped env key
-   CRITICAL; every legitimate GitHub or Slack server with a token scores 39.
-   Severity is deducted per finding, so ten informational findings outweigh a
-   real composition.
-3. **No persistence model.** Nothing asks whether the agent can rewrite its
-   own instructions (`CLAUDE.md`, `.cursorrules`), its own MCP config
-   (`.mcp.json`, `~/.claude.json`), or its hooks (`~/.claude/settings.json`).
-   Those are the writes that survive the session.
-4. **Trace conclusions do not distinguish observed from inferred.** Kill chain
-   descriptions read as fact ("was read, then an outbound call") which is
-   observed, but "possible exfiltration" and "prompt injection signature" are
-   inferences presented in the same voice.
-5. Static (`--no-exec`) scans know nothing about capabilities because
-   capabilities are derived from tool lists only, even for the well-known
-   official servers whose capabilities are fixed.
+| Spec feature | Status | Notes |
+|---|---|---|
+| Normalized environment/capability graph | PARTIAL | `attackpath.ServerCapabilities` covers servers. No shared model that also holds hooks, skills, instructions, destinations, blast radius; each command re-derives. |
+| Skills discovery | MISSING | Hooks yes (`internal/hooks`), skills no. |
+| `aspex lock` | MISSING | `inventory --json` is the closest; no fingerprints, no schema version, not designed for diffing. |
+| `aspex verify` (drift) | MISSING | `aspex-scan verify` today = known-bad registry lookup. Name clash to resolve. `diff --baseline` compares findings, not capabilities. |
+| `aspex diff` (security impact) | PARTIAL | `internal/diff` compares finding sets. No capability/scope/path/blast-radius diff, no git revisions, no markdown. |
+| PR/CI security review | PARTIAL | Scan action uploads SARIF and gates on severity. No capability diff comment. |
+| `aspex explore` | MISSING | |
+| `aspex explain <question>` | MISSING | `aspex-scan explain <server>` prints a per-server narrative. Different thing; keep both under one command. |
+| `aspex tighten` | MISSING | `--with-trace` shows usage per server; no recommendations. |
+| `aspex bom` | MISSING | |
+| `aspex mcp` (read-only) | MISSING | |
+| Corpus as scenario benchmark | PARTIAL | Server-level fixtures only; no environment scenarios with expected capabilities/paths/forbidden findings; no TP/FN/FP summary command. |
+| Capability-aware history | PARTIAL | `internal/history` stores score deltas only. |
+| Watch integration | PARTIAL | Rescans on mtime; reports findings, not drift. |
+| Finding evidence levels | EXISTS (trace) / PARTIAL (scan) | Attack paths carry evidence; per-rule findings carry Detail only. |
+| Blast radius | MISSING | One number (score) with a cap reason. |
 
-## Highest-value improvements
+## Weak implementations / duplicated concepts
 
-1. Rebuild attack paths on evidence: capability + scope + egress class,
-   severity from the composition, confidence from the evidence quality,
-   remediation that names the specific roots and tools. Surface in the default
-   scan, the score, JSON, and the gate. Infer capabilities for well-known
-   packages so static scans and the snapshot benefit.
-2. Persistence as a first-class target: writable agent config, instructions,
-   hooks, and memory, distinguished by whether writing them yields code
-   execution on the next session.
-3. Score: a composition caps the score; informational findings do not sink it.
-4. Trace: OBSERVED / INFERRED / POSSIBLE labeling in killchain output.
+- Two notions of "baseline": finding baseline (`policy.Baseline`) and trace
+  behavioral baseline (`internal/baseline`). Acceptable, but the new lockfile
+  must not become a third; it is the environment fingerprint, and `diff
+  --baseline` should sit beside it as the finding-level view.
+- `internal/hook` (git pre-commit installer) vs `internal/hooks` (agent
+  lifecycle hooks). Names are close; kept, documented.
+- `history` parses old JSON with capitalized field names; brittle.
 
-## Implementation priorities for this pass
+## Architecture decision for this pass
 
-P0: items 1 and 2 above with tests, default-scan integration, README.
-P1: item 3 (score cap) alongside, since it is small and makes 1 matter for CI.
-P2: item 4 if time remains; otherwise documented in the roadmap.
+Introduce `internal/agentenv`: one deterministic `Environment` assembled from
+the existing detectors (attackpath for servers, hooks, new skills discovery,
+instruction files) with fingerprints, destinations, blast radius and attack
+paths. Every new command (lock, verify, diff, explain, tighten, bom, mcp,
+explore's graph view) consumes this one model. Nothing existing is rewritten;
+attackpath stays the capability engine.
+
+## Implementation priorities
+
+1. agentenv + skills discovery + blast radius (foundation).
+2. lock / verify / diff (+ markdown for PRs, git revisions).
+3. explain (deterministic queries over agentenv).
+4. tighten (agentenv + trace activity).
+5. bom, mcp (read-only), explore (loopback, embedded UI).
+6. corpus scenarios + runner; history/watch integration; CLI unification;
+   README/docs.

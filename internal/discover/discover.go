@@ -325,6 +325,33 @@ type zedSettings struct {
 
 // ParseConfigFile parses a single config file and returns server entries.
 // Returns nil, nil if the file does not exist (not an error -- client simply not installed).
+// ParseConfigBytes parses config content for a client as if it lived at path.
+// Used to analyze a config at a git revision without checking it out. path is
+// only used for ConfigPath and for relative-root resolution.
+func ParseConfigBytes(client, path string, data []byte) ([]ServerEntry, error) {
+	switch client {
+	case ClientClaudeDesktop:
+		return parseClaudeDesktop(path, data)
+	case ClientClaudeCode:
+		return parseClaudeCode(path, data)
+	case ClientCursor:
+		return parseCursor(path, data)
+	case ClientVSCode:
+		return parseVSCode(path, data)
+	case ClientWindsurf:
+		return parseWindsurf(path, data)
+	case ClientCline:
+		return parseCline(path, data)
+	case ClientRooCline:
+		return parseRooCline(path, data)
+	case ClientContinue:
+		return parseContinue(path, data)
+	case ClientZed:
+		return parseZed(path, data)
+	}
+	return nil, fmt.Errorf("unknown client %q", client)
+}
+
 func ParseConfigFile(client, path string) ([]ServerEntry, error) {
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {

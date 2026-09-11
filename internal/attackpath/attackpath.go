@@ -680,7 +680,19 @@ func readersOf(sc *ServerCapabilities) []reader {
 	return out
 }
 
-func detectChains(caps []ServerCapabilities) []AttackChain {
+func detectChains(input []ServerCapabilities) []AttackChain {
+	// Compose over a name-sorted copy so the chains, and which server each
+	// hop names, never depend on config discovery order. Lockfiles and diffs
+	// rely on this.
+	caps := make([]ServerCapabilities, len(input))
+	copy(caps, input)
+	sort.SliceStable(caps, func(i, j int) bool {
+		if caps[i].Client != caps[j].Client {
+			return caps[i].Client < caps[j].Client
+		}
+		return caps[i].ServerName < caps[j].ServerName
+	})
+
 	var chains []AttackChain
 	seen := map[string]bool{}
 	add := func(ch AttackChain) {
