@@ -9,7 +9,41 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+- Attack paths rebuilt on evidence (`internal/attackpath`). Capabilities are
+  derived from live tool lists, or inferred for well-known packages in static
+  scans; filesystem scope comes from the allowed roots in the config
+  (home or `/` is sensitive, a project directory is project, undeclared is
+  unknown). Six compositions, each with evidence for both halves, the path
+  hop by hop, impact, remediation, and a confidence level: AP001 sensitive
+  data exfiltration, AP002 credential exfiltration, AP003 persistent agent
+  compromise (writable MCP config, hooks, instructions, or memory reachable
+  by a server while external content can enter), AP004 memory poisoning,
+  AP005 remote control, AP006 untrusted content to command execution.
+- Attack paths appear in the default `aspex-scan` report (top four; all in
+  `aspex-scan attack-paths` and `--json` under `attackPaths`), participate in
+  `--fail-on`, can be accepted in `.aspex.yaml` by ID, and are recorded in
+  baselines by ID and server set.
+- Score cap: one critical path caps the overall score at 39, one high path at
+  69, with the reason printed and exported as `scoreCapReason`. Ten
+  informational findings no longer outrank one real composition.
+- The `aspex` snapshot headline reports how many attack paths exist and the
+  worst one.
+- `ASSESSMENT.md`: architecture, weaknesses, and priorities.
+
 ### Changed
+- A capability on its own is no longer reported as a "chain": a shell server
+  alone, or a fetch server alone, produces no path entry. The old
+  implementation reported any `read_file` plus anything named `fetch` as a
+  CRITICAL "Data Exfiltration" regardless of scope, and a lone shell tool as
+  "Persistence via Shell".
+- Tool classification is token-based: `user_profile` is not a shell profile,
+  `slack_reply_to_thread` is not a REPL, `create_pull_request` is a GitHub
+  channel and not arbitrary HTTP egress.
+- `aspex-scan attack-paths --json`: `chains` entries gain `id`, `confidence`,
+  `evidence`, `impact`, `remediation`; `capabilities` entries gain `static`,
+  `fileScope`, `roots`, `evidence`, `agentStateWrites`. Existing fields are
+  unchanged.
 - npm publishing uses npm Trusted Publishing (OIDC from the release workflow)
   instead of a stored token. `aspex@0.6.1` was the first version on npm.
 

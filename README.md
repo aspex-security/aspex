@@ -39,8 +39,54 @@ Aspex reads the log files your AI clients already write. No proxy. No config cha
 | | Tool | Question | How |
 |---|---|---|---|
 | **After** | `aspex-trace` | What did my agents do? | Reads native client logs. Reconstructs kill chains (credential read → outbound call), traces injected instructions back to their source. 85+ rules. |
-| **Before** | `aspex-scan` | What can this server do? | Static analysis of every configured server. 140+ rules, 0-100 score, cross-server attack paths. |
+| **Before** | `aspex-scan` | What can this environment do? | Every configured server, 140+ rules, a 0-100 score, and the compositions across servers that no single-server view can see. |
 | **Both** | `aspex` | Show me. | The snapshot above, then a menu. `aspex share` gives you a privacy-safe card to post. |
+
+---
+
+## The finding a single-server scanner cannot make
+
+You know your filesystem server reads files. You know your browser server reaches the internet. Aspex tells you what the two are together, with the evidence for each half. This is real output from the maintainer's machine:
+
+```
+  CRITICAL  AP001  Potential sensitive data exfiltration path  confidence: high
+     filesystem
+       └─ read_file: reads files by path
+       └─ read_text_file: reads files by path
+       └─ read_media_file: reads files by path
+       └─ read_multiple_files: reads files by path
+       └─ allowed root /Users/steven (home directory: includes ~/.ssh, ~/.aws, browser profiles)
+       └─ and 5 more items (see --json)
+     playwright
+       └─ browser_navigate: reaches network destinations (takes a URL parameter)
+       └─ browser_navigate_back: reaches network destinations
+       └─ browser_network_request: reaches network destinations
+       └─ browser_tabs: reaches network destinations (takes a URL parameter)
+       └─ and 1 more item (see --json)
+
+     Path
+         instruction from a prompt, document, or tool result
+       ↓ filesystem.read_file reads credential files such as ~/.ssh and ~/.aws
+       ↓ contents enter the agent's context
+       ↓ playwright.browser_navigate sends them to any network destination
+
+     Why it matters
+       An instruction the agent processes could combine these two
+       capabilities to expose credential files such as ~/.ssh and ~/.aws
+       outside this machine. Nothing here proves it has happened; the
+       path exists.
+
+     Fix
+       scope filesystem to specific project directories instead of
+       /Users/steven; constrain playwright to an allowlist of
+       destinations. Either change alone removes the path.
+```
+
+Severity comes from the composition, not from a keyword: the same filesystem server scoped to one project directory plus the same browser is HIGH, not CRITICAL, because the reachable files change. Confidence comes from the evidence: `high` when the tools were listed live, `medium` when inferred from a well-known package in a static scan. A capability on its own is never reported as a path.
+
+The same reasoning finds the write that survives the session: a server that can modify `~/.claude.json`, `.mcp.json`, or `~/.claude/settings.json` hooks while another brings web content into the context is a **persistent agent compromise path**, because a modified MCP config runs code at the next session start without anyone asking again.
+
+One critical path caps the score at 39 and fails `--fail-on high` in CI, even when every server looks fine on its own. [All six paths and their severity rules](https://aspex.mintlify.site/tools/scan#attack-paths).
 
 ---
 

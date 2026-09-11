@@ -57,7 +57,7 @@ See [Policy, baselines and prioritization](/guides/policy) for how the last five
 | `doctor` | 2-second offline pre-flight check: env secrets, config secrets, filesystem grants, network exposure |
 | `inspect <target>` | Scan a single server by command string or URL |
 | `inventory` | List every detected MCP server and all their tools |
-| `attack-paths` | Cross-server kill chain analysis mapped to MITRE ATT&CK |
+| `attack-paths` | Every server's capabilities with evidence, and the compositions across servers they form (also shown in a normal scan) |
 | `shadow` | Detect tool name collisions across servers |
 | `phantom` | Detect servers that return different tool lists on successive calls |
 | `redteam` | Active adversarial probing (6 probe categories, 18 payloads); see `aspex-attack` |
@@ -103,27 +103,81 @@ Run `aspex-scan` before adding any new MCP server to your client config. A singl
 
 ---
 
-## Attack Path Analysis
+## Attack paths
 
-`aspex-scan attack-paths` correlates findings across servers to surface multi-step kill chains mapped to MITRE ATT&CK.
-
-```bash
-aspex-scan attack-paths
-```
+A single-server scanner can tell you that a filesystem server reads files and that a browser server reaches the internet. It cannot tell you that together they are a path from `~/.ssh/id_rsa` to any destination an injected instruction chooses. `aspex-scan` reasons about those compositions and shows them in every scan, after the per-server findings, with the evidence for each half:
 
 ```
-CRITICAL  Recon → Credential Theft → Exfiltration
-  Step 1  filesystem  read ~/  (AML.T0010 - Recon via file access)
-  Step 2  github      list repos  (AML.T0043 - Enumerate targets)
-  Step 3  slack       post_message  (AML.T0057 - Exfiltrate via trusted channel)
+  CRITICAL  AP001  Potential sensitive data exfiltration path  confidence: high
+     filesystem
+       └─ read_file: reads files by path
+       └─ read_text_file: reads files by path
+       └─ read_media_file: reads files by path
+       └─ read_multiple_files: reads files by path
+       └─ allowed root /Users/steven (home directory: includes ~/.ssh, ~/.aws, browser profiles)
+       └─ and 5 more items (see --json)
+     playwright
+       └─ browser_navigate: reaches network destinations (takes a URL parameter)
+       └─ browser_navigate_back: reaches network destinations
+       └─ browser_network_request: reaches network destinations
+       └─ browser_tabs: reaches network destinations (takes a URL parameter)
+       └─ and 1 more item (see --json)
 
-  Attack chain exploits: unrestricted filesystem read + outbound Slack
-  Recommendation: scope filesystem server to project directories only
+     Path
+         instruction from a prompt, document, or tool result
+       ↓ filesystem.read_file reads credential files such as ~/.ssh and ~/.aws
+       ↓ contents enter the agent's context
+       ↓ playwright.browser_navigate sends them to any network destination
+
+     Why it matters
+       An instruction the agent processes could combine these two
+       capabilities to expose credential files such as ~/.ssh and ~/.aws
+       outside this machine. Nothing here proves it has happened; the
+       path exists.
+
+     Fix
+       scope filesystem to specific project directories instead of
+       /Users/steven; constrain playwright to an allowlist of
+       destinations. Either change alone removes the path.
 ```
 
-<Warning>
-Attack paths that span three or more servers with an exfiltration step at the end are rated CRITICAL regardless of individual server scores.
-</Warning>
+That is real output. Three ideas are kept apart on purpose:
+
+- A **capability** is what a server can do, with evidence: the tool, and for filesystem servers the allowed roots from your config.
+- A **path** is a security conclusion about a composition of capabilities. Its severity comes from what the composition reaches; its confidence comes from how the capabilities were observed.
+- **Observed behavior** is what `aspex-trace` reports. A path says nothing about whether it was ever walked.
+
+### The paths
+
+| ID | Path | Severity |
+|---|---|---|
+| AP001 | Sensitive data exfiltration: a local file read plus a way to send data out | critical when the read reaches home or credential directories and the egress is unconstrained; high for project-scoped reads or authenticated channels (GitHub, Slack, email); medium or low when both are limited |
+| AP002 | Credential exfiltration: an explicit secret- or environment-reading tool plus egress | same scale as AP001 |
+| AP003 | Persistent agent compromise: external content can enter, and a writable root reaches files future sessions trust | critical when a reachable file executes at the next session start (`.mcp.json`, `~/.claude.json`, hooks, shell startup files); high for instruction files such as `CLAUDE.md` or `.cursorrules` |
+| AP004 | Memory poisoning: external content can enter, and a memory server persists what the agent remembers | medium |
+| AP005 | Remote control: command execution plus unconstrained egress | critical; high when egress is allowlisted |
+| AP006 | Untrusted content to command execution, in an environment with no open egress | high |
+
+A capability on its own is never a path. A shell server alone, a fetch server alone, or a home-scoped filesystem server alone produce no path entry; the per-server rules cover risky configuration.
+
+### Scope matters
+
+For filesystem servers the allowed roots come from the arguments in your client config. `~` or `/` (or any ancestor of your home directory) is *sensitive*: it reaches `~/.ssh`, `~/.aws`, browser profiles. A project directory is *project*: it may still hold `.env` or key files, so a project read plus open egress is HIGH rather than CRITICAL. A read tool with no declared roots is treated as sensitive at medium confidence.
+
+### Static scans
+
+When a server is not launched (`--no-exec`, or the `aspex` snapshot), capabilities are inferred for well-known packages: the official filesystem, fetch, GitHub, GitLab, Slack, Brave, memory, Postgres and SQLite servers, browser automation servers, and shell servers. Roots still come from the config. Inferred paths carry `confidence: medium`.
+
+### Score, gate, policy, baseline
+
+- One critical path caps the overall score at 39; one high path at 69. The report says why (`Score capped at 39: critical attack path: ...`).
+- `--fail-on` counts paths: an environment of individually clean servers with a critical path fails CI.
+- Accept a path in `.aspex.yaml` by its ID, with a reason: `- rule: AP001` (optionally `server:` one of the servers on the path).
+- `--save-baseline` records paths by ID and server set; `--baseline` hides the ones that were already there.
+
+### JSON
+
+`aspex-scan --json` adds `attackPaths` (id, name, severity, confidence, servers, evidence, steps, impact, remediation, MITRE reference) and `scoreCapReason`. `aspex-scan attack-paths --json` additionally lists every server's capabilities with evidence, allowed roots, file scope, and the agent-state files a writable root reaches.
 
 ---
 

@@ -55,6 +55,23 @@ All aspex findings map to **OWASP LLM Top 10 2025**, **MITRE ATLAS**, and **CWE*
 
 ---
 
+## Attack paths (AP001-AP006)
+
+Attack paths are compositions of capabilities across servers, produced by `aspex-scan` alongside the rules below. They are conclusions, not observations: each names the two capabilities, the evidence for both, the path hop by hop, the impact, and a remediation. Severity reflects what the composition reaches and confidence reflects how the capabilities were observed (live tool list: high; inferred from a well-known package: medium).
+
+| ID | Composition | Highest severity |
+|---|---|---|
+| AP001 | local file read + network egress or external channel | critical |
+| AP002 | credential or environment read + egress | critical |
+| AP003 | external content ingress + writable agent config, hooks, instructions, or memory | critical |
+| AP004 | external content ingress + persistent memory write | medium |
+| AP005 | command execution + open egress | critical |
+| AP006 | external content ingress + command execution, no open egress | high |
+
+See [aspex-scan: attack paths](/tools/scan#attack-paths) for the severity rules.
+
+---
+
 ## aspex-scan Rules (140+)
 
 aspex-scan evaluates every MCP server it connects to against a ruleset covering static configuration, tool schemas, resource URIs, and dynamic behavior. Rules are identified by the `MCP` prefix.

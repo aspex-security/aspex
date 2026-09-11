@@ -50,6 +50,8 @@ Rules:
 
 Suppressed findings are always listed at the end of the report and in `--json` output under `suppressed`, so a clean run is never mistaken for "nothing found".
 
+Attack paths (`AP001`...`AP006`, see [aspex-scan](/tools/scan#attack-paths)) are governed the same way: `- rule: AP003` with a `reason` accepts a path, optionally scoped with `server:` to one of the servers on it. Baselines record paths too, so `--baseline` hides pre-existing compositions and only new ones fail the gate.
+
 ## Baseline: adopt on an existing estate
 
 Turning on `--fail-on high` against 30 servers with 90 existing findings fails forever. A baseline snapshots what exists today so only **new** findings fail the gate, then you burn the baseline down at your own pace.
