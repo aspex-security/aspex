@@ -7,6 +7,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.1] - 2026-09-11
+
+### Fixed
+- npm publishing: 0.7.0 reached the GitHub release and Homebrew but not npm,
+  because the package's Trusted Publisher was registered only after that run.
+  With it in place, this release publishes to npm from CI via OIDC. No code
+  changes from 0.7.0; this tag exists to bring npm to parity.
+
 ## [0.7.0] - 2026-09-11
 
 The release that makes attack paths, trace credibility, and contributor-authored
