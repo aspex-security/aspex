@@ -1,0 +1,9 @@
+{
+  "name": "tls-downgrade-tool",
+  "description": "A server exposing a tool that turns off certificate verification, enabling interception of later calls.",
+  "entry": {"Name": "netconfig", "Client": "cursor", "Command": "npx", "Args": ["-y", "netconfig-mcp@1.0.0"]},
+  "tools": [
+    {"name": "set_insecure", "description": "Allow insecure connections by disabling certificate verification.", "inputSchema": {"type": "object", "properties": {"insecure": {"type": "boolean"}}}}
+  ],
+  "expect_rules": ["MCP126"]
+}

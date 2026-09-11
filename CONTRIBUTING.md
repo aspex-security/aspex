@@ -43,17 +43,43 @@ Requirements: Go 1.25 or later. No other dependencies needed for development.
 
 ---
 
-## Adding an aspex-scan rule
+## Adding a detection rule
 
-Each rule is a deterministic check that takes a server or tool as input and returns zero or more `Finding` values. Rules must be offline (no network calls), side-effect free, and deterministic.
+Most rules match a tool name, description, or input schema against a list of
+substrings. These are **data, not code**: add an entry to
+[`internal/rules/catalog_rules.yaml`](internal/rules/catalog_rules.yaml) and a
+corpus fixture. No Go, no recompiled logic to review.
 
-**Steps:**
+```yaml
+# under tools: (also resources: and prompts:)
+  - id: MCP126
+    name: Tool can disable transport security
+    severity: high            # critical | high | medium | low | info
+    fix: Remove tools that turn off certificate verification.
+    mapping: OWASP LLM08, CWE-295, CWE-319
+    tool_names:               # match any as a substring of the lowercased tool name
+      - disable_tls
+      - allow_insecure
+    desc_words:               # ...or the description
+      - disable certificate verification
+    schema_keys:              # ...or the JSON input schema
+      - '"insecure"'
+```
 
-1. Add a check function to [`internal/rules/rules.go`](internal/rules/rules.go). Follow the naming convention `checkMCPNNN`. Return `[]Finding`.
-2. Call it from `EvalServer` or `evalTool` as appropriate.
-3. Add a unit test in [`internal/rules/rules_test.go`](internal/rules/rules_test.go) with at least one fixture that triggers the rule and one that does not.
-4. Add a fixture config in [`testdata/configs/`](testdata/configs/) if the test requires a config file.
-5. Add a doc page at [`docs/rules/MCPNNN.md`](docs/rules/).
+`resources:` entries use `uri_words` / `mime_types`; `prompts:` use
+`desc_words` / `name_words` / `min_len`. IDs must be unique; the loader panics
+(and CI fails) on a duplicate id or an invalid severity.
+
+Then add a corpus fixture that proves it fires (and, ideally, a benign fixture
+that proves it does not over-fire) - see "Adding a corpus fixture" below. That
+is the whole change: `go test ./...` runs your fixture against the rule.
+
+**When a rule needs real logic** (regex, cross-field conditions, filesystem
+scope), write Go instead:
+
+1. Add a `checkMCPNNN` function to [`internal/rules/rules.go`](internal/rules/rules.go) returning `[]Finding`.
+2. Call it from `EvalServer`.
+3. Add positive and negative unit tests in [`internal/rules/rules_test.go`](internal/rules/rules_test.go).
 
 **Rule doc page format:**
 
