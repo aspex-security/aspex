@@ -353,6 +353,9 @@ type sessionSummary struct {
 }
 
 func buildSessionID(ev logparse.Event) string {
+	if ev.Session != "" {
+		return ev.Client + "/" + ev.Session
+	}
 	day := ev.Timestamp.Format("2006-01-02")
 	return ev.Client + "/" + day + "/" + ev.Server
 }
@@ -1158,16 +1161,18 @@ func runKillChain(since, clientFilter string, noColor, jsonOut bool) error {
 			Detail    string   `json:"detail"`
 		}
 		type jsonChain struct {
-			Name        string     `json:"name"`
-			Severity    string     `json:"severity"`
-			Description string     `json:"description"`
-			MITRETactic string     `json:"mitre_tactic"`
-			MITRERef    string     `json:"mitre_ref"`
-			WindowStart string     `json:"window_start"`
-			WindowEnd   string     `json:"window_end"`
-			Client      string     `json:"client"`
-			Server      string     `json:"server"`
-			Steps       []jsonStep `json:"steps"`
+			Name        string           `json:"name"`
+			Severity    string           `json:"severity"`
+			Description string           `json:"description"`
+			MITRETactic string           `json:"mitre_tactic"`
+			MITRERef    string           `json:"mitre_ref"`
+			WindowStart string           `json:"window_start"`
+			WindowEnd   string           `json:"window_end"`
+			Client      string           `json:"client"`
+			Server      string           `json:"server"`
+			SameSession bool             `json:"same_session"`
+			Steps       []jsonStep       `json:"steps"`
+			Evidence    []trace.Evidence `json:"evidence"`
 		}
 		type jsonOut struct {
 			Version     string      `json:"version"`
@@ -1197,7 +1202,9 @@ func runKillChain(since, clientFilter string, noColor, jsonOut bool) error {
 				WindowEnd:   ch.WindowEnd.Format(time.RFC3339),
 				Client:      ch.Client,
 				Server:      ch.Server,
+				SameSession: ch.SameSession,
 				Steps:       steps,
+				Evidence:    ch.Evidence,
 			})
 		}
 		enc := json.NewEncoder(os.Stdout)
@@ -1278,13 +1285,27 @@ func runKillChain(since, clientFilter string, noColor, jsonOut bool) error {
 				c(dim, step.Detail),
 			)
 		}
+		// Evidence, labeled by how well the log supports each line.
+		for _, e := range ch.Evidence {
+			lc := dim
+			switch e.Level {
+			case "OBSERVED":
+				lc = cyan
+			case "INFERRED":
+				lc = yellow
+			case "POSSIBLE":
+				lc = dim
+			}
+			fmt.Fprintf(os.Stdout, "     %s %s\n", c(lc, fmt.Sprintf("%-9s", e.Level)), c(dim, e.Text))
+		}
 		fmt.Fprintln(os.Stdout)
 	}
 
-	fmt.Fprintf(os.Stdout, "  %s %d kill chain(s) detected. Run %s to drill into a session.\n\n",
-		c(dim, "─"),
-		len(chains),
-		c(bold, "aspex-trace session"),
+	fmt.Fprintf(os.Stdout, "  %s %d kill chain(s) reconstructed. OBSERVED = in the log; INFERRED = from ordering; POSSIBLE = would be enabled, not proven.\n",
+		c(dim, "─"), len(chains))
+	fmt.Fprintf(os.Stdout, "  %s Run %s to find where the instructions came from.\n\n",
+		c(dim, " "),
+		c(bold, "aspex-trace provenance"),
 	)
 	return nil
 }

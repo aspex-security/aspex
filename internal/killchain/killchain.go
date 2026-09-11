@@ -29,6 +29,12 @@ type Chain struct {
 	WindowEnd   time.Time
 	Client      string
 	Server      string
+	// Evidence separates what the log shows (OBSERVED) from what the ordering
+	// implies (INFERRED) and what it would allow but cannot prove (POSSIBLE).
+	Evidence []trace.Evidence
+	// SameSession is true when every step comes from one agent session.
+	// A chain spanning sessions is far weaker evidence of a single attack.
+	SameSession bool
 }
 
 // ChainStep is one event within a detected chain.
@@ -58,13 +64,10 @@ func Analyze(events []logparse.Event, flagged []trace.FlaggedEvent) []Chain {
 		findingIdx[key] = append(findingIdx[key], fe.Findings...)
 	}
 
-	// Sort events chronologically.
-	sorted := make([]logparse.Event, len(events))
-	copy(sorted, events)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].Timestamp.Before(sorted[j].Timestamp)
-	})
-
+	// A chain is only meaningful within one agent session: two calls in two
+	// different conversations are not a single attacker walking a path.
+	// Detectors run per session, over that session's chronological events, so
+	// every chain they return is same-session by construction.
 	var chains []Chain
 	seen := map[string]bool{}
 
@@ -76,11 +79,15 @@ func Analyze(events []logparse.Event, flagged []trace.FlaggedEvent) []Chain {
 		detectInjectionSignature,
 	}
 
-	for _, detect := range detectors {
-		for _, ch := range detect(sorted, findingIdx) {
-			key := ch.Name + ch.WindowStart.Format(time.RFC3339) + ch.Client
-			if !seen[key] {
+	for _, session := range trace.Sessionize(events) {
+		for _, detect := range detectors {
+			for _, ch := range detect(session, findingIdx) {
+				key := ch.Name + ch.WindowStart.Format(time.RFC3339) + ch.Client
+				if seen[key] {
+					continue
+				}
 				seen[key] = true
+				annotate(&ch)
 				chains = append(chains, ch)
 			}
 		}
@@ -124,7 +131,7 @@ func detectExfiltrationTrifecta(events []logparse.Event, idx map[string][]rules.
 				Severity: "critical",
 				Description: "A sensitive credential or key file was read, then an outbound " +
 					"network call was made within " + formatWindow(ev.Timestamp, ev2.Timestamp) +
-					". This is the signature of a successful prompt-injection exfiltration attack.",
+					". A sensitive read followed by an outbound call is the shape of exfiltration; the log does not show whether the file's contents were in the request.",
 				MITRETactic: "Exfiltration",
 				MITRERef:    "TA0010",
 				WindowStart: ev.Timestamp,
@@ -164,7 +171,7 @@ func detectPersistenceEstablishment(events []logparse.Event, idx map[string][]ru
 				Severity: "critical",
 				Description: "Shell command execution followed by a write to a persistence location " +
 					"within " + formatWindow(ev.Timestamp, ev2.Timestamp) +
-					". This is the attacker's final step: ensuring code runs after reboot.",
+					". Shell execution followed by a write to a startup location is how persistence is set up; whether the written content is malicious is not shown here.",
 				MITRETactic: "Persistence",
 				MITRERef:    "TA0003",
 				WindowStart: ev.Timestamp,
@@ -205,7 +212,7 @@ func detectReconToCredential(events []logparse.Event, idx map[string][]rules.Fin
 				Severity: "high",
 				Description: "Filesystem or network reconnaissance was followed by " +
 					"sensitive credential file access within " + formatWindow(ev.Timestamp, ev2.Timestamp) +
-					". This matches the discovery phase of a targeted exfiltration.",
+					". Enumeration followed by credential access matches a discovery-then-theft pattern; intent is not established by the log alone.",
 				MITRETactic: "Discovery → Credential Access",
 				MITRERef:    "TA0007 → TA0006",
 				WindowStart: ev.Timestamp,
@@ -251,7 +258,7 @@ func detectLateralMovementSetup(events []logparse.Event, idx map[string][]rules.
 				Description: "A credential or sensitive file was read via " + ev.Server +
 					", then a different server (" + ev2.Server + ") made an outbound call " +
 					"within " + formatWindow(ev.Timestamp, ev2.Timestamp) +
-					". The attacker used two servers together to exfiltrate data.",
+					". Two servers used in sequence can move data off the machine; the log does not capture the payload, so exfiltration is not proven.",
 				MITRETactic: "Exfiltration",
 				MITRERef:    "TA0010",
 				WindowStart: ev.Timestamp,
@@ -323,7 +330,7 @@ func detectInjectionSignature(events []logparse.Event, idx map[string][]rules.Fi
 				Description: "Server '" + ev.Server + "' became active with high-risk tool calls " +
 					"in a context where it had not been recently used. Multiple suspicious " +
 					"events followed in rapid succession (" + formatWindow(ev.Timestamp, ev2.Timestamp) +
-					"). This behavioral pattern is the primary evidence of a successful prompt injection.",
+					"). A previously idle server turning to high-risk calls is consistent with a prompt injection; confirming it means finding the content that introduced the instructions (aspex-trace provenance).",
 				MITRETactic: "Initial Access",
 				MITRERef:    "AML.T0051",
 				WindowStart: ev.Timestamp,
@@ -344,6 +351,45 @@ func detectInjectionSignature(events []logparse.Event, idx map[string][]rules.Fi
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
+
+// annotate fills a chain's Evidence: each step is OBSERVED, the ordering that
+// links them is INFERRED, and the harm the chain would enable is POSSIBLE. The
+// separation is deliberate: the log proves the events and their order, not the
+// intent or the outcome.
+func annotate(ch *Chain) {
+	ch.SameSession = true
+	var ev []trace.Evidence
+	for _, s := range ch.Steps {
+		ts := ""
+		if !s.Timestamp.IsZero() {
+			ts = s.Timestamp.Format("15:04:05") + " "
+		}
+		ev = append(ev, trace.Evidence{Level: trace.Observed, Text: ts + s.Server + "." + s.Tool + " — " + s.Detail})
+	}
+	if len(ch.Steps) >= 2 {
+		d := ch.WindowEnd.Sub(ch.WindowStart).Truncate(time.Second)
+		ev = append(ev, trace.Evidence{Level: trace.Inferred,
+			Text: "these calls are " + d.String() + " apart in the same session; the ordering matches the " + ch.Name + " pattern, but the log does not prove one caused the other"})
+	}
+	ev = append(ev, trace.Evidence{Level: trace.Possible, Text: possibleConsequence(ch.Name)})
+	ch.Evidence = ev
+}
+
+// possibleConsequence states what the chain would allow, and what the log
+// cannot show, per pattern. Never asserts the outcome occurred.
+func possibleConsequence(name string) string {
+	switch name {
+	case "Credential Exfiltration", "Cross-Server Data Chain":
+		return "the file's contents could have left the machine in the outbound call; the log does not capture payloads, so exfiltration is not proven"
+	case "Persistence Establishment":
+		return "the written location could cause code to run in future sessions; whether the content is malicious is not shown"
+	case "Reconnaissance to Credential Theft":
+		return "the enumeration could have been targeting the credential file that was then read; intent is not shown"
+	case "Prompt Injection Signature":
+		return "external content may have introduced the instructions behind these calls; the injecting content is not identified here — run aspex-trace provenance"
+	}
+	return "the composition could enable further harm the log does not directly capture"
+}
 
 func evKey(ev logparse.Event) string {
 	return ev.Timestamp.Format(time.RFC3339Nano) + "/" + ev.Tool + "/" + ev.Server

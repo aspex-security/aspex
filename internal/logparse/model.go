@@ -26,5 +26,10 @@ type Event struct {
 	Args       map[string]string `json:"args,omitempty"`
 	DurationMS int64             `json:"duration_ms,omitempty"`
 	Flags      []string          `json:"flags,omitempty"`
-	Raw        string            `json:"-"`
+	// Session identifies the agent session this event belongs to when the
+	// client records one (Claude Code: one JSONL file and sessionId per
+	// session). Empty when the client does not; analysis then falls back to
+	// splitting on idle gaps.
+	Session string `json:"session,omitempty"`
+	Raw     string `json:"-"`
 }

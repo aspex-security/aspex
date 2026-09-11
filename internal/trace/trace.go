@@ -9,6 +9,7 @@ package trace
 import (
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -34,9 +35,59 @@ type SessionState struct {
 	readCount int
 }
 
-// AnalyzeEvents runs all trace rules against a slice of events and returns flagged events.
-// Stateful rules (burst, cross-server flow) operate across the full slice.
+// SessionGap is the idle time after which events from a client that does not
+// record session identifiers are treated as a new session.
+const SessionGap = 30 * time.Minute
+
+// AnalyzeEvents runs all trace rules against events and returns flagged events.
+// Stateful rules (error bursts, mass enumeration, cross-server chains) hold
+// state per session, never across a whole month of logs: a file read in one
+// conversation and a network call in another are not a chain.
 func AnalyzeEvents(events []logparse.Event) []FlaggedEvent {
+	var flagged []FlaggedEvent
+	for _, session := range Sessionize(events) {
+		flagged = append(flagged, analyzeSession(session)...)
+	}
+	return flagged
+}
+
+// Sessionize groups events into sessions, in chronological order within each
+// group and by first event across groups. Events carrying a Session id group
+// by (client, session); the rest group by client and split on SessionGap.
+func Sessionize(events []logparse.Event) [][]logparse.Event {
+	sorted := make([]logparse.Event, len(events))
+	copy(sorted, events)
+	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].Timestamp.Before(sorted[j].Timestamp) })
+
+	var groups [][]logparse.Event
+	index := map[string]int{}    // explicit session key -> group index
+	implicit := map[string]int{} // client -> group index of its current implicit session
+	lastSeen := map[string]time.Time{}
+	for _, ev := range sorted {
+		if ev.Session != "" {
+			key := ev.Client + "\x00" + ev.Session
+			gi, ok := index[key]
+			if !ok {
+				gi = len(groups)
+				index[key] = gi
+				groups = append(groups, nil)
+			}
+			groups[gi] = append(groups[gi], ev)
+			continue
+		}
+		gi, ok := implicit[ev.Client]
+		if !ok || (!ev.Timestamp.IsZero() && !lastSeen[ev.Client].IsZero() && ev.Timestamp.Sub(lastSeen[ev.Client]) > SessionGap) {
+			gi = len(groups)
+			implicit[ev.Client] = gi
+			groups = append(groups, nil)
+		}
+		groups[gi] = append(groups[gi], ev)
+		lastSeen[ev.Client] = ev.Timestamp
+	}
+	return groups
+}
+
+func analyzeSession(events []logparse.Event) []FlaggedEvent {
 	var flagged []FlaggedEvent
 	state := &SessionState{
 		serverDataSeen: map[string]time.Time{},

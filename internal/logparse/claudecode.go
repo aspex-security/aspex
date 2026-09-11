@@ -50,6 +50,14 @@ func ParseClaudeCodeProjectsDir(rootDir string, since time.Time) ([]Event, error
 			if parseErr != nil {
 				fmt.Fprintf(os.Stderr, "aspex warning: parse %s: %v\n", filepath.Join(projectDir, f.Name()), parseErr)
 			}
+			// One transcript file is one session; use its name when a line
+			// carried no sessionId of its own.
+			stem := strings.TrimSuffix(f.Name(), ".jsonl")
+			for i := range evs {
+				if evs[i].Session == "" {
+					evs[i].Session = stem
+				}
+			}
 			events = append(events, evs...)
 		}
 	}
@@ -83,6 +91,7 @@ func ParseClaudeCodeReader(r io.Reader, since time.Time) ([]Event, error) {
 
 type claudeCodeLine struct {
 	Type      string    `json:"type"`
+	SessionID string    `json:"sessionId"`
 	Timestamp time.Time `json:"timestamp"`
 	Message   struct {
 		Role    string `json:"role"`
@@ -114,6 +123,7 @@ func parseClaudeCodeLine(line string, since time.Time) ([]Event, bool) {
 		ev := Event{
 			Timestamp: entry.Timestamp,
 			Client:    "claude-code",
+			Session:   entry.SessionID,
 			Raw:       line,
 		}
 
