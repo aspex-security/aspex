@@ -44,7 +44,12 @@ aspex bom --json > agent.asbom.json
 
 ## JSON schema
 
-`aspex-asbom/v1` wraps the same `environment` object that `.aspex.lock` uses (`schema_version: 1`), so a BOM and a lockfile are the same data with different headers:
+`aspex bom` and `.aspex.lock` are the same underlying environment model with different jobs:
+
+- **`aspex bom`** answers *what constitutes this agent environment?* It is a portable inventory you generate on demand and hand to someone.
+- **`.aspex.lock`** answers *what security-relevant state should stay stable?* You commit it, and [`aspex verify`](/tools/change-detection) fails when the environment drifts from it.
+
+`aspex-asbom/v1` wraps the same `environment` object that `.aspex.lock` uses (`schema_version: 1`), so the two are the same data with different headers:
 
 | Field | Contents |
 |---|---|

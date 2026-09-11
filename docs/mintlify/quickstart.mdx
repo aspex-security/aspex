@@ -129,7 +129,12 @@ aspex lock          # write .aspex.lock, commit it
 aspex verify        # exit 1 on drift: NEW TOOL, DESCRIPTION CHANGED, SCOPE EXPANDED, NEW ATTACK PATH
 ```
 
-From here: [daily workflow](/guides/daily-workflow), [CI integration](/guides/ci-integration), or [how Aspex reasons](/concepts/how-aspex-reasons).
+Next:
+
+- [**Understand a finding**](/tools/explain) with `aspex explain AP001`, and follow the data with `aspex explain "Where could data from ~/.ssh go?"`.
+- [**Investigate what happened**](/tools/trace) with `aspex trace`, then [`aspex explore`](/tools/explore).
+- [**Add Aspex to CI**](/guides/ci-integration) to gate PRs on new attack paths.
+- [**Browse common workflows**](/guides/common-workflows): task first, command second.
 
 </Step>
 

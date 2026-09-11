@@ -52,6 +52,29 @@ aspex explain "Can external content change my agent's hooks or instructions?"
 - **NO COMPLETE PATH** names the condition that failed and the missing capabilities (for a database question: UPDATE, DELETE, arbitrary SQL, a destructive tool). When command execution exists, the answer notes that a shell could reach a local database client.
 - **Confidence** follows the evidence: `high` from live tool lists and declared sensitive scope; `medium` when capabilities were inferred from packages or the filesystem scope is undeclared; lowered again when egress is a fixed channel rather than arbitrary.
 
+## When there is no path
+
+Aspex is comfortable saying no, and a negative answer is as useful as a positive one:
+
+```
+$ aspex explain "Can this agent delete production data?"
+
+  NO COMPLETE PATH  no complete path found
+
+  Required conditions
+     ✓ external content enters the agent's context
+     ✗ database access
+     ✗ a write-capable database tool (UPDATE, DELETE, arbitrary SQL)
+
+  Missing capabilities
+     ✗ UPDATE
+     ✗ DELETE
+     ✗ arbitrary SQL
+     ✗ a destructive tool
+```
+
+The same question against an environment that has a write-capable database tool returns YES. The verdict follows the environment, not a template; Aspex is not built to always find something alarming.
+
 ## Verbs and what they require
 
 | Verb | Triggered by | Path requires |

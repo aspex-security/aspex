@@ -1,0 +1,64 @@
+---
+title: "Common workflows"
+description: "Task first, command second. What you want to do, and where to start."
+---
+
+Aspex is one security model with several views. Most sessions start from a task, not a command. Find yours below.
+
+| I want to… | Start here |
+|---|---|
+| Check whether my agent setup is dangerous | `aspex scan` |
+| Understand why a finding exists | `aspex explain AP001` |
+| See where credentials could go | `aspex explain "Where could data from ~/.ssh go?"` |
+| See what could reach a destination | `aspex explain "What sensitive data could reach Slack?"` |
+| Test a mitigation before changing anything | `aspex simulate --restrict-filesystem filesystem=~/projects/acme` |
+| Evaluate a server before I add it | `aspex inspect "npx -y @scope/some-mcp-server"` |
+| Review an agent-config change in a PR | `aspex diff main..HEAD` |
+| Investigate suspicious agent activity | `aspex trace` then `aspex explore` |
+| Reduce unnecessary permissions | `aspex tighten` then `aspex simulate` |
+| Detect tool or capability drift | `aspex lock`, commit it, then `aspex verify` in CI |
+| Let a coding agent query Aspex | `aspex mcp` |
+
+## The five questions
+
+Everything above is one of five questions. This is the whole mental model.
+
+<CardGroup cols={1}>
+  <Card title="What CAN happen?" icon="radar" href="/tools/scan">
+    `aspex scan` finds dangerous combinations across your tools and shows the resulting blast radius.
+  </Card>
+  <Card title="What DID happen?" icon="list-timeline" href="/tools/trace">
+    `aspex trace` reconstructs what your agents actually did from the logs they already write. `aspex explore` opens it visually.
+  </Card>
+  <Card title="What CHANGED?" icon="code-compare" href="/tools/change-detection">
+    `aspex diff main..HEAD` shows whether a change added capabilities or created new attack paths. `aspex lock` / `verify` catch drift over time.
+  </Card>
+  <Card title="WHY does it matter?" icon="circle-question" href="/tools/explain">
+    `aspex explain` says why a path exists, what evidence supports it, and what would break it. It follows data, and it says "no complete path found" when there is none.
+  </Card>
+  <Card title="WHAT IF I change it?" icon="flask" href="/tools/simulate">
+    `aspex simulate` tests a security change without touching your real configuration.
+  </Card>
+</CardGroup>
+
+## Two loops
+
+Most work is one of two loops.
+
+**Harden before you commit**
+
+```
+scan  →  explain  →  simulate  →  change the config yourself  →  verify
+```
+
+Scan finds a path, explain names the controls that break it, simulate proves one works, you apply it, verify confirms it. [tighten](/tools/tighten) suggests the change; [simulate](/tools/simulate) shows what it would do.
+
+**Investigate what happened**
+
+```
+trace  →  explore  →  explain  →  repro (share it, safely)
+```
+
+Trace reconstructs the session, explore shows it as a timeline and a graph, explain separates observed from inferred, and a [reproduction bundle](/tools/trace#reproduction-bundles) lets someone else analyze it offline without executing anything.
+
+Everything computes from configs and logs already on your machine. Nothing is sent anywhere, and no answer claims a path was walked unless the trace shows it. See [how Aspex reasons](/concepts/how-aspex-reasons).

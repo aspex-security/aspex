@@ -10,7 +10,7 @@ aspex            # or, without installing anything: npx aspex
 ```
 
 ```
-  ◆  Your AI agents, last 30 days  aspex v0.8.1
+  ◆  Your AI agents, last 30 days  aspex v0.9.0
 
   ▸ In the last 30 days your agents made 320 tool calls to 12 MCP servers.
   ▸ 316 of those calls went to 11 servers no security scan had ever checked.
@@ -34,6 +34,45 @@ aspex            # or, without installing anything: npx aspex
 It took 1.9 seconds. Then the tool menu opens underneath. Arrow keys to move, `Enter` to run, `→` for each tool's options, `q` to quit.
 
 Everything on that screen comes from files already on your machine. Nothing is sent anywhere.
+
+## Every command, by what it is for
+
+You will spend most of your time in five commands. The rest support them.
+
+**Start here (the five questions)**
+
+| | |
+|---|---|
+| [`aspex scan`](/tools/scan) | what CAN happen: servers, tools, hooks, skills, attack paths, blast radius |
+| [`aspex trace`](/tools/trace) | what DID happen, from your clients' own logs |
+| [`aspex diff`](/tools/change-detection) | what CHANGED between two states or git revisions |
+| [`aspex explain`](/tools/explain) | why a path exists, what breaks it, where data could flow |
+| [`aspex simulate`](/tools/simulate) | what a change would do, without touching your config |
+
+**Harden**
+
+| | |
+|---|---|
+| [`aspex tighten`](/tools/tighten) | least-privilege recommendations, each simulated |
+| [`aspex inspect`](/tools/scan-subcommands) | a server's impact before you install it |
+
+**Change control**
+
+| | |
+|---|---|
+| [`aspex lock`](/tools/change-detection) · [`aspex verify`](/tools/change-detection) | fingerprint the environment; fail on drift |
+| [`aspex history`](/tools/change-detection) · `aspex watch` | posture over time; re-scan on change |
+
+**Investigate and integrate**
+
+| | |
+|---|---|
+| [`aspex explore`](/tools/explore) | the local session explorer |
+| [`aspex mcp`](/tools/mcp) | expose Aspex to your coding agent (read-only) |
+| [`aspex bom`](/tools/bom) | a portable inventory of the environment |
+| [`aspex doctor`](/tools/doctor) · [`aspex attack`](/tools/attack) | pre-flight check; adversarial probing |
+
+New here? Follow [Common workflows](/guides/common-workflows).
 
 ## Share it
 
