@@ -19,7 +19,12 @@ import (
 
 // ansiEscapeRe matches ANSI/VT control sequences that a malicious MCP server
 // could embed in tool names or descriptions to manipulate terminal display.
-var ansiEscapeRe = regexp.MustCompile(`\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])`)
+// ansiEscapeRe matches the escape sequences a malicious tool name or
+// description could carry: CSI (ESC [ ... ), OSC (ESC ] ... terminated by BEL
+// or ST), and single-character Fe escapes. OSC is the dangerous one for a
+// security tool (terminal hyperlinks, window-title setting), so it is matched
+// whole, payload included, not just its opener.
+var ansiEscapeRe = regexp.MustCompile("\x1b\\][^\x07\x1b]*(?:\x07|\x1b\\\\)?" + "|" + "\x1b\\[[0-?]*[ -/]*[@-~]" + "|" + "\x1b[@-Z\\\\-_]")
 
 // SanitizeForTerminal strips ANSI escape sequences and non-printable control
 // characters from any string before rendering to the terminal. Exported so
