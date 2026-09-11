@@ -5,7 +5,6 @@ import (
 	"io"
 	"strings"
 
-	"github.com/aspex-security/aspex/internal/attackpath"
 	"github.com/aspex-security/aspex/internal/report"
 )
 
@@ -411,13 +410,4 @@ func wrap(s string, width int) []string {
 		lines = append(lines, cur)
 	}
 	return lines
-}
-
-// PathSeverities is a helper for gates: severities of the added paths.
-func PathSeverities(chains []attackpath.AttackChain) []string {
-	var out []string
-	for _, c := range chains {
-		out = append(out, c.Severity)
-	}
-	return out
 }

@@ -48,16 +48,17 @@ type Agent struct {
 
 // Server is one MCP server with its identity, surface, and capabilities.
 type Server struct {
-	Name     string   `json:"name"`
-	Client   string   `json:"client"`
-	Command  string   `json:"command,omitempty"`
-	Args     []string `json:"args,omitempty"`
-	URL      string   `json:"url,omitempty"`
-	Package  string   `json:"package,omitempty"` // best-effort: the npm/pypi identifier in the command line
-	Pinned   bool     `json:"pinned"`            // a version is fixed in the command line
-	EnvKeys  []string `json:"env_keys,omitempty"`
-	Static   bool     `json:"static"`
-	Identity string   `json:"identity"` // fingerprint of command+args+url: what would run
+	Name       string   `json:"name"`
+	Client     string   `json:"client"`
+	Command    string   `json:"command,omitempty"`
+	Args       []string `json:"args,omitempty"`
+	URL        string   `json:"url,omitempty"`
+	ConfigPath string   `json:"config_path,omitempty"` // file the server is configured in
+	Package    string   `json:"package,omitempty"`     // best-effort: the npm/pypi identifier in the command line
+	Pinned     bool     `json:"pinned"`                // a version is fixed in the command line
+	EnvKeys    []string `json:"env_keys,omitempty"`
+	Static     bool     `json:"static"`
+	Identity   string   `json:"identity"` // fingerprint of command+args+url: what would run
 
 	Tools        []Tool                        `json:"tools"`
 	Capabilities []string                      `json:"capabilities"`

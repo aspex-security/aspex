@@ -120,10 +120,6 @@ func attachLocal(env *Environment, hf []hooks.Finding, sks []skills.Skill, ins [
 	}
 }
 
-// HashContent is the hash used for instruction files; exported so revision
-// loaders hash content the same way Build hashes files on disk.
-func HashContent(b []byte) string { return shortHash(b) }
-
 func hasAgent(list []Agent, client string) bool {
 	for _, a := range list {
 		if a.Client == client {
@@ -164,7 +160,7 @@ func buildServer(srv *inspect.Server, sc attackpath.ServerCapabilities) Server {
 	e := srv.Entry
 	s := Server{
 		Name: e.Name, Client: e.Client, Command: e.Command, Args: append([]string(nil), e.Args...),
-		URL: e.URL, EnvKeys: sortedCopy(e.EnvKeys), Static: sc.Static || len(srv.Tools) == 0,
+		URL: e.URL, ConfigPath: e.ConfigPath, EnvKeys: sortedCopy(e.EnvKeys), Static: sc.Static || len(srv.Tools) == 0,
 	}
 	cmdline := strings.ToLower(e.Command + " " + strings.Join(e.Args, " "))
 	if m := pkgRe.FindString(cmdline); m != "" {
