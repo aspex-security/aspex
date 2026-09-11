@@ -1,0 +1,130 @@
+---
+title: "Supported Clients"
+description: "MCP clients supported by Aspex tools"
+---
+
+## Tool Coverage
+
+The table below shows which MCP clients each Aspex tool works with.
+
+| Client | aspex scan | aspex trace | aspex doctor |
+|--------|:----------:|:-----------:|:------------:|
+| Claude Desktop | ✓ | ✓ | auto-detected |
+| Claude Code | ✓ | ✓ | auto-detected |
+| Cursor | ✓ | ✓ | auto-detected |
+| VS Code | ✓ | - | auto-detected |
+| Windsurf | ✓ | ✓ | auto-detected |
+| Cline | ✓ | ✓ | auto-detected |
+| Roo-Cline | ✓ | ✓ | auto-detected |
+| Continue | ✓ | - | auto-detected |
+| Zed | ✓ | - | auto-detected |
+
+**aspex doctor** detects all installed clients automatically by probing their config file paths - no flags required.
+
+**aspex trace** reads the log files each client already writes to disk - no proxy, no interception. Clients marked `-` do not yet write MCP tool calls to a parseable log.
+
+---
+
+## Config File Locations
+
+### Claude Desktop
+
+| OS | Path |
+|----|------|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Linux | `~/.config/Claude/claude_desktop_config.json` |
+
+### Claude Code
+
+Claude Code keeps MCP servers in three places, and aspex scan reads all of them:
+
+| Scope | Path | Notes |
+|----|------|------|
+| User | `~/.claude.json` under `mcpServers` | Added with `claude mcp add --scope user` |
+| Local | `~/.claude.json` under `projects.<dir>.mcpServers` | Per-project, not committed. Reported with a `project:` label |
+| Project | `<repo>/.mcp.json` | Committed to the repo; read from the current directory |
+| Plugin | `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/.mcp.json` | Only plugins listed in `installed_plugins.json` |
+
+Connectors added through **claude.ai** (the remote connector directory) are configured in the cloud and have no local file. aspex scan cannot see them; `aspex scan --with-trace` lists them as "in use but not in any scanned config" from aspex trace logs, and `aspex scan inspect <url>` can scan one directly.
+
+### Cursor
+
+| OS | Path |
+|----|------|
+| macOS / Linux | `~/.cursor/mcp.json` |
+| Windows | `%APPDATA%\Cursor\User\mcp.json` |
+
+Cursor also supports per-project overrides at `.cursor/mcp.json` in the workspace root.
+
+### VS Code
+
+| OS | Path |
+|----|------|
+| macOS | `~/Library/Application Support/Code/User/settings.json` |
+| Windows | `%APPDATA%\Code\User\settings.json` |
+| Linux | `~/.config/Code/User/settings.json` |
+
+MCP servers are declared under `"github.copilot.chat.mcp.servers"` in `settings.json`. Per-workspace config lives in `.vscode/mcp.json`.
+
+### Windsurf
+
+| OS | Path |
+|----|------|
+| macOS / Linux | `~/.codeium/windsurf/mcp_config.json` |
+| Windows | `%APPDATA%\Windsurf\User\mcp_config.json` |
+
+### Cline
+
+Cline stores MCP configuration inside VS Code's extension storage. The effective path depends on your VS Code profile:
+
+| OS | Path |
+|----|------|
+| macOS | `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` |
+| Linux | `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` |
+| Windows | `%APPDATA%\Code\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json` |
+
+### Roo-Cline
+
+Same structure as Cline but under the Roo-Cline extension ID:
+
+| OS | Path |
+|----|------|
+| macOS | `~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/cline_mcp_settings.json` |
+| Linux | `~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/cline_mcp_settings.json` |
+| Windows | `%APPDATA%\Code\User\globalStorage\rooveterinaryinc.roo-cline\settings\cline_mcp_settings.json` |
+
+### Continue
+
+| OS | Path |
+|----|------|
+| macOS / Linux | `~/.continue/config.json` |
+| Windows | `%USERPROFILE%\.continue\config.json` |
+
+MCP servers are declared under the `"mcpServers"` key in `config.json`.
+
+### Zed
+
+| OS | Path |
+|----|------|
+| macOS | `~/.config/zed/settings.json` |
+| Linux | `~/.config/zed/settings.json` |
+| Windows | `%APPDATA%\Zed\settings.json` |
+
+MCP servers are declared under `"context_servers"` in Zed's `settings.json`.
+
+---
+
+## Notes
+
+- `aspex scan` reads all config files **read-only** and never modifies them.
+- The `env` block values inside config files are never read or reported - only key names are surfaced in findings, so secrets stay local.
+- Paths marked above are for default single-profile installs. Custom `--user-data-dir` or multi-profile setups may differ.
+
+---
+
+## Requesting Support for Additional Clients
+
+Don't see your client listed? Open a [GitHub issue](https://github.com/aspex-security/aspex/issues/new?template=client-support-request.md) with the client name and its config file path.
+
+If you'd like to contribute support yourself, see [CONTRIBUTING.md](https://github.com/aspex-security/aspex/blob/main/CONTRIBUTING.md) - adding a new client typically means adding its config path to the detector and a fixture file to `testdata/configs/`.

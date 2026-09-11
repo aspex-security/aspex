@@ -16,19 +16,14 @@
   },
   "favicon": "/favicon.svg",
   "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg",
-    "href": "/introduction"
+    "light": "/logo/logo.svg",
+    "dark": "/logo/logo.svg"
   },
   "navigation": {
     "groups": [
       {
         "group": "Start",
-        "pages": [
-          "introduction",
-          "quickstart",
-          "install"
-        ]
+        "pages": ["introduction", "quickstart", "install"]
       },
       {
         "group": "Concepts",
@@ -78,14 +73,8 @@
   },
   "navbar": {
     "links": [
-      {
-        "label": "GitHub",
-        "href": "https://github.com/aspex-security/aspex"
-      },
-      {
-        "label": "Changelog",
-        "href": "https://github.com/aspex-security/aspex/blob/main/CHANGELOG.md"
-      }
+      { "label": "GitHub", "href": "https://github.com/aspex-security/aspex" },
+      { "label": "Changelog", "href": "https://github.com/aspex-security/aspex/blob/main/CHANGELOG.md" }
     ],
     "primary": {
       "type": "button",
@@ -94,14 +83,9 @@
     }
   },
   "footer": {
-    "socials": {
-      "github": "https://github.com/aspex-security/aspex"
-    }
+    "socials": { "github": "https://github.com/aspex-security/aspex" }
   },
   "redirects": [
-    {
-      "source": "/reference/security-model",
-      "destination": "/concepts/how-aspex-reasons"
-    }
+    { "source": "/reference/security-model", "destination": "/concepts/how-aspex-reasons" }
   ]
 }

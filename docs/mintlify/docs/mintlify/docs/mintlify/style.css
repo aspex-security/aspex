@@ -1,0 +1,95 @@
+/* Aspex docs: Modernist theme layer on top of Mintlify's mint theme.
+   Flat, architectural, Archivo, zero radius, 2px rules, one red accent. */
+
+:root {
+  --aspex-ink: #201e1d;
+  --aspex-ground: #f3f2f2;
+  --aspex-surface: #eae9e9;
+  --aspex-accent: #ec3013;
+  --aspex-accent-deep: #ae1800;
+  --aspex-divider: rgba(32, 30, 29, 0.4);
+}
+
+/* Nothing rounded, anywhere. */
+#content-area *, #sidebar *, #navbar *, #topbar *, .prose * {
+  border-radius: 0 !important;
+}
+
+html:not(.dark) body, html:not(.dark) #navbar, html:not(.dark) #sidebar { background: var(--aspex-ground); }
+
+/* Dark mode: same architecture, inverted ink. The accent stays. */
+html.dark {
+  --aspex-ink: #f3f2f2;
+  --aspex-ground: #201e1d;
+  --aspex-surface: #2c2a29;
+  --aspex-divider: rgba(243, 242, 242, 0.35);
+}
+
+/* Strong 2px rules where mint draws hairlines */
+#navbar, #topbar { border-bottom: 2px solid var(--aspex-divider) !important; }
+#sidebar { border-right: 2px solid var(--aspex-divider) !important; }
+.prose hr { height: 2px; border: 0; background: var(--aspex-divider); }
+
+/* Type: Archivo everywhere, tight display headings, flush left */
+.prose h1 { font-weight: 800; letter-spacing: -0.02em; line-height: 1.08; }
+.prose h2 { font-weight: 800; letter-spacing: -0.015em; }
+.prose h3, .prose h4 { font-weight: 800; }
+#sidebar h5, .eyebrow, [class*="eyebrow"] {
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600;
+}
+
+/* Sidebar: active item is a 2px accent rule on the left, not a tinted pill */
+#sidebar a, #sidebar li a { border-left: 2px solid transparent; padding-left: 12px; }
+#sidebar a[aria-current="page"], #sidebar li.active > a {
+  border-left-color: var(--aspex-accent) !important;
+  background: transparent !important;
+  color: var(--aspex-ink) !important;
+  font-weight: 600;
+}
+
+/* Buttons: flush-left label, solid accent, darker on hover */
+#navbar a[href="/install"], .prose a.button-primary {
+  background: var(--aspex-accent) !important; color: var(--aspex-ground) !important;
+  font-weight: 800; justify-content: flex-start;
+}
+#navbar a[href="/install"]:hover { background: #dd2b0f !important; }
+
+/* Code: ink ground with a 2px accent rule on top */
+.prose pre, [class*="codeblock"] pre {
+  background: #201e1d !important;
+  border-top: 2px solid var(--aspex-accent);
+}
+.prose :not(pre) > code, [class*="card"] code {
+  background: var(--aspex-surface); color: var(--aspex-ink); padding: 2px 6px; font-size: 0.9em;
+}
+
+/* Tables: uppercase header on a 2px rule, 1px row rules, no zebra */
+.prose table th {
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: rgba(32, 30, 29, 0.6); border-bottom: 2px solid var(--aspex-divider);
+}
+html.dark .prose table th { color: rgba(243, 242, 242, 0.6); }
+.prose table td { border-bottom: 1px solid var(--aspex-divider); }
+.prose table tr:nth-child(2n) td { background: transparent; }
+
+/* Cards and callouts: 2px rules, no shadow, no tint */
+.prose .card, [class*="card"] {
+  border: 2px solid var(--aspex-divider) !important; box-shadow: none !important;
+}
+.prose .card:hover { background: var(--aspex-surface); }
+.callout, [class*="callout"] {
+  border-left: 2px solid var(--aspex-accent) !important;
+  background: transparent !important;
+}
+
+/* Steps: square ink numerals (mint's indicator element only, never the step body) */
+[class*="step-indicator"] {
+  background: var(--aspex-ink) !important; color: var(--aspex-ground) !important; font-weight: 800;
+}
+
+/* Interaction states from the accent, never browser defaults */
+:focus-visible { outline: 2px solid var(--aspex-accent); outline-offset: 2px; }
+::selection { background: rgba(236, 48, 19, 0.3); }
+.prose a { color: var(--aspex-accent-deep); text-underline-offset: 3px; }
+html.dark .prose a { color: var(--aspex-light, #ff9783); }
+html.dark #sidebar a[aria-current="page"], html.dark #sidebar li.active > a { color: var(--aspex-ink) !important; }

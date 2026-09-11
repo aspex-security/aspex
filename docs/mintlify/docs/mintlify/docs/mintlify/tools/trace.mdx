@@ -1,0 +1,173 @@
+---
+title: "aspex trace"
+description: "What did your agents actually do? A full audit trail from the logs your AI clients already write. No proxy, no config change."
+---
+
+`aspex trace` reads the native log files that Claude Code, Claude Desktop, Cursor, Windsurf, Cline, and Roo write to disk, normalizes every MCP tool call into one event stream, and runs 85+ detection rules over it. Nothing sits in the request path, nothing changes in your config, and it works on last month's sessions as well as today's.
+
+```sh
+aspex trace                  # last 24 hours, all clients
+aspex trace --since 7d       # last week
+aspex trace killchain        # multi-step attack patterns
+aspex trace provenance       # where did an injected instruction come from?
+```
+
+## Flags
+
+| Flag | Description |
+|---|---|
+| `--since <duration>` | How far back to read: `24h`, `7d`, `30d` (default `24h`) |
+| `--client <name>` | One client only: `claude`, `claude-code`, `cursor`, `windsurf`, `cline`, `roo-cline` |
+| `--server <name>` | One MCP server only |
+| `--summary` | Compact stats view, no per-event breakdown |
+| `--suppress-noise` | Hide low-signal rules that fire constantly in coding sessions (off-hours, large arguments) |
+| `--baseline <file>` | Flag deviations from a learned behavioral baseline (see below) |
+| `--json` | Machine-readable output |
+| `--sarif` | SARIF 2.1.0 for GitHub Advanced Security |
+| `--fail-on <sev>` | Exit 1 when findings reach this severity: `critical`, `high`, `medium`, `low`. Default `high`, so an interactive run with HIGH findings exits 1; pass `--fail-on off` for a report-only exit code |
+| `--no-color` | Plain text for logs and scripts |
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `stats` | Activity dashboard: events per client, server, and tool. No rule evaluation. |
+| `session [id]` | Forensic timeline for one session, or a list of recent sessions |
+| `killchain` | Reconstruct multi-step attack patterns across events |
+| `provenance` | Trace HIGH and CRITICAL findings back to the content that likely triggered them |
+| `export` | Export every event as CSV or JSONL for a SIEM |
+| `live` | Tail the logs and print new findings as they happen |
+| `baseline --learn` | Learn what normal looks like from recent logs |
+
+Every command accepts `--since`, `--client`, and `--no-color`; `session`, `killchain`, `provenance`, and `export` also accept `--json`.
+
+---
+
+## Kill chains
+
+A single suspicious call is a hint. A sequence is evidence. `killchain` correlates events into known attack patterns and reports each chain with its MITRE ATT&CK reference.
+
+```sh
+aspex trace killchain --since 7d
+aspex trace killchain --client cursor --json
+```
+
+| Pattern | What it looks for |
+|---|---|
+| Credential exfiltration | Sensitive file read, then an outbound network call within 5 minutes |
+| Persistence | Shell execution, then a write to a startup location |
+| Recon to credential theft | Enumeration or scanning, then a credential file read |
+| Cross-server data chain | Data read through one server, network call through another |
+| Prompt injection signature | A server becomes active with high-risk calls in an unexpected context |
+
+Every chain is confined to one agent session (Claude Code's session id, or a 30-minute idle gap for clients that record none), so a file read in one conversation and an outbound call in another are never joined.
+
+Each chain reports its evidence in three labels, so a fact is never dressed up as a conclusion:
+
+- **OBSERVED** - the event is in the log. `filesystem.read_file read ~/.aws/credentials at 14:23`.
+- **INFERRED** - a relationship drawn from order and timing. "These calls are 30s apart in the same session; the ordering matches the pattern, but the log does not prove one caused the other."
+- **POSSIBLE** - what the composition would allow, and what the log cannot show. "The file's contents could have left in the outbound call; payloads are not captured, so exfiltration is not proven."
+
+`--json` adds `evidence` (level + text) and `same_session` to each chain.
+
+## Provenance
+
+When something bad happened, the next question is *what made the agent do that?* `provenance` links each HIGH or CRITICAL finding backward to the ingestion event most likely to have carried the instruction: a file read, a URL fetch, a resource load.
+
+```sh
+aspex trace provenance --since 48h
+aspex trace provenance --json | jq '.attributions[] | select(.confidence=="high")'
+```
+
+| Confidence | Criteria |
+|---|---|
+| High | Under 30 seconds and at most 3 events between source and action |
+| Medium | Under 2 minutes and at most 8 events |
+| Low | Within 10 minutes |
+
+```
+CRITICAL  AT001  Sensitive file read
+  14:23:11  cursor / filesystem / read_file  ~/.aws/credentials
+  Source:   web_fetch -> https://attacker.example/README.md  (12s earlier, 2 events apart)
+  Confidence: HIGH
+```
+
+## Sessions
+
+```sh
+aspex trace session                          # recent sessions
+aspex trace session filesystem --since 7d    # sessions touching one server
+aspex trace session <id> --json              # one session, machine-readable
+```
+
+## Behavioral baseline
+
+Learn what your agents normally do, then get told only about what changed: new tools called for the first time, new outbound hosts, new file path prefixes, unusual hours, oversized arguments.
+
+```sh
+aspex trace baseline --learn --since 7d
+aspex trace baseline --learn --since 30d --output ~/aspex-baseline.json
+aspex trace --baseline ~/aspex-baseline.json
+```
+
+The default baseline path is `~/.config/aspex/aspex trace-baseline.json`.
+
+## Live monitoring
+
+```sh
+aspex trace live
+aspex trace live --client claude-code --interval 2
+aspex trace live --notify https://hooks.slack.com/services/...
+```
+
+Polls the log files (default every 5 seconds) and prints new findings. `--notify` posts HIGH and CRITICAL findings to a Slack or generic JSON webhook.
+
+## Export for your SIEM
+
+```sh
+aspex trace export --since 7d --format csv --output events.csv
+aspex trace export --format jsonl | jq 'select(.severity=="critical")'
+```
+
+`--format` is `jsonl` (default) or `csv`; without `--output` it writes to stdout.
+
+## CI
+
+```sh
+aspex trace --since 24h --suppress-noise --fail-on high --sarif > trace.sarif
+```
+
+Exit code 1 means a finding at or above the threshold. See the [CI guide](/guides/ci-integration).
+
+---
+
+## What it detects (85+ rules)
+
+| Category | Examples |
+|---|---|
+| Credential file access | `.env`, `.ssh/id_rsa`, `.aws/credentials`, kubeconfig, browser password stores |
+| Code execution | Shell tools invoked from MCP servers |
+| Reverse shell and payload staging | Netcat and Python reverse shells, curl piped to shell, base64-encoded commands |
+| Exfiltration | Outbound URLs, cross-server data chains, S3 upload, email send, webhooks |
+| Persistence | LaunchAgent plists, registry Run keys, crontab, systemd units, shell rc files |
+| Privilege escalation | sudo in arguments, SUID manipulation, sudoers writes |
+| Defense evasion | Log clearing, shell history deletion, AV exclusions |
+| Cloud and infrastructure | IAM changes, firewall rules, CloudTrail disable |
+| Surveillance | Clipboard read, screen capture |
+| Supply chain | Package manifest writes, dependency confusion |
+| Sensitive data in arguments | Private key PEM blocks, TOTP seeds, cloud access key prefixes |
+| Anomalous patterns | Off-hours activity, oversized arguments, error bursts |
+
+The full list with rule IDs is in the [rules reference](/reference/rules).
+
+## Which clients
+
+| Client | Log location |
+|---|---|
+| Claude Code | `~/.claude/projects/` |
+| Claude Desktop | `~/Library/Logs/Claude/` |
+| Cursor | `~/Library/Application Support/Cursor/logs/` |
+| Windsurf | `~/Library/Application Support/Windsurf/logs/` |
+| Cline, Roo-Cline | VS Code extension storage |
+
+Detection depth depends on how much each client logs. Claude Code and Claude Desktop log full tool calls with arguments, which enables every rule; some clients log less.

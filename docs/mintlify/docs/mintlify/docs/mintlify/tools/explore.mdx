@@ -1,0 +1,36 @@
+---
+title: "aspex explore"
+description: "A local, loopback-only session explorer: timeline, provenance, kill chains, capability graph, and findings that separate observed from inferred."
+---
+
+```sh
+aspex explore                    # opens http://127.0.0.1:<port> in your browser
+aspex explore --since 7d --port 7777 --no-open
+aspex explore --dataset > session.json     # the data, no server
+```
+
+Think Chrome DevTools plus Wireshark for one agent's sessions. It is built for one person investigating, not a fleet dashboard.
+
+## Views
+
+**Timeline.** Every event in the window, per session (a session is Claude Code's session id, or a 30-minute idle gap for clients without one): `TOOL`, `CONTENT` (a read that brings content into the context), `NETWORK`, `RESOURCE`, `ERROR`. The detail column shows the path or URL argument; content-bearing arguments are never displayed.
+
+**Provenance.** Each HIGH or CRITICAL call that closely followed an ingestion event, as a chain: external content → `fetch` → agent → `filesystem.read_file`. Clicking it shows the evidence:
+
+```
+OBSERVED      14:23:00 fetch.fetch brought content in (web_fetch: https://…/README.md)
+OBSERVED      14:23:12 filesystem.read_file was called 12s later, 1 event(s) apart
+INFERRED      the ingested content may have influenced the call (confidence high, from timing and proximity only)
+OBSERVED      AT001 Sensitive path accessed: Tool arg references sensitive path: /Users/x/.aws/credentials
+NOT OBSERVED  the content itself is not in the log; Aspex cannot show it contained an instruction
+```
+
+**Kill chains.** Multi-step patterns from `aspex trace killchain`, each step OBSERVED, the ordering INFERRED, the harm POSSIBLE.
+
+**Capability graph.** External content → agent → servers → sensitive resources and destinations. Edges exercised in the window are green; edges on a critical or high attack path are red. What is configured versus what was used, on one picture, kept small on purpose (one node per server, resource kind, destination).
+
+**Findings.** Each flagged event answers: why does Aspex believe this, what evidence exists, which parts are observed, which inferred, what is not observed, and what to do.
+
+## Local only
+
+The server binds `127.0.0.1` and nothing else; there is no flag to change that, and it refuses requests whose `Host` header is not loopback. The page is one embedded HTML file that loads one JSON document from the local process; there are no external scripts, fonts or telemetry, and a Content Security Policy forbids them. The process is ephemeral: the dataset is computed once at startup, and Ctrl-C ends it. Nothing leaves the machine.
