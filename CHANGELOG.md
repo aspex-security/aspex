@@ -7,9 +7,34 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-## [Unreleased]
+## [0.7.0] - 2026-09-11
+
+The release that makes attack paths, trace credibility, and contributor-authored
+rules real. See ASSESSMENT.md for the reasoning.
 
 ### Added
+- Trace evidence levels: every kill chain labels each statement OBSERVED (in
+  the log), INFERRED (from ordering and timing, not proof of causation), or
+  POSSIBLE (what the composition would allow, which the log cannot confirm -
+  payloads are not captured). Rendered in the terminal and in `--json`
+  (`evidence`, `same_session`). Chain descriptions no longer assert success.
+- Trace session boundaries: analysis and kill-chain detection run per agent
+  session (Claude Code's session id, or a 30-minute idle-gap split), so a read
+  in one conversation and a send in another are never joined into a chain.
+- MCP200: a per-server rule for a server whose writable root reaches the
+  agent's own MCP config, hooks, instruction, or memory files, even with no
+  ingress present. Severity by blast radius: user-global executable state HIGH,
+  global instructions/memory MEDIUM, this-repo `.mcp.json` MEDIUM, this-repo
+  instruction files LOW.
+- `aspex-scan hooks`: discovers Claude Code lifecycle hooks (commands the agent
+  runs automatically) from user and project settings, and judges each -
+  curl|sh / base64|sh / reverse shell CRITICAL, credentials+network HIGH,
+  credentials or network MEDIUM, everything else INFO. `--json`, `--fail-on`.
+- Declarative catalog rules: the 116 substring rules moved to embedded
+  `internal/rules/catalog_rules.yaml`. Adding a detection is now a YAML entry
+  plus a corpus fixture, no Go. The loader fails CI on a duplicate id or
+  invalid severity. New rule MCP126 (tool can disable transport security) was
+  added this way as the proof.
 - Attack paths rebuilt on evidence (`internal/attackpath`). Capabilities are
   derived from live tool lists, or inferred for well-known packages in static
   scans; filesystem scope comes from the allowed roots in the config
@@ -46,6 +71,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   unchanged.
 - npm publishing uses npm Trusted Publishing (OIDC from the release workflow)
   instead of a stored token. `aspex@0.6.1` was the first version on npm.
+
+### Fixed
+- MCP006 (secrets in env) no longer flags a secret-shaped key whose value is a
+  keychain, `$VAR`, or vault reference: that is the recommended state, not a
+  finding. Only plaintext literals are flagged, split by blast radius (cloud,
+  database, private keys CRITICAL; scoped API tokens HIGH). Discovery records
+  the value shape, never the value. The official GitHub or Slack server with a
+  keychain reference now scores clean instead of 39.
 
 ## [0.6.1] - 2026-09-10
 
