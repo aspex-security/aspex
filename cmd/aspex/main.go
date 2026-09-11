@@ -74,8 +74,12 @@ func passthrough(args []string) (binary string, rest []string, ok bool) {
 		return "aspex-scan", args[1:], true
 	case "trace":
 		return "aspex-trace", args[1:], true
-	case "doctor":
-		return "aspex-scan", append([]string{"doctor"}, args[1:]...), true
+	case "doctor", "lock", "verify", "diff", "hooks", "explain", "tighten", "bom", "mcp", "explore", "history", "corpus", "inventory", "attack-paths":
+		// Security-debugger commands live in aspex-scan; `aspex <cmd>` is the
+		// front door so users never have to know which binary owns what.
+		return "aspex-scan", append([]string{args[0]}, args[1:]...), true
+	case "watch":
+		return "aspex-scan", append([]string{"--watch"}, args[1:]...), true
 	case "attack":
 		if _, err := exec.LookPath("aspex-attack"); err != nil {
 			// aspex-attack not installed: route to aspex-scan redteam.
@@ -103,14 +107,22 @@ func run(binary string, args []string) {
 }
 
 func printHelp() {
-	fmt.Printf(`aspex v%s - see what your AI agents actually did, then scan what they could do
+	fmt.Printf(`aspex v%s - local security debugger for AI agents. Know what your agents can do. Know what they actually did.
 
   aspex               what your agents did this week + the tool menu
   aspex share         privacy-safe card of that snapshot, ready to paste
   aspex snapshot      the snapshot alone, no menu
 
-  aspex scan          audit every MCP server on this machine   (aspex-scan)
-  aspex trace         full audit trail from your clients' logs (aspex-trace)
+  aspex scan          what can my agents do? every server, hook, skill, attack path
+  aspex trace         what did they actually do? from your clients' own logs
+  aspex explain "…"   can external content reach my AWS credentials?  (deterministic)
+  aspex lock          write .aspex.lock, the security fingerprint of this setup
+  aspex verify        did anything drift from the lock? explained in security terms
+  aspex diff a..b     security impact of a config change between two git revisions
+  aspex tighten       least-privilege recommendations from configured vs observed use
+  aspex bom           agent security bill of materials (tree or JSON)
+  aspex explore       local session explorer in your browser (loopback only)
+  aspex mcp           expose Aspex to your agent as a read-only MCP server
   aspex doctor        2-second pre-flight health check
   aspex attack        red-team a server you own (advanced)
 

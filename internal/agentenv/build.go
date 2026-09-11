@@ -25,6 +25,17 @@ type Options struct {
 	// (a git revision, a corpus scenario) so the machine's own state does not
 	// leak into a comparison.
 	SkipLocalState bool
+	// Local, when non-nil, supplies hooks/skills/instructions directly instead
+	// of discovering them (a git revision, a corpus scenario). Implies
+	// SkipLocalState for discovery.
+	Local *LocalState
+}
+
+// LocalState is pre-discovered hooks, skills and instruction files.
+type LocalState struct {
+	Hooks        []hooks.Hook
+	Skills       []skills.Skill
+	Instructions []Instruction
 }
 
 // Build assembles the environment from inspected servers plus the local
@@ -56,7 +67,9 @@ func Build(servers []*inspect.Server, opts Options) Environment {
 		env.Agents = append(env.Agents, Agent{Name: agentDisplayName(a), Client: a})
 	}
 
-	if !opts.SkipLocalState {
+	if opts.Local != nil {
+		attachLocal(&env, hooks.Analyze(opts.Local.Hooks), opts.Local.Skills, opts.Local.Instructions)
+	} else if !opts.SkipLocalState {
 		for _, f := range hooks.Analyze(hooks.Discover(home, opts.Cwd)) {
 			env.Hooks = append(env.Hooks, Hook{
 				Event: f.Hook.Event, Matcher: f.Hook.Matcher, Command: f.Hook.Command,
@@ -86,6 +99,30 @@ func Build(servers []*inspect.Server, opts Options) Environment {
 	sortEnv(&env)
 	return env
 }
+
+func attachLocal(env *Environment, hf []hooks.Finding, sks []skills.Skill, ins []Instruction) {
+	for _, f := range hf {
+		env.Hooks = append(env.Hooks, Hook{
+			Event: f.Hook.Event, Matcher: f.Hook.Matcher, Command: f.Hook.Command,
+			Source: f.Hook.Source, Scope: f.Hook.Scope, Hash: shortHash([]byte(f.Hook.Command)),
+			Severity: f.Severity, Judgment: f.Title,
+		})
+	}
+	for _, sk := range sks {
+		env.Skills = append(env.Skills, Skill{
+			Name: sk.Name, Path: sk.Path, Scope: sk.Scope, ContentHash: sk.ContentHash,
+			Scripts: sk.Scripts, Destinations: sk.Destinations, Executes: sk.Executes,
+		})
+	}
+	env.Instructions = append(env.Instructions, ins...)
+	if (len(env.Hooks) > 0 || len(env.Skills) > 0) && !hasAgent(env.Agents, "claude-code") {
+		env.Agents = append(env.Agents, Agent{Name: agentDisplayName("claude-code"), Client: "claude-code"})
+	}
+}
+
+// HashContent is the hash used for instruction files; exported so revision
+// loaders hash content the same way Build hashes files on disk.
+func HashContent(b []byte) string { return shortHash(b) }
 
 func hasAgent(list []Agent, client string) bool {
 	for _, a := range list {

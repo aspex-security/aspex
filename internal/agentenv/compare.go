@@ -299,29 +299,49 @@ func compareServer(b, a Server) []Change {
 		out = append(out, Change{Kind: EgressConstrainedK, Class: ClassInformational, Entity: a.Name,
 			Impact: a.Name + " is now limited to specific destinations."})
 	}
-	// Agent state writes
-	bs := map[string]attackpath.AgentStateTarget{}
+	// Agent state writes: one change per server, not one per file. The
+	// meaning is "this server can now rewrite what the agent trusts"; the
+	// file list is detail.
+	bs := map[string]bool{}
 	for _, t := range b.StateWrites {
-		bs[t.Path] = t
+		bs[t.Path] = true
+	}
+	var newTargets []attackpath.AgentStateTarget
+	for _, t := range a.StateWrites {
+		if !bs[t.Path] {
+			newTargets = append(newTargets, t)
+		}
+	}
+	if len(newTargets) > 0 {
+		executes := false
+		kinds := map[string]bool{}
+		var paths []string
+		for _, t := range newTargets {
+			executes = executes || t.Executes
+			kinds[t.Kind] = true
+			paths = append(paths, t.Path)
+		}
+		sev, impact := "medium", "A modification would be trusted by future sessions."
+		if executes {
+			sev, impact = "high", "The reachable files include MCP config, hooks, or shell startup: a modification would run code at the next session start without any further prompt."
+		}
+		out = append(out, Change{Kind: StateWriteAdded, Class: ClassSecurityRelevant, Entity: a.Name, Severity: sev,
+			After:  fmt.Sprintf("%d file(s): %s", len(paths), strings.Join(sortedKeys(kinds), ", ")),
+			Reason: "e.g. " + strings.Join(firstN(paths, 3), ", "), Impact: impact})
 	}
 	as := map[string]bool{}
 	for _, t := range a.StateWrites {
 		as[t.Path] = true
-		if _, ok := bs[t.Path]; !ok {
-			sev := "medium"
-			impact := "A modification would be trusted by future sessions."
-			if t.Executes {
-				sev = "high"
-				impact = "A modification would run code at the next session start without any further prompt."
-			}
-			out = append(out, Change{Kind: StateWriteAdded, Class: ClassSecurityRelevant, Entity: a.Name, After: t.Path + " (" + t.Kind + ")", Severity: sev, Impact: impact})
+	}
+	var gone int
+	for _, t := range b.StateWrites {
+		if !as[t.Path] {
+			gone++
 		}
 	}
-	for p, t := range bs {
-		if !as[p] {
-			out = append(out, Change{Kind: StateWriteRemoved, Class: ClassInformational, Entity: a.Name, Before: p + " (" + t.Kind + ")",
-				Impact: a.Name + " can no longer modify this agent-state file."})
-		}
+	if gone > 0 {
+		out = append(out, Change{Kind: StateWriteRemoved, Class: ClassInformational, Entity: a.Name, Before: fmt.Sprintf("%d file(s)", gone),
+			Impact: a.Name + " can no longer modify these agent-state files."})
 	}
 	return out
 }
@@ -480,10 +500,15 @@ func compareInstructions(before, after Environment) []Change {
 		case !ok:
 			out = append(out, Change{Kind: InstructionAdded, Class: ClassInformational, Entity: p, Impact: "A new " + i.Kind + " file is now loaded by the agent."})
 		case b.Hash != i.Hash:
+			// Config and hook files: the server and hook comparisons above say
+			// what changed in security terms, so the file-level line is context.
+			// Instruction files (CLAUDE.md, .cursorrules) have no finer-grained
+			// view; a change there is the finding.
 			cls := ClassSecurityRelevant
-			impact := "Persistent " + i.Kind + " changed; future sessions follow the new content."
+			impact := "Persistent " + i.Kind + " changed; future sessions follow the new content. Review the text diff."
 			if i.Kind == "hooks" || i.Kind == "mcp-config" {
-				impact = "Persistent " + i.Kind + " changed; this file can start servers or run commands at the next session."
+				cls = ClassInformational
+				impact = "The " + i.Kind + " file changed; see the server and hook changes above for what that means."
 			}
 			out = append(out, Change{Kind: InstructionChanged, Class: cls, Entity: p, Impact: impact})
 		}
@@ -506,17 +531,58 @@ func compareResources(before, after Environment) []Change {
 	for _, r := range after.SensitiveResources {
 		am[r.Path] = r
 	}
+	// Credential directories and browser profiles arrive together (they are
+	// all "home is readable"); report them as one change. Databases and other
+	// kinds stay individual. Agent-state is reported by StateWriteAdded.
+	var newCreds, goneCreds []Resource
 	for p, r := range am {
-		if _, ok := bm[p]; !ok {
-			out = append(out, Change{Kind: ResourceReachable, Class: ClassSecurityRelevant, Entity: p, After: r.Access + " via " + strings.Join(r.Via, ", "),
-				Impact: resourceImpact(r)})
+		if _, ok := bm[p]; ok || r.Kind == "agent-state" {
+			continue
 		}
+		if r.Kind == "credentials" || r.Kind == "browser-profile" {
+			newCreds = append(newCreds, r)
+			continue
+		}
+		out = append(out, Change{Kind: ResourceReachable, Class: ClassSecurityRelevant, Entity: p, After: r.Access + " via " + strings.Join(r.Via, ", "), Impact: resourceImpact(r)})
 	}
 	for p, r := range bm {
-		if _, ok := am[p]; !ok {
-			out = append(out, Change{Kind: ResourceUnreachable, Class: ClassInformational, Entity: p, Before: r.Access + " via " + strings.Join(r.Via, ", "),
-				Impact: "No server reaches this any more."})
+		if _, ok := am[p]; ok || r.Kind == "agent-state" {
+			continue
 		}
+		if r.Kind == "credentials" || r.Kind == "browser-profile" {
+			goneCreds = append(goneCreds, r)
+			continue
+		}
+		out = append(out, Change{Kind: ResourceUnreachable, Class: ClassInformational, Entity: p, Before: r.Access + " via " + strings.Join(r.Via, ", "), Impact: "No server reaches this any more."})
+	}
+	if len(newCreds) > 0 {
+		// Most recognizable first: SSH and cloud keys, then the rest alphabetically.
+		prio := map[string]int{"~/.ssh": 0, "~/.aws": 1, "~/.gnupg": 2, "~/.kube": 3}
+		sort.Slice(newCreds, func(i, j int) bool {
+			pi, oki := prio[newCreds[i].Path]
+			pj, okj := prio[newCreds[j].Path]
+			if oki != okj {
+				return oki
+			}
+			if oki && okj && pi != pj {
+				return pi < pj
+			}
+			return newCreds[i].Path < newCreds[j].Path
+		})
+		var paths, via []string
+		access := newCreds[0].Access
+		for _, r := range newCreds {
+			paths = append(paths, r.Path)
+			via = append(via, r.Via...)
+		}
+		out = append(out, Change{Kind: ResourceReachable, Class: ClassSecurityRelevant, Entity: "credential directories",
+			After:  access + " via " + strings.Join(uniqSorted(via), ", "),
+			Reason: strings.Join(firstN(paths, 4), ", ") + moreSuffix(len(paths), 4),
+			Impact: "Credential material (SSH keys, cloud credentials, browser profiles) is now within the agent's reach; combined with any egress it is an exfiltration path."})
+	}
+	if len(goneCreds) > 0 {
+		out = append(out, Change{Kind: ResourceUnreachable, Class: ClassInformational, Entity: "credential directories",
+			Before: fmt.Sprintf("%d location(s)", len(goneCreds)), Impact: "Credential directories are no longer reachable through any server."})
 	}
 	return out
 }
@@ -703,4 +769,27 @@ func addedText(before, after string) string {
 		}
 	}
 	return strings.Join(out, " ")
+}
+
+func sortedKeys(m map[string]bool) []string {
+	var out []string
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func firstN(in []string, n int) []string {
+	if len(in) <= n {
+		return in
+	}
+	return in[:n]
+}
+
+func moreSuffix(total, shown int) string {
+	if total <= shown {
+		return ""
+	}
+	return fmt.Sprintf(" and %d more", total-shown)
 }

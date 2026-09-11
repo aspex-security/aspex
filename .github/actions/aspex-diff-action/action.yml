@@ -1,0 +1,118 @@
+name: "Aspex Security Impact Diff"
+description: "On a pull request, explain what changed in the agent's effective security capabilities: new tools, wider filesystem scope, new attack paths, blast radius. Posts a Markdown comment."
+author: "aspex-security"
+
+branding:
+  icon: git-pull-request
+  color: purple
+
+inputs:
+  version:
+    description: "Version of aspex-scan to use"
+    required: false
+    default: "latest"
+  base:
+    description: "Base revision. Default: the PR base SHA, or HEAD~1 on push"
+    required: false
+    default: ""
+  head:
+    description: "Head revision. Default: the PR head SHA, or HEAD"
+    required: false
+    default: ""
+  comment:
+    description: "Post or update a PR comment with the result (needs pull-requests: write)"
+    required: false
+    default: "true"
+  fail-on:
+    description: "Fail when drift reaches this class: suspicious | security-relevant | informational | off"
+    required: false
+    default: "suspicious"
+  github-token:
+    description: "Token for the PR comment"
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  worst:
+    description: "Worst change class found: suspicious, security-relevant, informational, or empty"
+    value: ${{ steps.diff.outputs.worst }}
+  attack-paths-added:
+    description: "Number of new attack paths"
+    value: ${{ steps.diff.outputs.paths_added }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install aspex-scan
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        VERSION="$INPUT_VERSION"
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        ARCH=$(uname -m)
+        if [ "$ARCH" = "x86_64" ]; then ARCH="amd64"; fi
+        if [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi
+        if [ "$VERSION" = "latest" ]; then
+          VERSION=$(gh release view --repo aspex-security/aspex --json tagName -q '.tagName' | sed 's/^v//')
+        fi
+        ASSET="aspex-scan_${OS}_${ARCH}.tar.gz"
+        URL="https://github.com/aspex-security/aspex/releases/download/v${VERSION}/${ASSET}"
+        TMP=$(mktemp); curl -fsSL "$URL" -o "$TMP"
+        CK=$(mktemp); curl -fsSL "https://github.com/aspex-security/aspex/releases/download/v${VERSION}/checksums.txt" -o "$CK"
+        EXPECTED=$(grep " ${ASSET}$" "$CK" | awk '{print $1}'); ACTUAL=$(sha256sum "$TMP" | awk '{print $1}'); rm -f "$CK"
+        if [ "$ACTUAL" != "$EXPECTED" ]; then echo "Checksum mismatch for ${ASSET}"; rm -f "$TMP"; exit 1; fi
+        tar -xz -C /usr/local/bin -f "$TMP"; rm -f "$TMP"; chmod +x /usr/local/bin/aspex-scan
+
+    - name: Security impact diff
+      id: diff
+      shell: bash
+      env:
+        INPUT_BASE: ${{ inputs.base }}
+        INPUT_HEAD: ${{ inputs.head }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        PR_BASE: ${{ github.event.pull_request.base.sha }}
+        PR_HEAD: ${{ github.event.pull_request.head.sha }}
+      run: |
+        BASE="${INPUT_BASE:-${PR_BASE:-HEAD~1}}"
+        HEAD_REV="${INPUT_HEAD:-${PR_HEAD:-HEAD}}"
+        # Shallow checkouts do not have the base commit; fetch it.
+        git fetch --no-tags --depth=1 origin "$BASE" 2>/dev/null || git fetch --no-tags --unshallow 2>/dev/null || true
+        set +e
+        aspex-scan diff "${BASE}..${HEAD_REV}" --json > aspex-diff.json
+        aspex-scan diff "${BASE}..${HEAD_REV}" --markdown aspex-diff.md --no-color > /dev/null
+        set -e
+        WORST=$(python3 -c "import json; print(json.load(open('aspex-diff.json'))['worst'])" 2>/dev/null || echo "")
+        PATHS=$(python3 -c "import json; print(len(json.load(open('aspex-diff.json'))['attack_paths_added']))" 2>/dev/null || echo "0")
+        echo "worst=$WORST" >> "$GITHUB_OUTPUT"
+        echo "paths_added=$PATHS" >> "$GITHUB_OUTPUT"
+        cat aspex-diff.md >> "$GITHUB_STEP_SUMMARY"
+        rank() { case "$1" in suspicious) echo 3;; security-relevant) echo 2;; informational) echo 1;; *) echo 0;; esac; }
+        if [ "$INPUT_FAIL_ON" != "off" ] && [ "$(rank "$WORST")" -ge "$(rank "$INPUT_FAIL_ON")" ] && [ "$(rank "$WORST")" -gt 0 ]; then
+          echo "::error::Agent environment drift reached $WORST (fail-on: $INPUT_FAIL_ON). See the job summary."
+          echo "failed=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Comment on the pull request
+      if: ${{ inputs.comment == 'true' && github.event_name == 'pull_request' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR: ${{ github.event.pull_request.number }}
+      run: |
+        MARKER="<!-- aspex-diff -->"
+        BODY="$(cat aspex-diff.md)
+        $MARKER"
+        # Update the existing comment instead of adding one per push.
+        EXISTING=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | head -1)
+        if [ -n "$EXISTING" ]; then
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${EXISTING}" -f body="$BODY" > /dev/null
+        else
+          gh pr comment "$PR" --body "$BODY"
+        fi
+
+    - name: Fail if drift reached the threshold
+      if: ${{ steps.diff.outputs.failed == 'true' }}
+      shell: bash
+      run: exit 1

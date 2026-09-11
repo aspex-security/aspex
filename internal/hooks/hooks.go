@@ -70,6 +70,12 @@ func parseSettings(path, scope string) []Hook {
 	if err != nil {
 		return nil
 	}
+	return ParseBytes(data, path, scope)
+}
+
+// ParseBytes parses settings.json content as if it lived at path. Used to
+// read hooks at a git revision without checking it out.
+func ParseBytes(data []byte, path, scope string) []Hook {
 	var sf settingsFile
 	if json.Unmarshal(data, &sf) != nil {
 		return nil

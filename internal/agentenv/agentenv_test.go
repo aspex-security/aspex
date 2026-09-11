@@ -189,8 +189,9 @@ func TestScopeExpansionCreatesPathAndRaisesBlastRadius(t *testing.T) {
 	if c := findChange(d, agentenv.ScopeExpanded, "filesystem"); c == nil || c.Class != agentenv.ClassSecurityRelevant {
 		t.Fatalf("expected FILESYSTEM SCOPE EXPANDED, got %+v", c)
 	}
-	if findChange(d, agentenv.ResourceReachable, "~/.ssh") == nil {
-		t.Error("~/.ssh should become newly reachable")
+	c := findChange(d, agentenv.ResourceReachable, "credential directories")
+	if c == nil || !strings.Contains(c.Reason, "~/.ssh") {
+		t.Errorf("credential directories (incl. ~/.ssh) should become newly reachable as one grouped change, got %+v", c)
 	}
 	// Both have AP001 (project vs sensitive) but severity differs; the model
 	// treats same ID + same servers as the same path, so check blast radius.
@@ -209,8 +210,8 @@ func TestScopeRestrictionIsInformationalAndRemovesResources(t *testing.T) {
 	if c := findChange(d, agentenv.ScopeRestricted, "filesystem"); c == nil || c.Class != agentenv.ClassInformational {
 		t.Errorf("restriction should be informational, got %+v", c)
 	}
-	if findChange(d, agentenv.ResourceUnreachable, "~/.aws") == nil {
-		t.Error("~/.aws should be reported as no longer reachable")
+	if findChange(d, agentenv.ResourceUnreachable, "credential directories") == nil {
+		t.Error("credential directories should be reported as no longer reachable")
 	}
 }
 

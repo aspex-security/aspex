@@ -193,7 +193,9 @@ COMPARING OVER TIME
 	root.AddCommand(newDiffCmd(&gf))
 	root.AddCommand(newInstallHookCmd())
 	root.AddCommand(newUninstallHookCmd())
-	root.AddCommand(newVerifyCmd())
+	root.AddCommand(newVerifyCmd(&gf))
+	root.AddCommand(newCheckPackageCmd())
+	root.AddCommand(newLockCmd(&gf))
 	root.AddCommand(newInventoryCmd(&gf))
 	root.AddCommand(newAttackPathsCmd(&gf))
 	root.AddCommand(newShadowCmd(&gf))
@@ -988,7 +990,15 @@ func newInspectCmd(gf *globalFlags) *cobra.Command {
 	}
 }
 
-func newDiffCmd(gf *globalFlags) *cobra.Command {
+// runFindingDiff is the pre-0.8 `diff --baseline` behaviour: compare finding
+// sets against a saved aspex-scan --json output.
+func runFindingDiff(gf *globalFlags, baselineFile string) error {
+	c := newFindingDiffCmd(gf)
+	c.SetArgs([]string{"--baseline", baselineFile})
+	return c.Execute()
+}
+
+func newFindingDiffCmd(gf *globalFlags) *cobra.Command {
 	var baselineFile string
 	cmd := &cobra.Command{
 		Use:     "diff",
@@ -1098,37 +1108,6 @@ func newUninstallHookCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&repoPath, "repo", "", "Path to git repo (default: current directory)")
 	return cmd
-}
-
-func newVerifyCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:     "verify <package-name>",
-		Short:   "Check a package name against the known-malicious registry",
-		Long:    "Look up a package name in Aspex's registry of known-malicious MCP server packages. Checks for exact matches, typosquats, and known CVEs.",
-		Example: "  aspex-scan verify @modelcontextprotocol/server-filesystem\n  aspex-scan verify my-mcp-package",
-		Args:    cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			pkg := args[0]
-			entry := registry.Lookup(pkg)
-			if entry == nil {
-				fmt.Printf("No registry entry found for %q\n", pkg)
-				return nil
-			}
-			fmt.Printf("Package:  %s\n", entry.Package)
-			fmt.Printf("Version:  %s\n", entry.Version)
-			fmt.Printf("Severity: %s\n", entry.Severity)
-			fmt.Printf("Summary:  %s\n", entry.Summary)
-			if entry.FixedIn != "" {
-				fmt.Printf("Fixed in: %s\n", entry.FixedIn)
-			}
-			if entry.CVE != "" {
-				fmt.Printf("CVE:      %s\n", entry.CVE)
-			}
-			fmt.Printf("Reported: %s\n", entry.Reported)
-			fmt.Printf("Rules:    %s\n", strings.Join(entry.RuleIDs, ", "))
-			return nil
-		},
-	}
 }
 
 func newRedTeamCmd(gf *globalFlags) *cobra.Command {
