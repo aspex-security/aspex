@@ -65,6 +65,11 @@ type Report struct {
 
 // ingestionTool returns true and a kind label if the tool name looks like a
 // content-ingestion operation.
+// IngestionKind reports whether a tool brings content into the agent's
+// context and which kind ("file_read", "web_fetch", "resource_read",
+// "browser_load"). Exported for the session explorer.
+func IngestionKind(toolName string) (bool, string) { return ingestionTool(toolName) }
+
 func ingestionTool(toolName string) (bool, string) {
 	lower := strings.ToLower(toolName)
 
