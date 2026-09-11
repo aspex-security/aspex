@@ -105,34 +105,71 @@ builds:
 
 archives:
   - id: mcp-scan
-    builds: [mcp-scan]
+    ids: [mcp-scan]
     name_template: "aspex-scan_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
     files:
       - LICENSE
       - README.md
 
   - id: agent-trace
-    builds: [agent-trace]
+    ids: [agent-trace]
     name_template: "aspex-trace_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
     files:
       - LICENSE
       - README.md
 
   - id: aspex-combined
-    builds: [mcp-scan, agent-trace, aspex, aspex-attack, aspex-doctor]
+    ids: [mcp-scan, agent-trace, aspex, aspex-attack, aspex-doctor]
     name_template: "aspex_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
     files:
       - LICENSE
       - README.md
+
+# macOS: a cask (GoReleaser's replacement for binary formulae). No quarantine
+# prompt, no compile step. The formula below stays for Linux and for installs
+# that predate the cask; `brew install aspex-security/tap/aspex` keeps working,
+# `brew install --cask aspex-security/tap/aspex` gets the cask.
+homebrew_casks:
+  - name: aspex
+    ids: [aspex-combined]
+    repository:
+      owner: aspex-security
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "Brew cask update for aspex version {{ .Tag }}"
+    directory: Casks
+    homepage: "https://github.com/aspex-security/aspex"
+    description: "Local security debugger for AI agents: know what your agents can do, know what they actually did"
+    license: "Apache-2.0"
+    skip_upload: auto
+    binaries:
+      - aspex
+      - aspex-scan
+      - aspex-trace
+      - aspex-attack
+      - aspex-doctor
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/aspex"]
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/aspex-scan"]
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/aspex-trace"]
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/aspex-attack"]
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/aspex-doctor"]
+          end
 
 brews:
   - name: aspex
@@ -147,7 +184,7 @@ brews:
     commit_msg_template: "Brew formula update for aspex version {{ .Tag }}"
     directory: Formula
     homepage: "https://github.com/aspex-security/aspex"
-    description: "MCP security: see what your AI agents did, then scan what they could do"
+    description: "Local security debugger for AI agents: know what your agents can do, know what they actually did"
     license: "Apache-2.0"
     skip_upload: auto
     install: |

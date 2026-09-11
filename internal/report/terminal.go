@@ -717,6 +717,13 @@ func printFinding(w io.Writer, c colorFn, f rules.Finding, explain bool) {
 	}
 
 	if explain {
+		for _, e := range f.Evidence {
+			lc := colorDim
+			if e.Level == "OBSERVED" {
+				lc = colorGreen
+			}
+			fmt.Fprintf(w, "        %s %s\n", c(lc, fmt.Sprintf("%-8s", e.Level)), c(colorDim, SanitizeForTerminal(e.Text)))
+		}
 		if adv, ok := rules.AdvisoryFor(f.RuleID); ok {
 			fmt.Fprintf(w, "     %s %-11s %s\n", c(colorDim, "│"), c(colorBrYellow, "WHY"), c(colorDim, SanitizeForTerminal(adv.Why)))
 			for i, line := range wrapText(SanitizeForTerminal(adv.Exploit), 58) {

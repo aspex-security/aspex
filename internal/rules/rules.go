@@ -52,7 +52,22 @@ type Finding struct {
 	Fix      string
 	// Comma-separated framework references, e.g. "OWASP LLM01, ATLAS AML.T0051, CWE-77"
 	Mapping string
+	// Evidence is what the rule actually saw, labeled OBSERVED (a fact about the
+	// config or tool list) or INFERRED (the rule's reading of it). Detail is the
+	// sentence; Evidence is the receipt. Rules that do not set it get a generic
+	// entry from EvalServer so every finding has at least one.
+	Evidence []Evidence
 }
+
+// Evidence is one labeled statement backing a finding.
+type Evidence struct {
+	Level string `json:"level"` // OBSERVED | INFERRED
+	Text  string `json:"text"`
+}
+
+// Observed and Inferred build evidence entries.
+func Observed(text string) Evidence { return Evidence{Level: "OBSERVED", Text: text} }
+func Inferred(text string) Evidence { return Evidence{Level: "INFERRED", Text: text} }
 
 // Advisory holds educational context for a rule finding, surfaced when --explain is passed.
 type Advisory struct {
@@ -95,6 +110,14 @@ func EvalServer(srv *inspect.Server) []Finding {
 		f = append(f, EvalPromptCatalog(&srv.Prompts[i])...)
 	}
 
+	for idx := range f {
+		if len(f[idx].Evidence) == 0 {
+			f[idx].Evidence = []Evidence{
+				Observed("server " + srv.Entry.Name + " (" + srv.Entry.Client + ") is configured in " + srv.Entry.ConfigPath),
+				Inferred(f[idx].Detail),
+			}
+		}
+	}
 	return f
 }
 
@@ -499,6 +522,11 @@ func checkMCP006SecretsInEnv(srv *inspect.Server) []Finding {
 				Detail:   "Env key '" + key + "' holds a plaintext secret value in the config file. " + radius,
 				Fix:      "Replace the literal with a keychain or vault reference. On macOS: aspex-scan fix env migrates these automatically.",
 				Mapping:  "OWASP LLM02, CWE-312, CWE-522",
+				Evidence: []Evidence{
+					Observed("env key " + key + " has a literal value in " + srv.Entry.ConfigPath + " (value not read)"),
+					Observed("key name matches a secret pattern"),
+					Inferred(radius),
+				},
 			})
 			break
 		}

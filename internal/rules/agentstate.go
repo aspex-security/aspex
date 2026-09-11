@@ -72,7 +72,19 @@ func checkMCP200WritableAgentState(srv *inspect.Server) []Finding {
 	for k := range kinds {
 		kindList = append(kindList, k)
 	}
+	var ev []Evidence
+	for _, t := range sc.StateWrites {
+		if len(ev) < 4 {
+			ex := ""
+			if t.Executes {
+				ex = ", runs at next session start"
+			}
+			ev = append(ev, Observed("writable root reaches "+t.Path+" ("+t.Kind+ex+")"))
+		}
+	}
+	ev = append(ev, Inferred(impact))
 	return []Finding{{
+		Evidence: ev,
 		RuleID:   "MCP200",
 		Name:     "Server can write agent-trusted state",
 		Severity: sev,

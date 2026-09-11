@@ -2078,6 +2078,7 @@ func toJSONServer(srv *inspect.Server, sc score.ServerScore) report.JSONServerRe
 			Detail:   f.Detail,
 			Fix:      f.Fix,
 			Mapping:  f.Mapping,
+			Evidence: f.Evidence,
 		})
 	}
 	return res

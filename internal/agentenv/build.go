@@ -154,7 +154,11 @@ func agentDisplayName(client string) string {
 }
 
 var pinnedRe = regexp.MustCompile(`@\d+\.\d+|==\d|@v?\d+\.\d+\.\d+`)
-var pkgRe = regexp.MustCompile(`(@[a-z0-9-]+/[a-z0-9._-]+|\b[a-z0-9][a-z0-9._-]*(?:-mcp|mcp-[a-z0-9._-]+|server-[a-z0-9._-]+)[a-z0-9._-]*)`)
+
+// pkgScopedRe is tried first so a wrapper binary named like "onyx-mcp-gw"
+// does not shadow the real "@scope/server-x" it launches.
+var pkgScopedRe = regexp.MustCompile(`@[a-z0-9-]+/[a-z0-9._-]+`)
+var pkgRe = regexp.MustCompile(`\b[a-z0-9][a-z0-9._-]*(?:-mcp|mcp-[a-z0-9._-]+|server-[a-z0-9._-]+)[a-z0-9._-]*`)
 
 func buildServer(srv *inspect.Server, sc attackpath.ServerCapabilities) Server {
 	e := srv.Entry
@@ -163,7 +167,9 @@ func buildServer(srv *inspect.Server, sc attackpath.ServerCapabilities) Server {
 		URL: e.URL, ConfigPath: e.ConfigPath, EnvKeys: sortedCopy(e.EnvKeys), Static: sc.Static || len(srv.Tools) == 0,
 	}
 	cmdline := strings.ToLower(e.Command + " " + strings.Join(e.Args, " "))
-	if m := pkgRe.FindString(cmdline); m != "" {
+	if m := pkgScopedRe.FindString(cmdline); m != "" {
+		s.Package = m
+	} else if m := pkgRe.FindString(cmdline); m != "" {
 		s.Package = m
 	}
 	s.Pinned = pinnedRe.MatchString(cmdline)
@@ -247,6 +253,8 @@ func discoverInstructions(home, cwd string) []Instruction {
 		{filepath.Join(home, ".claude.json"), "mcp-config", "user"},
 		{filepath.Join(home, ".claude", "settings.json"), "hooks", "user"},
 		{filepath.Join(home, ".cursor", "mcp.json"), "mcp-config", "user"},
+		{filepath.Join(home, ".codeium", "windsurf", "mcp_config.json"), "mcp-config", "user"},
+		{filepath.Join(home, ".codeium", "windsurf", "memories", "global_rules.md"), "instructions", "user"},
 	}
 	if cwd != "" {
 		cands = append(cands,
@@ -256,7 +264,17 @@ func discoverInstructions(home, cwd string) []Instruction {
 			cand{filepath.Join(cwd, ".mcp.json"), "mcp-config", "project"},
 			cand{filepath.Join(cwd, ".claude", "settings.json"), "hooks", "project"},
 			cand{filepath.Join(cwd, ".vscode", "mcp.json"), "mcp-config", "project"},
+			cand{filepath.Join(cwd, "AGENTS.md"), "instructions", "project"},
+			cand{filepath.Join(cwd, ".windsurfrules"), "instructions", "project"},
 		)
+		// Rule directories: Cursor (.cursor/rules/*.mdc) and Windsurf
+		// (.windsurf/rules/*). Each file is its own instruction, so a change
+		// to one rule is attributed to that rule.
+		for _, dir := range []string{filepath.Join(cwd, ".cursor", "rules"), filepath.Join(cwd, ".windsurf", "rules")} {
+			for _, f := range ruleFiles(dir) {
+				cands = append(cands, cand{f, "instructions", "project"})
+			}
+		}
 	}
 	var out []Instruction
 	for _, c := range cands {
@@ -266,6 +284,26 @@ func discoverInstructions(home, cwd string) []Instruction {
 		}
 		out = append(out, Instruction{Path: c.path, Kind: c.kind, Scope: c.scope, Hash: shortHash(data)})
 	}
+	return out
+}
+
+// ruleFiles lists instruction rule files under dir (one level), sorted.
+func ruleFiles(dir string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(e.Name()))
+		if ext == ".mdc" || ext == ".md" || ext == "" || ext == ".txt" {
+			out = append(out, filepath.Join(dir, e.Name()))
+		}
+	}
+	sort.Strings(out)
 	return out
 }
 

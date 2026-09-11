@@ -2,6 +2,7 @@ package report
 
 import (
 	"encoding/json"
+	"github.com/aspex-security/aspex/internal/rules"
 	"io"
 
 	"github.com/aspex-security/aspex/internal/attackpath"
@@ -74,6 +75,8 @@ type JSONFinding struct {
 	Detail   string `json:"detail"`
 	Fix      string `json:"fix"`
 	Mapping  string `json:"mapping,omitempty"`
+	// Evidence: what the rule saw (OBSERVED) and how it read it (INFERRED).
+	Evidence []rules.Evidence `json:"evidence,omitempty"`
 }
 
 // WriteJSONScan encodes the scan report as JSON to w.

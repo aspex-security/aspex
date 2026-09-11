@@ -455,7 +455,7 @@ func runExplainQuestion(gf *globalFlags, question string) error {
 // ---------------------------------------------------------------------------
 
 func newBomCmd(gf *globalFlags) *cobra.Command {
-	var out string
+	var out, format string
 	cmd := &cobra.Command{
 		Use:   "bom",
 		Short: "Agent Security Bill of Materials: what constitutes this agent environment",
@@ -463,15 +463,34 @@ func newBomCmd(gf *globalFlags) *cobra.Command {
 their tools, skills, hooks, persistent state, capabilities, reachable
 sensitive resources, external destinations, attack paths, fingerprints.
 
-  aspex-scan bom                 tree for humans
-  aspex-scan bom --json          aspex-asbom/v1 JSON (no secret values)
+  aspex-scan bom                       tree for humans
+  aspex-scan bom --json                aspex-asbom/v1 JSON (no secret values)
+  aspex-scan bom --format cyclonedx    CycloneDX 1.5 JSON: servers as components
+                                       (purl, fingerprint hash), destinations as
+                                       external references, attack paths as
+                                       vulnerabilities; Aspex specifics as properties
 
-The JSON is the same schema as .aspex.lock's environment, wrapped with a BOM
-header. It is not CycloneDX or SPDX; see docs for the mapping notes.`,
+The native JSON is the same schema as .aspex.lock's environment, wrapped with a
+BOM header, and remains the authoritative form.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			env := loadEnvironment(gf, gf.jsonOut || out != "")
+			env := loadEnvironment(gf, gf.jsonOut || out != "" || format != "")
+			if format == "cyclonedx" {
+				data, err := agentenv.CycloneDX(env, version.Version)
+				if err != nil {
+					return err
+				}
+				data = append(data, '\n')
+				if out != "" {
+					return os.WriteFile(out, data, 0o644)
+				}
+				os.Stdout.Write(data)
+				return nil
+			}
+			if format != "" && format != "aspex" {
+				return fmt.Errorf("--format must be aspex or cyclonedx")
+			}
 			if gf.jsonOut || out != "" {
 				doc := struct {
 					Schema      string               `json:"$schema"`
@@ -502,6 +521,7 @@ header. It is not CycloneDX or SPDX; see docs for the mapping notes.`,
 		},
 	}
 	cmd.Flags().StringVarP(&out, "output", "o", "", "Write JSON BOM to this file (e.g. agent.asbom.json)")
+	cmd.Flags().StringVar(&format, "format", "", "JSON format: aspex (default) or cyclonedx")
 	return cmd
 }
 

@@ -74,9 +74,9 @@ engine, and `report` stays below `agentenv` (it has its own small
 
 ## Remaining
 
-- P0: per-rule scan findings should carry Evidence like paths do.
-- P1: watch should use fsnotify-style events rather than 2s mtime polling;
-  explore frontend tests (rendering) beyond the served-page check; Cursor and
-  Windsurf hooks/skills equivalents when those clients grow them.
-- P2: CycloneDX export for the server/destination subset of the BOM; GoReleaser
-  `brews` -> `homebrew_casks` migration (release-engineering, needs a test tap).
+- Cursor and Windsurf have no hook system today; when they grow one, add it to
+  `internal/hooks` and the environment model.
+- CycloneDX export covers servers, destinations, hooks, skills and attack
+  paths; capabilities and scope ride as properties by design.
+- After one release with both, retire the Homebrew formula in favour of the
+  cask for macOS (keep the formula for Linux).

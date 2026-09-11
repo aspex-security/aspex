@@ -96,6 +96,7 @@ func EvalToolCatalog(t *mcpclient.Tool) []Finding {
 		}
 		if matched {
 			f = append(f, Finding{
+				Evidence: []Evidence{Observed(detail), Inferred(rule.name)},
 				RuleID:   rule.ruleID,
 				Name:     rule.name,
 				Severity: rule.sev,

@@ -52,6 +52,25 @@ can do, what they actually did, what changed, and what could happen next.
   `hooks.ParseBytes`, `skills.FromContents`, `provenance.IngestionKind`.
 - Docs: change detection, explain, tighten, bom, mcp, explore, security model
   for researchers, corpus. README repositioned.
+- Every per-rule scan finding now carries structured evidence: OBSERVED facts
+  (the matched tool token, the env key name, the reachable agent-state file)
+  and the INFERRED reading. Shown under `--explain`, exported in `--json` as
+  `evidence`. Rules that set none get a generic entry, so none is empty.
+- `--watch` uses filesystem events (fsnotify) with rename-safe directory
+  watches and debouncing; polling remains as fallback for paths that cannot
+  be watched.
+- Cursor (`.cursor/rules/*.mdc`) and Windsurf (`.windsurf/rules`,
+  `.windsurfrules`, global rules) instruction files are discovered, hashed,
+  locked and diffed per file.
+- `aspex bom --format cyclonedx`: CycloneDX 1.5 export (servers as components
+  with purl and fingerprint hash, destinations as external references, attack
+  paths as vulnerabilities, Aspex specifics as properties). The native
+  `aspex-asbom/v1` stays authoritative.
+- Homebrew cask (`brew install --cask aspex-security/tap/aspex`) for macOS,
+  published alongside the formula; the formula remains for Linux and existing
+  installs.
+- Explorer UI contract test: every dataset field the page reads exists, every
+  view has a renderer, no external resources, strings are escaped.
 
 ### Changed
 - `aspex-scan verify <package>` (registry lookup) renamed `check-package`;

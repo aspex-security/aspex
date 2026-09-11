@@ -305,3 +305,26 @@ func TestCleanServer_NoFindings(t *testing.T) {
 		t.Errorf("expected no findings for clean server, got %d: %+v", len(findings), findings)
 	}
 }
+
+func TestEveryFindingCarriesEvidence(t *testing.T) {
+	entry := discover.ServerEntry{Name: "s", Client: "claude", ConfigPath: "/c.json", Command: "npx", Args: []string{"-y", "@org/server@latest"}, EnvKeys: []string{"GITHUB_TOKEN"}, PlaintextEnvKeys: []string{"GITHUB_TOKEN"}}
+	tool := mcpclient.Tool{Name: "execute_command", Description: "Run a command.", InputSchema: []byte(`{"type":"object","properties":{"command":{"type":"string"}}}`)}
+	for _, f := range rules.EvalServer(makeServer(entry, []mcpclient.Tool{tool})) {
+		if len(f.Evidence) == 0 {
+			t.Errorf("%s has no evidence", f.RuleID)
+			continue
+		}
+		hasObserved := false
+		for _, e := range f.Evidence {
+			if e.Level == "OBSERVED" {
+				hasObserved = true
+			}
+			if e.Level != "OBSERVED" && e.Level != "INFERRED" {
+				t.Errorf("%s: bad evidence level %q", f.RuleID, e.Level)
+			}
+		}
+		if !hasObserved {
+			t.Errorf("%s: evidence must include at least one OBSERVED fact", f.RuleID)
+		}
+	}
+}

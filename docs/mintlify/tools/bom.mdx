@@ -59,6 +59,19 @@ aspex bom --json > agent.asbom.json
 
 No secret values appear anywhere in the document.
 
-## CycloneDX / SPDX
+## CycloneDX
 
-The ASBOM is **not** a CycloneDX or SPDX document and does not claim to be. Parts of it map cleanly and could be exported in a future version: MCP servers as `components` (type `application`, `purl` from the package and pin, the identity fingerprint as a hash), destinations as `externalReferences`, and attack paths as CycloneDX `vulnerabilities` with a custom rating. Capabilities, filesystem scope, hooks and blast radius have no standard home in either format; forcing them into properties would lose their meaning, so the native schema stays primary.
+```sh
+aspex bom --format cyclonedx > agent.cdx.json
+```
+
+A CycloneDX 1.5 JSON BOM for the subset that maps cleanly:
+
+| Aspex | CycloneDX |
+|---|---|
+| MCP server | `component` (type application) with `purl` when the package and pin are known (`pkg:npm/modelcontextprotocol/server-filesystem@0.6.2`), the surface fingerprint as a SHA-256 hash, fixed destinations as `externalReferences` |
+| agent, hook, skill | `component` with `aspex:kind` property; hooks and skills carry their content hash |
+| attack path | `vulnerability` rated by Aspex (source URL points at the project), `affects` the servers on the path, `recommendation` is the fix |
+| capabilities, filesystem scope, egress, blast radius, confidence | `properties` (`aspex:*`), because the standard has no first-class field for them |
+
+The serial number is derived from the environment, so an unchanged setup produces the same serial. SPDX is not supported; it has no natural home for capabilities or paths. The native `aspex-asbom/v1` remains the authoritative form.

@@ -178,3 +178,41 @@ func TestServerIsLoopbackOnlyAndRefusesForeignHosts(t *testing.T) {
 		t.Errorf("UI should be served with a CSP: %d", rec.Code)
 	}
 }
+
+// The UI is vanilla JS reading one JSON document. This test pins the contract
+// between the two: every field the script dereferences must exist in the
+// dataset's JSON, and every view the nav offers must have a renderer.
+func TestUIContractWithDataset(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Host = "127.0.0.1:1"
+	explore.Handler(dataset(t)).ServeHTTP(rec, req)
+	html := rec.Body.String()
+	raw, _ := json.Marshal(dataset(t))
+	var doc map[string]interface{}
+	json.Unmarshal(raw, &doc)
+	for _, field := range []string{"summary", "sessions", "timeline", "provenance", "killchains", "graph", "findings", "blast_radius", "window"} {
+		if _, ok := doc[field]; !ok {
+			t.Errorf("dataset lacks %q", field)
+		}
+		if !strings.Contains(html, "."+field) && !strings.Contains(html, "'"+field+"'") && !strings.Contains(html, `"`+field+`"`) {
+			t.Errorf("UI never reads dataset field %q", field)
+		}
+	}
+	for _, view := range []string{"timeline", "provenance", "killchains", "graph", "findings"} {
+		if !strings.Contains(html, `data-v="`+view+`"`) || !strings.Contains(html, "function "+view+"(") {
+			t.Errorf("view %q needs both a nav button and a renderer", view)
+		}
+	}
+	for _, level := range []string{"OBSERVED", "INFERRED", "POSSIBLE", "NOT"} {
+		if !strings.Contains(html, ".ev."+level) {
+			t.Errorf("UI has no style for evidence level %s", level)
+		}
+	}
+	if strings.Contains(html, "http://") || strings.Contains(html, "https://") {
+		t.Error("UI must not reference external resources")
+	}
+	if !strings.Contains(html, "esc(") {
+		t.Error("UI must escape dataset strings before rendering")
+	}
+}

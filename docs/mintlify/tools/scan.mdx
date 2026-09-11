@@ -31,12 +31,12 @@ Framework coverage:
 | Flag | Description |
 |---|---|
 | `--no-exec` | Skip servers that require subprocess execution |
-| `--explain` | Print full security advisory (WHY, EXPLOIT, IMPACT, CONFIDENCE) for every finding |
+| `--explain` | Print the evidence behind every finding (OBSERVED facts, INFERRED reading) and the full advisory (WHY, EXPLOIT, IMPACT, CONFIDENCE) |
 | `--clients` | Limit scan to specific MCP clients (e.g. `--clients claude,cursor`) |
 | `--json` | Emit machine-readable JSON output |
 | `--sarif` | Emit SARIF 2.1 output for GitHub Code Scanning |
 | `--html` | Write a self-contained HTML report |
-| `--watch` | Re-scan on config file changes |
+| `--watch` | Re-scan on config file changes (filesystem events, debounced) and print the security-relevant drift since the previous scan |
 | `--fail-on` | Exit 1 when any finding reaches this severity: `critical`, `high`, `medium`, `low` (default `off`; `.aspex.yaml` can set a default) |
 | `--share` | Generate a privacy-safe Markdown summary suitable for sharing |
 | `--report` | Export compliance report (`soc2` or `iso27001`) |

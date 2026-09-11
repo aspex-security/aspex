@@ -29,7 +29,11 @@ var projectFiles = []struct {
 	{".claude/CLAUDE.md", "", "instructions"},
 	{".cursorrules", "", "instructions"},
 	{"AGENTS.md", "", "instructions"},
+	{".windsurfrules", "", "instructions"},
 }
+
+// projectRuleDirs hold one instruction file per rule.
+var projectRuleDirs = []string{".cursor/rules", ".windsurf/rules"}
 
 // FileSource yields file content by project-relative path; ok=false when the
 // file does not exist on that side. List enumerates paths under a directory.
@@ -104,6 +108,13 @@ func BuildProject(ctx context.Context, root string, src FileSource, home string)
 		// Relative paths: both sides of a revision diff share the root, and
 		// the entity should read as ".mcp.json", not an absolute temp path.
 		local.Instructions = append(local.Instructions, Instruction{Path: pf.rel, Kind: pf.kind, Scope: "project", Hash: shortHash(data)})
+	}
+	for _, dir := range projectRuleDirs {
+		for _, rel := range src.List(dir) {
+			if data, ok := src.Read(rel); ok {
+				local.Instructions = append(local.Instructions, Instruction{Path: rel, Kind: "instructions", Scope: "project", Hash: shortHash(data)})
+			}
+		}
 	}
 	// Skills: every directory under .claude/skills with a SKILL.md.
 	bySkill := map[string]map[string][]byte{}
