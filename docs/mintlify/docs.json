@@ -47,6 +47,7 @@
           "tools/scan-subcommands",
           "tools/trace",
           "tools/explain",
+          "tools/simulate",
           "tools/change-detection",
           "tools/explore",
           "tools/tighten",

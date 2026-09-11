@@ -67,3 +67,26 @@ The same question against two environments gives opposite answers; the verdict i
 ## Server narrative
 
 `aspex explain <server-name>` (a single word, no spaces) keeps the older behaviour: that server's findings, advisories and risk narrative.
+
+## Follow the data
+
+Two question shapes walk the capability graph as data flow:
+
+```sh
+aspex explain "Where could data from ~/.aws/credentials go?"
+aspex explain "What sensitive data could reach Slack?"
+```
+
+The forward form lists every sink a resource could reach; the reverse form lists the sensitive resources that could reach a destination. Each hop is labelled **REACHABLE** (within a reader's scope), **POTENTIAL** (the capabilities allow it) or **OBSERVED** (that server or tool was invoked in the trace window, which is not the same as the data having moved). Aspex never claims data flowed.
+
+## Explain a finding
+
+```sh
+aspex explain AP003
+```
+
+Prints the stable definition of an attack path (its composition, how severity is decided, the assumptions it makes, what it never claims, and false-positive notes), then how it applies in your environment: the instances, the OBSERVED CONFIGURATION / INFERRED / NOT OBSERVED evidence, and the controls that break it, each simulated. `MCP` and `AT` ids are explained too.
+
+## What breaks this path
+
+Every YES answer ends with concrete, simulated controls: "deny network egress for playwright (removes the path on its own)", "restrict filesystem to ~/projects/acme (lowers severity; another leg remains)". No answer stops at "apply least privilege".

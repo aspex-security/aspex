@@ -171,3 +171,22 @@ The full list with rule IDs is in the [rules reference](/reference/rules).
 | Cline, Roo-Cline | VS Code extension storage |
 
 Detection depth depends on how much each client logs. Claude Code and Claude Desktop log full tool calls with arguments, which enables every rule; some clients log less.
+
+## Reproduction bundles
+
+Package a suspicious investigation so someone else can analyze it offline, safely:
+
+```sh
+aspex trace repro create ./repro --since 24h
+aspex trace repro create ./repro --session claude-code/3f2a1b
+```
+
+A bundle holds the redacted trace events, the environment model, and the findings, kill chains and provenance at export time. Secret-shaped values (tokens, keys, Authorization headers, PEM blocks) are removed with their prefix kept, content bodies are dropped, and credential-file contents never leave; the environment model carries no secret values by construction. Review `events.json` before sharing.
+
+```sh
+aspex trace replay ./repro
+```
+
+Replay re-runs Aspex's analysis over the bundle and reports whether current rules still agree. It is an analysis replay: no recorded tool, command or network call is ever executed. Bundles are read with fixed file names only; symlinks, path traversal and oversized files are refused.
+
+Turn a bundle into a regression test: `aspex-scan corpus import ./repro` writes a scenario skeleton (with your home directory anonymized) for the [corpus](/reference/corpus).

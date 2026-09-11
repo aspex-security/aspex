@@ -1,0 +1,61 @@
+---
+title: "aspex simulate"
+description: "Counterfactual security analysis: what would happen to your attack surface if you changed something. Nothing is modified."
+---
+
+```sh
+aspex simulate --remove-server playwright
+aspex simulate --restrict-filesystem filesystem=~/projects/acme
+aspex simulate --deny-network '*'
+aspex simulate --remove-tool desktop-commander.start_process
+```
+
+`simulate` clones your environment in memory, applies a hypothetical change, recomputes capabilities and attack paths through the same pipeline as a real scan, and compares before with after. Your configuration is never touched; the last line of every run says so.
+
+## What you can change
+
+| Flag | Effect |
+|---|---|
+| `--remove-server NAME` | drop a configured server |
+| `--restrict-filesystem [SERVER=]ROOT[,ROOT]` | replace a filesystem server's allowed roots (omit `SERVER=` for every filesystem server) |
+| `--deny-network [SERVER\|*]` | remove network egress, as an allowlist of nothing would |
+| `--remove-tool SERVER.TOOL` | drop one tool from a live tool list |
+| `--remove-hook EVENT` | remove lifecycle hooks for an event |
+| `--remove-skill NAME` | remove a skill |
+
+Flags are repeatable and combine, so you can evaluate a whole hardening change at once.
+
+## Output
+
+```
+$ aspex simulate --restrict-filesystem filesystem=~/projects/acme
+
+  ◆  Security impact simulation
+     • restrict filesystem to ~/projects/acme
+
+  BEFORE   blast radius HIGH   6 attack path(s)
+  AFTER    blast radius MEDIUM 2 attack path(s)
+
+  REMOVED ATTACK PATHS
+     ✓ Potential sensitive data exfiltration path  CRITICAL · filesystem + playwright
+     ✓ Potential persistent agent compromise path  CRITICAL · filesystem + brave-search
+
+  SEVERITY CHANGED
+     ~ Potential sensitive data exfiltration path (filesystem + github): HIGH → MEDIUM
+
+  Capability changes
+     ~ filesystem  roots /Users/you → /Users/you/projects/acme
+
+  No configuration was modified.
+```
+
+`--json` emits the versioned `aspex-simulate/v1` schema: before/after environments, capability deltas, and attack paths added and removed.
+
+## Where simulation shows up elsewhere
+
+- **`aspex explain "…"`** ends every YES answer with the controls that break the path, each simulated so you see which one removes it on its own.
+- **`aspex tighten`** runs each recommendation through the simulator and shows its security impact next to the functional impact.
+- **`aspex inspect <command|path>`** simulates adding a server you have not installed yet.
+- **`aspex mcp`** exposes `aspex_simulate_change` so your coding agent can check a proposed `.mcp.json` before it writes it.
+
+All four share this one engine, so the numbers agree everywhere.
