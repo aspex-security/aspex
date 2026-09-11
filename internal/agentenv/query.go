@@ -586,6 +586,10 @@ func toolFor(s Server, class string) string {
 		toks = []string{"get_secret", "get_credential", "keychain", "read_secret"}
 	case "browser":
 		toks = []string{"browser_navigate", "navigate", "click", "screenshot"}
+	case "write":
+		toks = []string{"write_file", "edit_file", "create_file", "write", "save_file"}
+	case "memory":
+		toks = []string{"create_entities", "store", "remember", "add_observations", "save_memory", "memory_store"}
 	}
 	for _, tk := range toks {
 		for _, t := range s.Tools {

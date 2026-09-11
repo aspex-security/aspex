@@ -3,6 +3,7 @@ package agentenv
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/aspex-security/aspex/internal/report"
@@ -95,6 +96,18 @@ func PrintDrift(w io.Writer, d Drift, noColor, verbose bool) {
 	if len(d.PathsAdded) > 0 {
 		fmt.Fprintf(w, "  %s  %s\n", c(cRed+cBold, "NEW ATTACK PATH"), c(cDim, fmt.Sprintf("%d", len(d.PathsAdded))))
 		report.PrintAttackPaths(w, noColor, d.PathsAdded)
+		if d.after != nil {
+			fmt.Fprintf(w, "  %s\n", c(cBold, "Suggested mitigation"))
+			seen := map[string]bool{}
+			for _, p := range d.PathsAdded {
+				t := FirstControl(*d.after, p, d.projectRoot)
+				if !seen[t] {
+					seen[t] = true
+					fmt.Fprintf(w, "     %s %s\n", c(cGreen, "→"), report.SanitizeForTerminal(t))
+				}
+			}
+			fmt.Fprintln(w)
+		}
 	}
 	if len(d.PathsRemoved) > 0 {
 		fmt.Fprintf(w, "  %s  %d path(s) no longer exist:\n", c(cGreen+cBold, "ATTACK PATH REMOVED"), len(d.PathsRemoved))
@@ -292,6 +305,8 @@ func Markdown(d Drift, title string) string {
 	} else {
 		fmt.Fprintf(&b, "Blast radius: **%s** (unchanged)\n\n", d.BlastAfter.Level)
 	}
+	// The story first: what this change adds, what it composes with, the path, the fix.
+	b.WriteString(d.story())
 	if len(d.PathsAdded) > 0 {
 		fmt.Fprintf(&b, "### 🔴 New attack path%s\n\n", plural(len(d.PathsAdded)))
 		for _, p := range d.PathsAdded {
@@ -303,7 +318,11 @@ func Markdown(d Drift, title string) string {
 					fmt.Fprintf(&b, "  ↓ %s\n", s)
 				}
 			}
-			fmt.Fprintf(&b, "```\n\n%s\n\n**Fix:** %s\n\n", p.Impact, p.Remediation)
+			fix := p.Remediation
+			if d.after != nil {
+				fix = FirstControl(*d.after, p, d.projectRoot)
+			}
+			fmt.Fprintf(&b, "```\n\n%s\n\n**Recommended fix:** %s\n\n", p.Impact, fix)
 		}
 	}
 	if len(d.PathsRemoved) > 0 {
@@ -410,4 +429,56 @@ func wrap(s string, width int) []string {
 		lines = append(lines, cur)
 	}
 	return lines
+}
+
+// story writes the one-paragraph narrative for a PR comment: what was added,
+// what it composes with, and the consequence. Empty when no path was added.
+func (d Drift) story() string {
+	if len(d.PathsAdded) == 0 {
+		return ""
+	}
+	var added []string
+	changed := map[string]bool{}
+	for _, ch := range d.Changes {
+		switch ch.Kind {
+		case ServerAdded:
+			added = append(added, "`"+ch.Entity+"` ("+describeCapsShort(ch.After)+")")
+			changed[ch.Entity] = true
+		case ScopeExpanded:
+			added = append(added, "a wider filesystem scope for `"+ch.Entity+"` ("+ch.After+")")
+			changed[ch.Entity] = true
+		case CapabilityAdded:
+			added = append(added, "`"+ch.Entity+"` gains "+describeCaps([]string{ch.After}))
+			changed[ch.Entity] = true
+		case HookAdded:
+			added = append(added, "a "+ch.Entity)
+		}
+	}
+	var b strings.Builder
+	if len(added) > 0 {
+		fmt.Fprintf(&b, "This change adds %s.", strings.Join(added, ", "))
+	} else {
+		b.WriteString("This change alters the environment's capabilities.")
+	}
+	p := d.PathsAdded[0]
+	var existing []string
+	for _, s := range p.Servers {
+		if !changed[s] {
+			existing = append(existing, "`"+s+"`")
+		}
+	}
+	sort.Strings(existing)
+	if len(existing) > 0 {
+		fmt.Fprintf(&b, " Combined with the existing %s, it introduces a new attack path.\n\n", strings.Join(existing, " and "))
+	} else {
+		b.WriteString(" It introduces a new attack path.\n\n")
+	}
+	return b.String()
+}
+
+func describeCapsShort(caps string) string {
+	if caps == "" {
+		return "no classified capabilities"
+	}
+	return describeCaps(strings.Split(caps, ", "))
 }

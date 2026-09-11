@@ -219,6 +219,14 @@ type AttackChain struct {
 type Options struct {
 	// Home overrides the home directory used to classify roots. Tests set it.
 	Home string
+	// Hypotheticals, used by simulation. They never touch the real config.
+	// RootsOverride replaces a server's allowed filesystem roots.
+	RootsOverride map[string][]string
+	// DenyNetwork removes network egress (open egress, browser reach, external
+	// channels, email) from the named servers, as an allowlist of nothing would.
+	DenyNetwork map[string]bool
+	// RemoveTools drops named tools ("server.tool") before classification.
+	RemoveTools map[string]bool
 }
 
 // Analyze detects capabilities and attack chains across all inspected servers.
@@ -234,9 +242,74 @@ func AnalyzeWithOptions(servers []*inspect.Server, opts Options) ([]ServerCapabi
 	}
 	caps := make([]ServerCapabilities, 0, len(servers))
 	for _, srv := range servers {
-		caps = append(caps, detectCapabilities(srv, home))
+		h, emptied := withHypotheticals(srv, opts)
+		caps = append(caps, applyHypotheticals(detectCapabilities(h, home, !emptied), opts))
 	}
 	return caps, detectChains(caps)
+}
+
+// withHypotheticals returns a shallow copy of srv with removed tools dropped
+// and overridden roots substituted into the path arguments. The original is
+// never modified: simulation is side-effect free by construction.
+func withHypotheticals(srv *inspect.Server, opts Options) (*inspect.Server, bool) {
+	if len(opts.RemoveTools) == 0 && len(opts.RootsOverride) == 0 {
+		return srv, false
+	}
+	emptied := false
+	cp := *srv
+	cp.Entry.Args = append([]string(nil), srv.Entry.Args...)
+	if len(opts.RemoveTools) > 0 {
+		cp.Tools = nil
+		for _, t := range srv.Tools {
+			if !opts.RemoveTools[srv.Entry.Name+"."+t.Name] {
+				cp.Tools = append(cp.Tools, t)
+			}
+		}
+		// A live tool list that the simulation emptied is "no tools", not
+		// "unknown tools": static package inference must not resurrect them.
+		emptied = len(srv.Tools) > 0 && len(cp.Tools) == 0
+	}
+	if roots, ok := opts.RootsOverride[srv.Entry.Name]; ok {
+		// Replace every path-shaped argument with the new roots; keep the rest.
+		var args []string
+		replaced := false
+		for _, a := range srv.Entry.Args {
+			if looksLikePathArg(a) {
+				if !replaced {
+					args = append(args, roots...)
+					replaced = true
+				}
+				continue
+			}
+			args = append(args, a)
+		}
+		if !replaced {
+			args = append(args, roots...)
+		}
+		cp.Entry.Args = args
+	}
+	return &cp, emptied
+}
+
+func looksLikePathArg(a string) bool {
+	return strings.HasPrefix(a, "/") || strings.HasPrefix(a, "~") || strings.HasPrefix(a, "./") || (len(a) > 2 && a[1] == ':' && (a[2] == '\\' || a[2] == '/'))
+}
+
+// applyHypotheticals removes network capabilities from servers the
+// simulation denies egress for. Evidence entries record the hypothetical.
+func applyHypotheticals(sc ServerCapabilities, opts Options) ServerCapabilities {
+	if !opts.DenyNetwork[sc.ServerName] && !opts.DenyNetwork["*"] {
+		return sc
+	}
+	for _, c := range []Capability{CapNetworkSend, CapExternalSend, CapEmailSend, CapBrowser} {
+		if sc.Has(c) {
+			sc.Caps &^= c
+			delete(sc.CapTools, c)
+			delete(sc.Evidence, c)
+		}
+	}
+	sc.EgressConstrained = true
+	return sc
 }
 
 // DetectServer returns the capabilities of a single server, including its
@@ -248,7 +321,7 @@ func DetectServer(srv *inspect.Server, opts Options) ServerCapabilities {
 	if home == "" {
 		home, _ = os.UserHomeDir()
 	}
-	return detectCapabilities(srv, home)
+	return detectCapabilities(srv, home, true)
 }
 
 // ---------------------------------------------------------------------------
@@ -278,7 +351,7 @@ var knownPackages = []knownPackage{
 	{match: []string{"server-everything"}, caps: []Capability{}, description: "demo server"},
 }
 
-func detectCapabilities(srv *inspect.Server, home string) ServerCapabilities {
+func detectCapabilities(srv *inspect.Server, home string, inferStatic bool) ServerCapabilities {
 	sc := ServerCapabilities{
 		ServerName: srv.Entry.Name,
 		Client:     srv.Entry.Client,
@@ -296,7 +369,7 @@ func detectCapabilities(srv *inspect.Server, home string) ServerCapabilities {
 		}
 	}
 
-	if len(srv.Tools) == 0 {
+	if len(srv.Tools) == 0 && inferStatic {
 		// Static: infer from the package.
 		for _, kp := range knownPackages {
 			if !matchesAny(cmdline, kp.match) {

@@ -60,6 +60,9 @@ type Change struct {
 
 // Drift is the result of comparing two environments.
 type Drift struct {
+	after       *Environment // the after environment, for remediation text; not serialized
+	projectRoot string       // suggested narrow root for filesystem restrictions
+
 	Changes      []Change                 `json:"changes"`
 	PathsAdded   []attackpath.AttackChain `json:"attack_paths_added"`
 	PathsRemoved []attackpath.AttackChain `json:"attack_paths_removed"`
@@ -125,6 +128,9 @@ func Compare(before, after Environment) Drift {
 	d.Changes = append(d.Changes, compareInstructions(before, after)...)
 	d.Changes = append(d.Changes, compareResources(before, after)...)
 	d.PathsAdded, d.PathsRemoved = comparePaths(before, after)
+	afterCopy := after
+	d.after = &afterCopy
+	d.projectRoot = guessProjectRoot(after)
 
 	sort.SliceStable(d.Changes, func(i, j int) bool {
 		ri, rj := classRank(d.Changes[i].Class), classRank(d.Changes[j].Class)
@@ -792,4 +798,23 @@ func moreSuffix(total, shown int) string {
 		return ""
 	}
 	return fmt.Sprintf(" and %d more", total-shown)
+}
+
+// guessProjectRoot picks a narrow root to suggest: a project-scoped server's
+// first root if any, else "" (ControlsFor uses a placeholder).
+func guessProjectRoot(env Environment) string {
+	for _, s := range env.Servers {
+		if s.Scope == "project" && len(s.Roots) > 0 {
+			return s.Roots[0]
+		}
+	}
+	return ""
+}
+
+// SetProjectRoot overrides the narrow root suggested in remediation text
+// (a repository root for revision diffs, the working directory for verify).
+func (d *Drift) SetProjectRoot(root string) {
+	if root != "" {
+		d.projectRoot = root
+	}
 }

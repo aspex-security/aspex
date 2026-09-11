@@ -29,6 +29,9 @@ type Options struct {
 	// of discovering them (a git revision, a corpus scenario). Implies
 	// SkipLocalState for discovery.
 	Local *LocalState
+	// AttackPath carries hypothetical overrides (simulation only). Home is
+	// filled from Options.Home.
+	AttackPath attackpath.Options
 }
 
 // LocalState is pre-discovered hooks, skills and instruction files.
@@ -49,7 +52,9 @@ func Build(servers []*inspect.Server, opts Options) Environment {
 	}
 	env := Environment{SchemaVersion: SchemaVersion, Static: true}
 
-	caps, chains := attackpath.AnalyzeWithOptions(servers, attackpath.Options{Home: home})
+	apOpts := opts.AttackPath
+	apOpts.Home = home
+	caps, chains := attackpath.AnalyzeWithOptions(servers, apOpts)
 	capByName := map[string]attackpath.ServerCapabilities{}
 	for _, c := range caps {
 		capByName[c.Client+"\x00"+c.ServerName] = c
@@ -70,26 +75,8 @@ func Build(servers []*inspect.Server, opts Options) Environment {
 	if opts.Local != nil {
 		attachLocal(&env, hooks.Analyze(opts.Local.Hooks), opts.Local.Skills, opts.Local.Instructions)
 	} else if !opts.SkipLocalState {
-		for _, f := range hooks.Analyze(hooks.Discover(home, opts.Cwd)) {
-			env.Hooks = append(env.Hooks, Hook{
-				Event: f.Hook.Event, Matcher: f.Hook.Matcher, Command: f.Hook.Command,
-				Source: f.Hook.Source, Scope: f.Hook.Scope, Hash: shortHash([]byte(f.Hook.Command)),
-				Severity: f.Severity, Judgment: f.Title,
-			})
-		}
-		for _, sk := range skills.Discover(home, opts.Cwd) {
-			env.Skills = append(env.Skills, Skill{
-				Name: sk.Name, Path: sk.Path, Scope: sk.Scope, ContentHash: sk.ContentHash,
-				Scripts: sk.Scripts, Destinations: sk.Destinations, Executes: sk.Executes,
-			})
-		}
-		env.Instructions = discoverInstructions(home, opts.Cwd)
-		if len(env.Hooks) > 0 || len(env.Skills) > 0 {
-			agents["claude-code"] = true
-			if !hasAgent(env.Agents, "claude-code") {
-				env.Agents = append(env.Agents, Agent{Name: agentDisplayName("claude-code"), Client: "claude-code"})
-			}
-		}
+		l := discoverLocal(opts)
+		attachLocal(&env, hooks.Analyze(l.Hooks), l.Skills, l.Instructions)
 	}
 
 	env.AttackPaths = chains
@@ -98,6 +85,19 @@ func Build(servers []*inspect.Server, opts Options) Environment {
 	env.BlastRadius = deriveBlastRadius(env)
 	sortEnv(&env)
 	return env
+}
+
+// discoverLocal reads hooks, skills and instruction files from disk.
+func discoverLocal(opts Options) LocalState {
+	home := opts.Home
+	if home == "" {
+		home, _ = os.UserHomeDir()
+	}
+	return LocalState{
+		Hooks:        hooks.Discover(home, opts.Cwd),
+		Skills:       skills.Discover(home, opts.Cwd),
+		Instructions: discoverInstructions(home, opts.Cwd),
+	}
 }
 
 func attachLocal(env *Environment, hf []hooks.Finding, sks []skills.Skill, ins []Instruction) {
