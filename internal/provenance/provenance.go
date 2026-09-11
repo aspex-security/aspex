@@ -145,23 +145,22 @@ func extractSource(ev logparse.Event, kind string) string {
 // confidence assesses how confident we are that the ingestion event caused the
 // suspicious one, based on timing and event distance.
 func confidence(delta time.Duration, eventsApart int, ingestionKind string) (string, string) {
+	// Explanations are INFERRED statements: timing and proximity only. They
+	// never assert that the ingested content contained an instruction or that
+	// the call was caused by it; that is NOT OBSERVED and the renderer says so.
 	switch {
 	case delta < 30*time.Second && eventsApart <= 3:
-		return "high", "Suspicious call occurred within 30 seconds and 3 events of the ingestion — " +
-			"extremely tight temporal coupling consistent with immediate instruction execution."
-
+		return "high", "INFERRED: the call followed the ingestion within 30 seconds and 3 events; timing this tight is consistent with the agent acting on what it just read, but the log does not show what the content said."
 	case delta < 2*time.Minute && eventsApart <= 8:
-		explanation := "Suspicious call occurred within 2 minutes of the ingestion."
+		explanation := "INFERRED: the call followed the ingestion within 2 minutes and 8 events."
 		if ingestionKind == "web_fetch" || ingestionKind == "browser_load" {
-			explanation += " Web content is a primary prompt injection delivery channel."
+			explanation += " Web content is a common carrier of injected instructions."
 		} else if ingestionKind == "file_read" {
-			explanation += " Files containing injected instructions are a common attack vector."
+			explanation += " Files are a common carrier of injected instructions."
 		}
 		return "medium", explanation
-
 	default:
-		return "low", "Suspicious call occurred after an ingestion event, but with more temporal " +
-			"distance. Less conclusive, but worth reviewing the ingested content."
+		return "low", "INFERRED: the call followed an ingestion event, but with enough distance that the relationship is weak. Worth reviewing the ingested content; not evidence on its own."
 	}
 }
 

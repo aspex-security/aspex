@@ -1,0 +1,35 @@
+name: Bug report
+description: Aspex crashed, misparsed something, or behaved unexpectedly.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Aspex version and OS
+      placeholder: "aspex 0.8.1, macOS 15"
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and output
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Steps, a redacted config, or a reproduction bundle (`aspex-trace repro create ./repro`; review events.json before attaching).
+  - type: checkboxes
+    id: security
+    attributes:
+      label: Security
+      options:
+        - label: This is not a security vulnerability in Aspex itself (those go to the email in SECURITY.md, not a public issue).
+          required: true

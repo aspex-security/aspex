@@ -1,0 +1,325 @@
+{
+  "version": "0.8.1",
+  "overall": {
+    "Score": 39,
+    "Band": "HIGH RISK",
+    "Servers": [
+      {
+        "Score": 95,
+        "Band": "HEALTHY",
+        "Findings": null
+      },
+      {
+        "Score": 90,
+        "Band": "HEALTHY",
+        "Findings": [
+          {
+            "RuleID": "MCP200",
+            "Name": "Server can write agent-trusted state",
+            "Severity": 2,
+            "Detail": "Write access reaches agent state (mcp-config, hooks, instructions), e.g. /Users/demo/.mcp.json, /Users/demo/.claude/settings.json, /Users/demo/CLAUDE.md. This repository's own .mcp.json or hooks are writable; a change would load new servers or run hooks the next time the repo is opened.",
+            "Fix": "Scope this server to a directory that holds no MCP config, hooks, instruction, or memory files; keep those under version control so changes are visible.",
+            "Mapping": "OWASP LLM06, MITRE ATLAS AML.T0051, CWE-732",
+            "Evidence": [
+              {
+                "level": "OBSERVED",
+                "text": "writable root reaches /Users/demo/.mcp.json (mcp-config, runs at next session start)"
+              },
+              {
+                "level": "OBSERVED",
+                "text": "writable root reaches /Users/demo/.claude/settings.json (hooks, runs at next session start)"
+              },
+              {
+                "level": "OBSERVED",
+                "text": "writable root reaches /Users/demo/CLAUDE.md (instructions)"
+              },
+              {
+                "level": "OBSERVED",
+                "text": "writable root reaches /Users/demo/.cursorrules (instructions)"
+              },
+              {
+                "level": "INFERRED",
+                "text": "This repository's own .mcp.json or hooks are writable; a change would load new servers or run hooks the next time the repo is opened."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "Score": 95,
+        "Band": "HEALTHY",
+        "Findings": null
+      },
+      {
+        "Score": 95,
+        "Band": "HEALTHY",
+        "Findings": null
+      }
+    ],
+    "Critical": 0,
+    "High": 0,
+    "Medium": 1,
+    "Low": 0,
+    "Info": 0,
+    "CapReason": "critical attack path: Potential persistent agent compromise path"
+  },
+  "servers": [
+    {
+      "name": "sequential-thinking",
+      "client": "claude-code",
+      "score": 95,
+      "band": "HEALTHY",
+      "staticOnly": true,
+      "findings": null
+    },
+    {
+      "name": "filesystem",
+      "client": "claude-code",
+      "score": 90,
+      "band": "HEALTHY",
+      "staticOnly": true,
+      "findings": [
+        {
+          "ruleId": "MCP200",
+          "name": "Server can write agent-trusted state",
+          "severity": "MEDIUM",
+          "detail": "Write access reaches agent state (mcp-config, hooks, instructions), e.g. /Users/demo/.mcp.json, /Users/demo/.claude/settings.json, /Users/demo/CLAUDE.md. This repository's own .mcp.json or hooks are writable; a change would load new servers or run hooks the next time the repo is opened.",
+          "fix": "Scope this server to a directory that holds no MCP config, hooks, instruction, or memory files; keep those under version control so changes are visible.",
+          "mapping": "OWASP LLM06, MITRE ATLAS AML.T0051, CWE-732",
+          "evidence": [
+            {
+              "level": "OBSERVED",
+              "text": "writable root reaches /Users/demo/.mcp.json (mcp-config, runs at next session start)"
+            },
+            {
+              "level": "OBSERVED",
+              "text": "writable root reaches /Users/demo/.claude/settings.json (hooks, runs at next session start)"
+            },
+            {
+              "level": "OBSERVED",
+              "text": "writable root reaches /Users/demo/CLAUDE.md (instructions)"
+            },
+            {
+              "level": "OBSERVED",
+              "text": "writable root reaches /Users/demo/.cursorrules (instructions)"
+            },
+            {
+              "level": "INFERRED",
+              "text": "This repository's own .mcp.json or hooks are writable; a change would load new servers or run hooks the next time the repo is opened."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "browser",
+      "client": "claude-code",
+      "score": 95,
+      "band": "HEALTHY",
+      "staticOnly": true,
+      "findings": null
+    },
+    {
+      "name": "github",
+      "client": "claude-code",
+      "score": 95,
+      "band": "HEALTHY",
+      "staticOnly": true,
+      "findings": null
+    }
+  ],
+  "attackPaths": [
+    {
+      "id": "AP003",
+      "name": "Potential persistent agent compromise path",
+      "severity": "critical",
+      "confidence": "medium",
+      "description": "filesystem can write files the agent trusts in future sessions: /Users/demo/.mcp.json (mcp-config, runs code at next session start); /Users/demo/.claude/settings.json (hooks, runs code at next session start); /Users/demo/CLAUDE.md (instructions); and 3 more.",
+      "mitre_tactic": "Persistence",
+      "mitre_ref": "TA0003",
+      "servers": [
+        "filesystem",
+        "browser"
+      ],
+      "steps": [
+        "browser brings external content into the agent's context",
+        "filesystem (file-write) modifies /Users/demo/.mcp.json (mcp-config, runs code at next session start)",
+        "current session ends",
+        "next session loads the modified state and trusts it"
+      ],
+      "evidence": [
+        {
+          "server": "filesystem",
+          "detail": "official filesystem server (server-filesystem)",
+          "source": "package"
+        },
+        {
+          "server": "filesystem",
+          "detail": "allowed root /Users/demo",
+          "source": "config"
+        },
+        {
+          "server": "filesystem",
+          "detail": "can write /Users/demo/.mcp.json (mcp-config)",
+          "source": "config"
+        },
+        {
+          "server": "filesystem",
+          "detail": "can write /Users/demo/.claude/settings.json (hooks)",
+          "source": "config"
+        },
+        {
+          "server": "filesystem",
+          "detail": "can write /Users/demo/CLAUDE.md (instructions)",
+          "source": "config"
+        },
+        {
+          "server": "filesystem",
+          "detail": "can write /Users/demo/.cursorrules (instructions)",
+          "source": "config"
+        },
+        {
+          "server": "filesystem",
+          "detail": "can write /Users/demo/.cursor/rules (instructions)",
+          "source": "config"
+        },
+        {
+          "server": "filesystem",
+          "detail": "can write /Users/demo/.vscode/mcp.json (mcp-config)",
+          "source": "config"
+        },
+        {
+          "server": "browser",
+          "detail": "browser automation server (playwright)",
+          "source": "package"
+        },
+        {
+          "server": "browser",
+          "detail": "web content entering the browser enters the agent's context",
+          "source": "tool"
+        }
+      ],
+      "impact": "A modification made in one session would shape every later session. Because the writable state includes MCP configuration or hooks, a modification can start arbitrary code at the next session without any further instruction.",
+      "remediation": "Scope filesystem to a directory that holds no agent configuration, instruction files, or hooks; keep a copy of those files under version control so changes are visible."
+    },
+    {
+      "id": "AP001",
+      "name": "Potential sensitive data exfiltration path",
+      "severity": "high",
+      "confidence": "medium",
+      "description": "filesystem can read project files, including any .env or key files in the tree and browser can send data to any network destination. Together they form a path an injected instruction could walk.",
+      "mitre_tactic": "Exfiltration",
+      "mitre_ref": "TA0010",
+      "servers": [
+        "filesystem",
+        "browser"
+      ],
+      "steps": [
+        "instruction from a prompt, document, or tool result",
+        "filesystem (file-read) reads project files, including any .env or key files in the tree",
+        "contents enter the agent's context",
+        "browser (network-send) sends them to any network destination"
+      ],
+      "evidence": [
+        {
+          "server": "filesystem",
+          "detail": "official filesystem server (server-filesystem)",
+          "source": "package"
+        },
+        {
+          "server": "filesystem",
+          "detail": "allowed root /Users/demo",
+          "source": "config"
+        },
+        {
+          "server": "browser",
+          "detail": "browser automation server (playwright)",
+          "source": "package"
+        },
+        {
+          "server": "browser",
+          "detail": "browser session can reach any destination",
+          "source": "tool"
+        }
+      ],
+      "impact": "An instruction the agent processes could combine these two capabilities to expose project files, including any .env or key files in the tree outside this machine. Nothing here proves it has happened; the path exists.",
+      "remediation": "keep secrets out of the directories filesystem can read (use a secret manager rather than .env files); constrain browser to an allowlist of destinations. Either change alone removes the path."
+    },
+    {
+      "id": "AP001",
+      "name": "Potential sensitive data exfiltration path",
+      "severity": "medium",
+      "confidence": "medium",
+      "description": "filesystem can read project files, including any .env or key files in the tree and github can send data to an external service the agent is authenticated to. Together they form a path an injected instruction could walk.",
+      "mitre_tactic": "Exfiltration",
+      "mitre_ref": "TA0010",
+      "servers": [
+        "filesystem",
+        "github"
+      ],
+      "steps": [
+        "instruction from a prompt, document, or tool result",
+        "filesystem (file-read) reads project files, including any .env or key files in the tree",
+        "contents enter the agent's context",
+        "github (external-send) sends them to an external service the agent is authenticated to"
+      ],
+      "evidence": [
+        {
+          "server": "filesystem",
+          "detail": "official filesystem server (server-filesystem)",
+          "source": "package"
+        },
+        {
+          "server": "filesystem",
+          "detail": "allowed root /Users/demo",
+          "source": "config"
+        },
+        {
+          "server": "github",
+          "detail": "GitHub server (server-github)",
+          "source": "package"
+        }
+      ],
+      "impact": "An instruction the agent processes could combine these two capabilities to expose project files, including any .env or key files in the tree outside this machine. Nothing here proves it has happened; the path exists.",
+      "remediation": "keep secrets out of the directories filesystem can read (use a secret manager rather than .env files). Either change alone removes the path."
+    }
+  ],
+  "scoreCapReason": "critical attack path: Potential persistent agent compromise path",
+  "blastRadius": {
+    "level": "HIGH",
+    "why": [
+      {
+        "present": false,
+        "text": "reads credentials or sensitive files"
+      },
+      {
+        "present": true,
+        "text": "arbitrary external network egress"
+      },
+      {
+        "present": false,
+        "text": "sends data to an external service (fixed destination)"
+      },
+      {
+        "present": false,
+        "text": "command execution"
+      },
+      {
+        "present": true,
+        "text": "can rewrite agent config or hooks that run at next start"
+      },
+      {
+        "present": true,
+        "text": "can rewrite agent instructions or memory"
+      },
+      {
+        "present": false,
+        "text": "destructive database capability"
+      },
+      {
+        "present": true,
+        "text": "external content enters the agent's context"
+      }
+    ]
+  }
+}

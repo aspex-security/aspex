@@ -33,7 +33,8 @@ func dataset(t *testing.T) explore.Dataset {
 	}
 	flagged := trace.AnalyzeEvents(events)
 	fs := &inspect.Server{Entry: discover.ServerEntry{Name: "filesystem", Client: "claude-code", Command: "npx", Args: []string{"-y", "@modelcontextprotocol/server-filesystem@0.6.2", "/Users/x"}},
-		Tools: []mcpclient.Tool{{Name: "read_file", Description: "Read.", InputSchema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}}}`)}}}
+		Tools: []mcpclient.Tool{{Name: "read_file", Description: "Read.", InputSchema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}}}`)},
+			{Name: "write_file", Description: "Write.", InputSchema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}}}`)}}}
 	fetch := &inspect.Server{Entry: discover.ServerEntry{Name: "fetch", Client: "claude-code", Command: "uvx", Args: []string{"mcp-server-fetch"}},
 		Tools: []mcpclient.Tool{{Name: "fetch", Description: "Fetch.", InputSchema: json.RawMessage(`{"type":"object","properties":{"url":{"type":"string"}}}`)}}}
 	env := agentenv.Build([]*inspect.Server{fs, fetch}, agentenv.Options{Home: "/Users/x", SkipLocalState: true})
@@ -134,12 +135,12 @@ func TestGraphSerializationIsSmallAndMarksObservedEdges(t *testing.T) {
 	}
 	hasRes := false
 	for _, n := range g.Nodes {
-		if n.Kind == "resource" && strings.Contains(n.Label, ".aws") {
+		if n.Kind == "resource" && strings.Contains(n.Label, "credentials") && strings.Contains(n.Label, "~/.") {
 			hasRes = true
 		}
 	}
 	if !hasRes {
-		t.Error("~/.aws should be a resource node")
+		t.Error("credential directories should collapse into one resource node")
 	}
 	if _, err := json.Marshal(ds); err != nil {
 		t.Fatal(err)
@@ -191,7 +192,7 @@ func TestUIContractWithDataset(t *testing.T) {
 	raw, _ := json.Marshal(dataset(t))
 	var doc map[string]interface{}
 	json.Unmarshal(raw, &doc)
-	for _, field := range []string{"summary", "sessions", "timeline", "provenance", "killchains", "graph", "findings", "blast_radius", "window"} {
+	for _, field := range []string{"summary", "sessions", "timeline", "provenance", "killchains", "graph", "findings", "blast_radius", "window", "data_flows", "attack_paths", "controls"} {
 		if _, ok := doc[field]; !ok {
 			t.Errorf("dataset lacks %q", field)
 		}
@@ -199,12 +200,17 @@ func TestUIContractWithDataset(t *testing.T) {
 			t.Errorf("UI never reads dataset field %q", field)
 		}
 	}
-	for _, view := range []string{"timeline", "provenance", "killchains", "graph", "findings"} {
+	for _, view := range []string{"timeline", "graph", "flow", "findings"} {
 		if !strings.Contains(html, `data-v="`+view+`"`) || !strings.Contains(html, "function "+view+"(") {
 			t.Errorf("view %q needs both a nav button and a renderer", view)
 		}
 	}
 	for _, level := range []string{"OBSERVED", "INFERRED", "POSSIBLE", "NOT"} {
+		// Evidence levels must be distinguishable without color: each has its own
+		// border style and marker glyph, not just a hue.
+		if !strings.Contains(html, ".ev."+level+" .lv::before") {
+			t.Errorf("evidence level %s needs a non-color marker", level)
+		}
 		if !strings.Contains(html, ".ev."+level) {
 			t.Errorf("UI has no style for evidence level %s", level)
 		}
@@ -214,5 +220,62 @@ func TestUIContractWithDataset(t *testing.T) {
 	}
 	if !strings.Contains(html, "esc(") {
 		t.Error("UI must escape dataset strings before rendering")
+	}
+}
+
+func TestDataFlowsBoundariesAndControlsInDataset(t *testing.T) {
+	ds := dataset(t)
+	if len(ds.DataFlows) == 0 {
+		t.Fatal("home-scoped filesystem should yield data-flow views")
+	}
+	if ds.DataFlows[0].Resource != "~/.aws/credentials" || len(ds.DataFlows[0].Sinks) == 0 {
+		t.Errorf("first flow should be ~/.aws with sinks: %+v", ds.DataFlows[0])
+	}
+	var obs bool
+	for _, s := range ds.DataFlows[0].Sinks {
+		if strings.HasPrefix(s.Via, "fetch") && s.Status == "OBSERVED" {
+			obs = true
+		}
+	}
+	if !obs {
+		t.Error("fetch was invoked in the window: its sink hop is OBSERVED")
+	}
+	bounds := map[string]bool{}
+	for _, n := range ds.Graph.Nodes {
+		bounds[n.Boundary] = true
+		if n.Kind == "resource" && strings.Contains(n.Label, "agent config") && !n.Persists {
+			t.Error("agent-state resource must be marked persistent")
+		}
+	}
+	for _, b := range []string{"EXTERNAL CONTENT", "AGENT CONTEXT", "LOCAL MACHINE", "PERSISTENT STATE", "EXTERNAL NETWORK"} {
+		if !bounds[b] {
+			t.Errorf("missing trust boundary %s in graph nodes: %v", b, bounds)
+		}
+	}
+	if len(ds.Controls) == 0 {
+		t.Error("each attack path should carry path-breaking controls")
+	}
+	for k, cs := range ds.Controls {
+		for _, c := range cs {
+			if strings.Contains(strings.ToLower(c), "least privilege") {
+				t.Errorf("%s: control is generic: %s", k, c)
+			}
+		}
+	}
+}
+
+func TestUntrustedTraceContentIsEscapedInUI(t *testing.T) {
+	// The UI must escape every dataset string. The dataset itself carries raw
+	// (untrusted) text; this checks the script never inserts without esc().
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Host = "127.0.0.1:1"
+	explore.Handler(dataset(t)).ServeHTTP(rec, req)
+	html := rec.Body.String()
+	// Every template interpolation of dataset fields must be wrapped in esc() or be a number/known enum.
+	for _, raw := range []string{"${e.detail}", "${e.server}", "${e.tool}", "${f.name}", "${f.detail}", "${p.name}", "${s.reader}", "${s.via}", "${s.destination}", "${n.label}", "${n.meta}", "${k.name}", "${c}"} {
+		if strings.Contains(html, raw) {
+			t.Errorf("unescaped interpolation %s", raw)
+		}
 	}
 }

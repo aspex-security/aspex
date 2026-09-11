@@ -160,6 +160,9 @@ COMPARING OVER TIME
 
 	root.PersistentFlags().BoolP("version", "v", false, "Print version and exit")
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if os.Getenv("NO_COLOR") != "" {
+			gf.noColor = true
+		}
 		if v, _ := cmd.Flags().GetBool("version"); v {
 			fmt.Printf("aspex-scan %s (built %s)\n", version.Version, version.BuildDate)
 			os.Exit(0)

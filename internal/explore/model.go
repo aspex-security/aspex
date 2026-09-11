@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/aspex-security/aspex/internal/agentenv"
+	"github.com/aspex-security/aspex/internal/attackpath"
 	"github.com/aspex-security/aspex/internal/killchain"
 	"github.com/aspex-security/aspex/internal/logparse"
 	"github.com/aspex-security/aspex/internal/provenance"
@@ -25,16 +26,21 @@ import (
 
 // Dataset is everything the UI needs, serialized once.
 type Dataset struct {
-	Generated  time.Time            `json:"generated"`
-	Window     string               `json:"window"`
-	Summary    Summary              `json:"summary"`
-	Sessions   []Session            `json:"sessions"`
-	Timeline   []Entry              `json:"timeline"`
-	Provenance []Chain              `json:"provenance"`
-	KillChains []KillChain          `json:"killchains"`
-	Graph      Graph                `json:"graph"`
-	Findings   []Finding            `json:"findings"`
-	Blast      agentenv.BlastRadius `json:"blast_radius"`
+	Generated  time.Time                `json:"generated"`
+	Window     string                   `json:"window"`
+	Summary    Summary                  `json:"summary"`
+	Sessions   []Session                `json:"sessions"`
+	Timeline   []Entry                  `json:"timeline"`
+	Provenance []Chain                  `json:"provenance"`
+	KillChains []KillChain              `json:"killchains"`
+	Graph      Graph                    `json:"graph"`
+	Findings   []Finding                `json:"findings"`
+	Blast      agentenv.BlastRadius     `json:"blast_radius"`
+	DataFlows  []FlowView               `json:"data_flows"`
+	Paths      []attackpath.AttackChain `json:"attack_paths"`
+	// Controls: for each attack path (keyed id|servers), the concrete changes
+	// that break it, from the shared remediation engine.
+	Controls map[string][]string `json:"controls"`
 }
 
 // Summary is the header numbers.
@@ -105,10 +111,12 @@ type Graph struct {
 }
 
 type GNode struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
-	Kind  string `json:"kind"` // source | agent | server | resource | destination
-	Meta  string `json:"meta,omitempty"`
+	ID       string `json:"id"`
+	Label    string `json:"label"`
+	Kind     string `json:"kind"` // source | agent | server | resource | destination
+	Meta     string `json:"meta,omitempty"`
+	Boundary string `json:"boundary"`           // EXTERNAL CONTENT | AGENT CONTEXT | LOCAL MACHINE | EXTERNAL NETWORK | PERSISTENT STATE | DATABASE
+	Persists bool   `json:"persists,omitempty"` // a write here survives the session
 }
 
 type GEdge struct {
@@ -117,6 +125,16 @@ type GEdge struct {
 	Label    string `json:"label,omitempty"`
 	Severity string `json:"severity,omitempty"` // set when part of an attack path
 	Observed bool   `json:"observed"`           // the edge was exercised in the trace window
+	Persists bool   `json:"persists,omitempty"` // crosses the session boundary
+}
+
+// FlowView is the data-flow tab: for a sensitive resource, the readers and
+// the sinks it could reach, each hop labeled REACHABLE / POTENTIAL / OBSERVED.
+type FlowView struct {
+	Resource string                `json:"resource"`
+	Sources  []agentenv.FlowSource `json:"sources"`
+	Sinks    []agentenv.FlowSink   `json:"sinks"`
+	Summary  string                `json:"summary"`
 }
 
 // Finding is one flagged event with its explanation.
@@ -194,6 +212,9 @@ func Build(in Inputs) Dataset {
 		}
 		if ev.Server != "" {
 			observedEdge["agent->"+ev.Server] = true
+			if ev.Tool != "" {
+				observedEdge["agent->"+ev.Server+"."+ev.Tool] = true
+			}
 		}
 	}
 	for _, s := range sessions {
@@ -221,6 +242,32 @@ func Build(in Inputs) Dataset {
 		ds.KillChains = append(ds.KillChains, kc)
 	}
 	ds.Graph = buildGraph(in.Env, observedEdge)
+	ds.Paths = in.Env.AttackPaths
+	ds.Controls = map[string][]string{}
+	for _, p := range in.Env.AttackPaths {
+		for _, ctl := range agentenv.ControlsFor(in.Env, p, "") {
+			ds.Controls[p.ID+"|"+strings.Join(p.Servers, ",")] = append(ds.Controls[p.ID+"|"+strings.Join(p.Servers, ",")], ctl.Text)
+		}
+	}
+	// Data-flow views for the resources people ask about; hops are OBSERVED
+	// when the server was invoked in the window, never "data moved".
+	obs := agentenv.Observed{}
+	for k := range observedEdge {
+		obs[strings.TrimPrefix(k, "agent->")] = true
+	}
+	for _, res := range []string{"~/.aws/credentials", "~/.ssh", "environment variables", "database", "browser session", "project files"} {
+		fa := agentenv.Forward(in.Env, res, obs)
+		if len(fa.Sources) == 0 {
+			continue
+		}
+		ds.DataFlows = append(ds.DataFlows, FlowView{Resource: res, Sources: fa.Sources, Sinks: fa.Sinks, Summary: fa.Summary})
+	}
+	if ds.DataFlows == nil {
+		ds.DataFlows = []FlowView{}
+	}
+	if ds.Paths == nil {
+		ds.Paths = []attackpath.AttackChain{}
+	}
 	ds.Summary = Summary{Events: len(sorted), Sessions: len(ds.Sessions), Flagged: len(ds.Findings), Servers: len(in.Env.Servers), Chains: len(ds.KillChains), Attribs: len(ds.Provenance)}
 	if ds.Timeline == nil {
 		ds.Timeline = []Entry{}
@@ -350,8 +397,8 @@ func buildGraph(env agentenv.Environment, observed map[string]bool) Graph {
 		}
 		g.Nodes = append(g.Nodes, n)
 	}
-	add(GNode{ID: "src:external", Label: "External content", Kind: "source", Meta: "prompts, documents, web pages, tool results"})
-	add(GNode{ID: "agent", Label: "Agent", Kind: "agent"})
+	add(GNode{ID: "src:external", Label: "External content", Kind: "source", Meta: "prompts, documents, web pages, tool results", Boundary: "EXTERNAL CONTENT"})
+	add(GNode{ID: "agent", Label: "Agent", Kind: "agent", Boundary: "AGENT CONTEXT"})
 	g.Edges = append(g.Edges, GEdge{From: "src:external", To: "agent", Observed: true})
 	pathSev := map[string]string{} // server -> worst path severity
 	for _, p := range env.AttackPaths {
@@ -363,24 +410,45 @@ func buildGraph(env agentenv.Environment, observed map[string]bool) Graph {
 	}
 	for _, s := range env.Servers {
 		id := "srv:" + s.Name
-		add(GNode{ID: id, Label: s.Name, Kind: "server", Meta: strings.Join(s.Capabilities, ", ")})
+		add(GNode{ID: id, Label: s.Name, Kind: "server", Meta: strings.Join(s.Capabilities, ", "), Boundary: "AGENT CONTEXT"})
 		g.Edges = append(g.Edges, GEdge{From: "agent", To: id, Observed: observed["agent->"+s.Name], Severity: pathSev[s.Name]})
 		for _, d := range s.Destinations {
 			did := "dst:" + d
-			add(GNode{ID: did, Label: d, Kind: "destination"})
+			add(GNode{ID: did, Label: d, Kind: "destination", Boundary: "EXTERNAL NETWORK"})
 			g.Edges = append(g.Edges, GEdge{From: id, To: did, Label: "sends", Severity: pathSev[s.Name]})
+		}
+	}
+	// Credential directories collapse into one node: nine boxes for ~/.ssh,
+	// ~/.aws, ~/.gnupg ... say nothing more than one box that lists them.
+	var credPaths []string
+	for _, r := range env.SensitiveResources {
+		if r.Kind == "credentials" {
+			credPaths = append(credPaths, r.Path)
 		}
 	}
 	for _, r := range env.SensitiveResources {
 		rid := "res:" + r.Kind + ":" + r.Path
 		label := r.Path
-		if r.Kind == "agent-state" {
+		boundary := "LOCAL MACHINE"
+		persists := false
+		switch r.Kind {
+		case "agent-state":
 			rid = "res:agent-state"
 			label = "agent config, hooks, instructions"
+			boundary = "PERSISTENT STATE"
+			persists = true
+		case "credentials":
+			rid = "res:credentials"
+			label = "credentials: " + strings.Join(firstN(credPaths, 3), ", ")
+			if len(credPaths) > 3 {
+				label += fmt.Sprintf(" +%d", len(credPaths)-3)
+			}
+		case "database":
+			boundary = "DATABASE"
 		}
-		add(GNode{ID: rid, Label: label, Kind: "resource", Meta: r.Kind})
+		add(GNode{ID: rid, Label: label, Kind: "resource", Meta: r.Kind, Boundary: boundary, Persists: persists})
 		for _, via := range r.Via {
-			g.Edges = append(g.Edges, GEdge{From: "srv:" + via, To: rid, Label: r.Access, Severity: pathSev[via]})
+			g.Edges = append(g.Edges, GEdge{From: "srv:" + via, To: rid, Label: r.Access, Severity: pathSev[via], Persists: persists && strings.Contains(r.Access, "write")})
 		}
 	}
 	// Dedupe edges.
@@ -441,4 +509,11 @@ func humanWindow(d time.Duration) string {
 		return fmt.Sprintf("%dd", int(d.Hours()/24))
 	}
 	return d.String()
+}
+
+func firstN(in []string, n int) []string {
+	if len(in) <= n {
+		return in
+	}
+	return in[:n]
 }

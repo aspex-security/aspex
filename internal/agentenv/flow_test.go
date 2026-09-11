@@ -64,7 +64,7 @@ func TestReverseFlowRanksSensitiveSources(t *testing.T) {
 
 func TestObservedEvidenceMarksHops(t *testing.T) {
 	env := agentenv.Build([]*inspect.Server{fsHome, fetch}, opts)
-	a := agentenv.Forward(env, "~/.aws", agentenv.Observed{"fetch": true})
+	a := agentenv.Forward(env, "~/.aws", agentenv.Observed{"fetch.fetch": true})
 	var seen bool
 	for _, s := range a.Sinks {
 		if strings.HasPrefix(s.Via, "fetch") && s.Status == agentenv.FlowObserved {
@@ -72,7 +72,14 @@ func TestObservedEvidenceMarksHops(t *testing.T) {
 		}
 	}
 	if !seen {
-		t.Error("a sink whose server was invoked in the trace window is OBSERVED (the tool ran), never 'data moved'")
+		t.Error("a sink whose tool was invoked in the trace window is OBSERVED (the tool ran), never 'data moved'")
+	}
+	// The same server, a different tool: not observed for this sink.
+	a = agentenv.Forward(env, "~/.aws", agentenv.Observed{"fetch.other_tool": true})
+	for _, s := range a.Sinks {
+		if strings.HasPrefix(s.Via, "fetch") && s.Status == agentenv.FlowObserved {
+			t.Error("another tool of the same server must not mark this sink observed")
+		}
 	}
 }
 

@@ -1088,7 +1088,8 @@ func runProvenance(since, clientFilter string, noColor, jsonOut bool) error {
 			c(dim, deltaStr),
 			attr.EventsApart,
 		)
-		fmt.Fprintf(os.Stdout, "        %s\n\n", c(dim, attr.Explanation))
+		fmt.Fprintf(os.Stdout, "        %s\n", c(dim, attr.Explanation))
+		fmt.Fprintf(os.Stdout, "        %s\n\n", c(dim, "NOT OBSERVED: the ingested content itself is not in the log; Aspex cannot show it contained an instruction."))
 	}
 
 	fmt.Fprintf(os.Stdout, "  %s %d attribution(s). Run %s to drill into a session.\n\n",

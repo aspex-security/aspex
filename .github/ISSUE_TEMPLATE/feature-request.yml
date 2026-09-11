@@ -1,0 +1,22 @@
+name: Feature request
+description: A question Aspex should be able to answer, a client to support, a capability or attack path to model.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you ask Aspex, or what would you want it to show?
+      description: Phrase it as the developer or researcher question, e.g. "Can external content reach my Kubernetes credentials?"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Your setup
+      description: Which agents, clients and MCP servers. Redact secrets.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [scan, trace, diff / lock / verify, explain / simulate, explore, corpus, CI / PR review, MCP server, other]

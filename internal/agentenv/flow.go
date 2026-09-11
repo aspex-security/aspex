@@ -72,8 +72,17 @@ func sinksOf(env Environment, obs Observed) []FlowSink {
 	var out []FlowSink
 	for _, s := range env.Servers {
 		caps := capSet(s)
+		// OBSERVED means this tool (or, when no tool list exists, this server)
+		// was invoked in the window. A server-level match must not mark a sink
+		// observed when a different tool of the same server was what ran.
 		status := func(tool string) string {
-			if obs[s.Name] || obs[s.Name+"."+tool] {
+			if tool != "" && len(s.Tools) > 0 {
+				if obs[s.Name+"."+tool] {
+					return FlowObserved
+				}
+				return FlowPotential
+			}
+			if obs[s.Name] {
 				return FlowObserved
 			}
 			return FlowPotential
@@ -142,7 +151,13 @@ func sourcesOf(env Environment, obs Observed) []FlowSource {
 	for _, s := range env.Servers {
 		caps := capSet(s)
 		st := func(tool string) string {
-			if obs[s.Name] || obs[s.Name+"."+tool] {
+			if tool != "" && len(s.Tools) > 0 {
+				if obs[s.Name+"."+tool] {
+					return FlowObserved
+				}
+				return FlowReachable
+			}
+			if obs[s.Name] {
 				return FlowObserved
 			}
 			return FlowReachable

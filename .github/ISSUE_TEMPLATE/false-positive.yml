@@ -1,0 +1,38 @@
+name: False positive
+description: Aspex reported something that is not a risk in your setup. These reports are the most valuable ones.
+title: "[false positive] "
+labels: ["false-positive"]
+body:
+  - type: input
+    id: finding
+    attributes:
+      label: Finding or attack path id
+      placeholder: "MCP006, AP001, AT015, HOOK005 ..."
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: What Aspex printed
+      description: Paste the finding block (run with --no-color). Remove anything private; Aspex never prints secret values, but check paths.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why this is not a risk in your environment
+      description: e.g. "the filesystem server is scoped to a sandbox directory", "this tool's description is legitimate", "egress is allowlisted by the server".
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: The relevant configuration (redacted)
+      description: The server entry from your MCP config with secret values replaced. If you can, attach a corpus scenario or a reproduction bundle (`aspex-trace repro create ./repro`, then review events.json).
+      render: json
+  - type: input
+    id: version
+    attributes:
+      label: Aspex version
+      placeholder: "aspex --version"

@@ -2,73 +2,97 @@
 <meta charset="utf-8">
 <title>aspex explore</title>
 <style>
-:root{--bg:#0f1115;--panel:#161a22;--fg:#e6e6e6;--dim:#8b93a7;--line:#262c38;--purple:#a78bfa;--red:#f87171;--yellow:#fbbf24;--green:#34d399;--cyan:#67e8f9}
+:root{--bg:#0f1115;--panel:#161a22;--fg:#e6e6e6;--dim:#8b93a7;--line:#262c38;--red:#ec3013;--salmon:#ff9783;--yellow:#fbbf24;--green:#34d399;--cyan:#67e8f9;--purple:#a78bfa}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
-header{display:flex;gap:18px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
-header h1{font-size:15px;margin:0;color:var(--purple)}header .k{color:var(--dim)}header .k b{color:var(--fg)}
-nav{display:flex;gap:4px;padding:8px 20px;border-bottom:1px solid var(--line)}
-nav button{background:none;border:1px solid var(--line);color:var(--dim);padding:6px 12px;border-radius:6px;cursor:pointer;font:inherit}
-nav button.on{color:var(--fg);border-color:var(--purple)}
-main{display:grid;grid-template-columns:1fr 380px;height:calc(100vh - 96px)}
-#list{overflow:auto;padding:10px 20px}#detail{overflow:auto;border-left:1px solid var(--line);padding:14px 16px;background:var(--panel)}
-.row{display:grid;grid-template-columns:70px 72px 1fr;gap:10px;padding:5px 8px;border-radius:5px;cursor:pointer}
-.row:hover{background:var(--panel)}.row.sel{background:#1e2433}
+header{display:flex;gap:18px;align-items:baseline;padding:12px 18px;border-bottom:2px solid var(--line)}
+header h1{font-size:15px;margin:0;color:var(--red)}header .k{color:var(--dim)}header .k b{color:var(--fg)}
+nav{display:flex;gap:4px;padding:8px 18px;border-bottom:1px solid var(--line)}
+nav button{background:none;border:1px solid var(--line);color:var(--dim);padding:6px 12px;cursor:pointer;font:inherit}
+nav button.on{color:var(--fg);border-color:var(--red)}
+main{display:grid;grid-template-columns:minmax(180px,220px) minmax(0,1fr) minmax(280px,34%);height:calc(100vh - 92px)}
+@media (max-width:900px){main{grid-template-columns:minmax(0,1fr) minmax(260px,45%)}#sessions{display:none}}
+#sessions{overflow:auto;border-right:1px solid var(--line);padding:10px}#list{overflow:auto;padding:10px 16px}#detail{overflow:auto;border-left:1px solid var(--line);padding:14px 16px;background:var(--panel)}
+.sess{padding:7px 8px;cursor:pointer;border-left:2px solid transparent}.sess:hover{background:var(--panel)}.sess.on{border-left-color:var(--red);background:var(--panel)}.sess .id{color:var(--fg)}.sess .m{color:var(--dim);font-size:11px}
+.row{display:grid;grid-template-columns:70px 84px 1fr;gap:10px;padding:5px 8px;cursor:pointer}.row:hover{background:var(--panel)}.row.sel{background:#1e2433}
 .ts{color:var(--dim)}.kind{font-weight:600}.kind.TOOL{color:var(--fg)}.kind.CONTENT{color:var(--cyan)}.kind.NETWORK{color:var(--yellow)}.kind.ERROR{color:var(--red)}.kind.RESOURCE{color:var(--cyan)}
-.sev{display:inline-block;padding:0 6px;border-radius:4px;font-size:11px;margin-left:6px}.sev.critical,.sev.high{background:#3b1d1d;color:var(--red)}.sev.medium{background:#3b2f14;color:var(--yellow)}.sev.low,.sev.info{background:#1b2a33;color:var(--cyan)}
-.what{color:var(--fg)}.what .srv{color:var(--purple)}.what .arg{color:var(--dim);margin-left:8px}
-h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);margin:14px 0 6px}
-.ev{padding:6px 8px;border-left:3px solid var(--line);margin:4px 0;background:#12151c;border-radius:0 5px 5px 0}
-.ev .lv{font-size:10px;font-weight:700;letter-spacing:.06em;margin-right:8px}.ev.OBSERVED{border-color:var(--green)}.ev.OBSERVED .lv{color:var(--green)}
-.ev.INFERRED{border-color:var(--yellow)}.ev.INFERRED .lv{color:var(--yellow)}.ev.POSSIBLE{border-color:var(--dim)}.ev.POSSIBLE .lv{color:var(--dim)}
-.ev.NOT{border-color:var(--red)}.ev.NOT .lv{color:var(--red)}
-.chain{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:10px 0;cursor:pointer}.chain:hover{border-color:var(--purple)}
-.arrow{color:var(--dim);text-align:center}.hop{padding:3px 0}.hop b{color:var(--purple)}
+.sev{display:inline-block;padding:0 6px;font-size:11px;margin-left:6px;border:1px solid}.sev.critical,.sev.high{border-color:var(--red);color:var(--salmon)}.sev.medium{border-color:var(--yellow);color:var(--yellow)}.sev.low,.sev.info{border-color:var(--cyan);color:var(--cyan)}
+.what .srv{color:var(--purple)}.what .arg{color:var(--dim);margin-left:8px}
+h2{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin:14px 0 6px}
+.ev{padding:6px 8px;border-left:3px solid var(--line);margin:4px 0;background:#12151c}.ev .lv{font-size:10px;font-weight:700;letter-spacing:.06em;margin-right:8px}
+.ev.OBSERVED{border-left-style:solid;border-color:var(--green)}.ev.OBSERVED .lv{color:var(--green)}.ev.OBSERVED .lv::before{content:"● "}
+.ev.INFERRED{border-left-style:dashed;border-color:var(--yellow)}.ev.INFERRED .lv{color:var(--yellow)}.ev.INFERRED .lv::before{content:"◐ "}
+.ev.POSSIBLE{border-left-style:dotted;border-color:var(--dim)}.ev.POSSIBLE .lv{color:var(--dim)}.ev.POSSIBLE .lv::before{content:"○ "}
+.ev.NOT{border-left-style:double;border-color:var(--red)}.ev.NOT .lv{color:var(--salmon)}.ev.NOT .lv::before{content:"✗ "}
+.card{border:1px solid var(--line);padding:10px 12px;margin:10px 0;cursor:pointer}.card:hover{border-color:var(--red)}.card.sel{border-color:var(--red)}
+.hop{padding:3px 0}.hop b{color:var(--purple)}.arrow{color:var(--dim);padding-left:16px}
 .empty{color:var(--dim);padding:30px 0;text-align:center}
-svg text{font:12px ui-monospace,Menlo,monospace;fill:var(--fg)}svg .meta{fill:var(--dim);font-size:10px}
-.node rect{fill:#1a1f2b;stroke:var(--line);rx:6}.node.server rect{stroke:var(--purple)}.node.resource rect{stroke:var(--cyan)}.node.destination rect{stroke:var(--yellow)}.node.source rect{stroke:var(--dim);stroke-dasharray:3 3}
-.edge{stroke:var(--line);stroke-width:1.5;fill:none}.edge.observed{stroke:var(--green)}.edge.critical,.edge.high{stroke:var(--red);stroke-width:2.5}.edge.medium{stroke:var(--yellow)}
-.legend{color:var(--dim);font-size:11px;margin:8px 0}.legend i{display:inline-block;width:14px;height:3px;margin:0 6px 0 12px;vertical-align:middle}
-select{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font:inherit;margin-left:auto}
-.why{color:var(--dim);margin-top:8px}.blast{display:inline-block;padding:2px 8px;border-radius:4px;font-weight:700}.blast.HIGH{background:#3b1d1d;color:var(--red)}.blast.MEDIUM{background:#3b2f14;color:var(--yellow)}.blast.LOW{background:#14342a;color:var(--green)}
+.why{color:var(--dim);margin-top:8px}.blast{display:inline-block;padding:2px 8px;font-weight:700;border:1px solid}.blast.HIGH{border-color:var(--red);color:var(--salmon)}.blast.MEDIUM{border-color:var(--yellow);color:var(--yellow)}.blast.LOW{border-color:var(--green);color:var(--green)}
+svg text{font:12px ui-monospace,Menlo,monospace;fill:var(--fg)}svg .meta{fill:var(--dim);font-size:10px}svg .lane{fill:var(--dim);font-size:10px;letter-spacing:.08em}
+.node rect{fill:#1a1f2b;stroke:var(--line)}.node.server rect{stroke:var(--purple)}.node.resource rect{stroke:var(--cyan)}.node.destination rect{stroke:var(--yellow)}.node.source rect{stroke:var(--dim);stroke-dasharray:3 3}.node.persists rect{stroke:var(--salmon);stroke-width:2}
+.node.sel rect{stroke:var(--fg);stroke-width:2}
+.edge{stroke:var(--line);stroke-width:1.5;fill:none}.edge.observed{stroke:var(--green);stroke-width:2}.edge.critical,.edge.high{stroke:var(--red);stroke-width:2.5}.edge.medium{stroke:var(--yellow)}.edge.persists{stroke-dasharray:6 4}
+.laneline{stroke:var(--line);stroke-dasharray:2 4}.boundary{stroke:var(--salmon);stroke-dasharray:8 6;stroke-width:1.5}
+.legend{color:var(--dim);font-size:11px;margin:8px 0}.legend i{display:inline-block;width:18px;height:0;border-top:3px solid var(--line);margin:0 6px 0 12px;vertical-align:middle}.legend i.obs{border-color:var(--green)}.legend i.crit{border-color:var(--red)}.legend i.pers{border-color:var(--salmon);border-top-style:dashed}
+.flow{border:1px solid var(--line);padding:10px 12px;margin:10px 0}.flow .res{color:var(--fg);font-weight:700}.st{font-size:10px;letter-spacing:.06em;margin-left:8px}.st.OBSERVED{color:var(--green)}.st.POTENTIAL{color:var(--dim)}.st.REACHABLE{color:var(--cyan)}
+.ctl{color:var(--green)}
 </style>
-<header><h1>◆ aspex explore</h1><span class="k" id="hdr"></span></header>
-<nav><button data-v="timeline" class="on">Timeline</button><button data-v="provenance">Provenance</button><button data-v="killchains">Kill chains</button><button data-v="graph">Capability graph</button><button data-v="findings">Findings</button><select id="session"><option value="">all sessions</option></select></nav>
-<main><section id="list"></section><aside id="detail"><div class="empty">Select an item.<br><br>OBSERVED = it is in the log.<br>INFERRED = a relation drawn from order and timing.<br>POSSIBLE = what the capabilities would allow.<br>NOT OBSERVED = what Aspex cannot show.</div></aside></main>
+<header><h1>■ aspex explore</h1><span class="k" id="hdr"></span></header>
+<nav><button data-v="timeline" class="on">Timeline</button><button data-v="graph">Attack graph</button><button data-v="flow">Data flow</button><button data-v="findings">Findings</button></nav>
+<main>
+<aside id="sessions"></aside>
+<section id="list"></section>
+<aside id="detail"><div class="empty">Select an item.<br><br><span class="ev OBSERVED" style="display:inline-block;padding:2px 6px"><span class="lv">OBSERVED</span>it is in the log</span><br><span class="ev INFERRED" style="display:inline-block;padding:2px 6px"><span class="lv">INFERRED</span>a relation from order and timing</span><br><span class="ev POSSIBLE" style="display:inline-block;padding:2px 6px"><span class="lv">POSSIBLE</span>what the capabilities would allow</span><br><span class="ev NOT" style="display:inline-block;padding:2px 6px"><span class="lv">NOT OBSERVED</span>what Aspex cannot show</span></div></aside>
+</main>
 <script>
+// All strings from the dataset pass through esc(); trace content is untrusted.
 let D=null,view='timeline',session='';
-const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const t=ts=>new Date(ts).toLocaleTimeString([], {hour12:false});
-const ev=e=>`<div class="ev ${e.level.split(' ')[0]}"><span class="lv">${esc(e.level)}</span>${esc(e.text)}</div>`;
+const lvClass=l=>l.startsWith('NOT')?'NOT':l.split(' ')[0];
+const ev=e=>`<div class="ev ${lvClass(e.level)}"><span class="lv">${esc(e.level)}</span>${esc(e.text)}</div>`;
 fetch('/api/dataset').then(r=>r.json()).then(d=>{D=d;
- $('#hdr').innerHTML=`last <b>${esc(d.window)}</b> · <b>${d.summary.events}</b> events · <b>${d.summary.sessions}</b> sessions · <b>${d.summary.flagged}</b> findings · <b>${d.summary.killchains}</b> kill chains · blast radius <span class="blast ${esc(d.blast_radius.level)}">${esc(d.blast_radius.level)}</span>`;
- for(const s of d.sessions){const o=document.createElement('option');o.value=s.id;o.textContent=`${s.id} · ${s.events} ev · ${s.flagged} flagged`;$('#session').appendChild(o);}
- render();});
+ $('#hdr').innerHTML=`last <b>${esc(d.window)}</b> · <b>${d.summary.events}</b> events · <b>${d.summary.sessions}</b> sessions · <b>${d.summary.flagged}</b> findings · <b>${d.attack_paths.length}</b> attack paths · blast radius <span class="blast ${esc(d.blast_radius.level)}">${esc(d.blast_radius.level)}</span>`;
+ renderSessions(); render();});
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{view=b.dataset.v;document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));render();});
-$('#session').onchange=e=>{session=e.target.value;render();};
-function render(){const L=$('#list');L.innerHTML='';({timeline,provenance,killchains,graph,findings})[view]();}
+function renderSessions(){const S=$('#sessions');S.innerHTML=`<h2>Sessions</h2><div class="sess ${session===''?'on':''}" data-id=""><span class="id">all sessions</span><div class="m">${D.summary.events} events</div></div>`+D.sessions.map(s=>`<div class="sess ${session===s.id?'on':''}" data-id="${esc(s.id)}"><span class="id">${esc(s.id)}</span><div class="m">${new Date(s.start).toLocaleDateString()} · ${s.events} ev · ${s.flagged} flagged · ${s.servers.map(esc).join(', ')}</div></div>`).join('');
+ S.querySelectorAll('.sess').forEach(el=>el.onclick=()=>{session=el.dataset.id;renderSessions();render();});}
+function render(){$('#list').innerHTML='';({timeline,graph,flow,findings})[view]();}
 function timeline(){const rows=D.timeline.filter(e=>!session||e.session===session);if(!rows.length)return $('#list').innerHTML='<div class="empty">No events in this window.</div>';
- $('#list').innerHTML=rows.map(e=>`<div class="row" data-id="${e.id}"><span class="ts">${t(e.ts)}</span><span class="kind ${e.kind}">${e.kind}</span><span class="what"><span class="srv">${esc(e.server)}</span>.${esc(e.tool)}${e.severity?`<span class="sev ${e.severity}">${esc(e.severity)}</span>`:''}<span class="arg">${esc(e.detail)}</span></span></div>`).join('');
+ $('#list').innerHTML=rows.map(e=>`<div class="row" data-id="${e.id}"><span class="ts">${t(e.ts)}</span><span class="kind ${esc(e.kind)}">${esc(e.kind)}</span><span class="what"><span class="srv">${esc(e.server)}</span>.${esc(e.tool)}${e.severity?`<span class="sev ${esc(e.severity)}">${esc(e.severity)}</span>`:''}<span class="arg">${esc(e.detail)}</span></span></div>`).join('');
  document.querySelectorAll('.row').forEach(r=>r.onclick=()=>{document.querySelectorAll('.row').forEach(x=>x.classList.remove('sel'));r.classList.add('sel');showEntry(+r.dataset.id);});}
 function showEntry(id){const e=D.timeline[id];const fs=D.findings.filter(f=>f.entry_id===id);
- let h=`<h2>Event</h2><div><span class="srv" style="color:var(--purple)">${esc(e.server)}</span>.${esc(e.tool)}<br><span class="ts">${new Date(e.ts).toLocaleString()}</span><br>${esc(e.detail)}</div>`;
+ let h=`<h2>Event</h2><div><span style="color:var(--purple)">${esc(e.server)}</span>.${esc(e.tool)}<br><span class="ts">${new Date(e.ts).toLocaleString()}</span> · session ${esc(e.session)}<br>${esc(e.detail)}</div>`;
  if(!fs.length)h+=`<h2>Findings</h2><div class="why">No rule fired on this event.</div>`;
- for(const f of fs){h+=`<h2>${esc(f.rule_id)} · ${esc(f.name)} <span class="sev ${f.severity}">${esc(f.severity)}</span></h2><div class="why">Why does Aspex believe this?</div>${f.evidence.map(ev).join('')}<h2>Remediation</h2><div>${esc(f.fix)}</div><div class="why">${esc(f.mapping)}</div>`;}
- const prov=D.provenance.filter(p=>p.target.id===id||p.source.id===id);if(prov.length){h+=`<h2>Provenance</h2>`+prov.map(p=>`<div class="why">${esc(p.source.server)}.${esc(p.source.tool)} → ${esc(p.target.server)}.${esc(p.target.tool)} (${esc(p.delta)}, ${esc(p.confidence)})</div>`).join('');}
+ for(const f of fs){h+=`<h2>${esc(f.rule_id)} · ${esc(f.name)} <span class="sev ${esc(f.severity)}">${esc(f.severity)}</span></h2><div class="why">Why does Aspex believe this?</div>${f.evidence.map(ev).join('')}<h2>Remediation</h2><div>${esc(f.fix)}</div><div class="why">${esc(f.mapping)}</div>`;}
+ const prov=D.provenance.filter(p=>p.target.id===id||p.source.id===id);if(prov.length){h+=`<h2>Provenance</h2>`+prov.map(p=>`<div class="hop"><b>${esc(p.source.server)}.${esc(p.source.tool)}</b> → <b>${esc(p.target.server)}.${esc(p.target.tool)}</b> <span class="why">${esc(p.delta)} · ${esc(p.confidence)} confidence</span></div>${p.evidence.map(ev).join('')}`).join('');}
  $('#detail').innerHTML=h;}
-function provenance(){const rows=D.provenance.filter(p=>!session||p.target.session===session);if(!rows.length)return $('#list').innerHTML='<div class="empty">No provenance links: no HIGH or CRITICAL call followed an ingestion event closely enough.</div>';
- $('#list').innerHTML=rows.map((p,i)=>`<div class="chain" data-i="${i}"><div class="hop"><b>${esc(p.source.server)}.${esc(p.source.tool)}</b> <span class="ts">${t(p.source.ts)}</span> <span class="arg" style="color:var(--dim)">${esc(p.source.detail)}</span></div><div class="arrow">↓ ${esc(p.delta)} · ${p.events_apart} event(s) apart · <span class="sev ${p.confidence==='high'?'high':p.confidence}">${esc(p.confidence)} confidence</span></div><div class="hop"><b>${esc(p.target.server)}.${esc(p.target.tool)}</b> <span class="ts">${t(p.target.ts)}</span> <span class="arg" style="color:var(--dim)">${esc(p.target.detail)}</span></div></div>`).join('');
- document.querySelectorAll('.chain').forEach(c=>c.onclick=()=>{const p=rows[+c.dataset.i];$('#detail').innerHTML=`<h2>Provenance chain</h2><div class="hop">External content<br>↓<br><b>${esc(p.source.server)}.${esc(p.source.tool)}</b><br>↓<br>Agent<br>↓<br><b>${esc(p.target.server)}.${esc(p.target.tool)}</b></div><h2>Evidence</h2>${p.evidence.map(ev).join('')}`;});}
-function killchains(){const rows=D.killchains;if(!rows.length)return $('#list').innerHTML='<div class="empty">No multi-step attack patterns reconstructed in this window.</div>';
- $('#list').innerHTML=rows.map((k,i)=>`<div class="chain" data-i="${i}"><span class="sev ${k.severity}">${esc(k.severity)}</span> <b>${esc(k.name)}</b> <span class="ts">${t(k.start)}</span><div class="why">${esc(k.tactic)}</div>${k.steps.map(s=>`<div class="hop">${esc(s)}</div>`).join('')}</div>`).join('');
- document.querySelectorAll('.chain').forEach(c=>c.onclick=()=>{const k=rows[+c.dataset.i];$('#detail').innerHTML=`<h2>${esc(k.name)}</h2>${k.evidence.map(ev).join('')}`;});}
-function findings(){const rows=D.findings.filter(f=>!session||D.timeline[f.entry_id].session===session);if(!rows.length)return $('#list').innerHTML='<div class="empty">No findings.</div>';
- const order={critical:0,high:1,medium:2,low:3,info:4};rows.sort((a,b)=>order[a.severity]-order[b.severity]);
- $('#list').innerHTML=rows.map(f=>`<div class="row" data-id="${f.entry_id}"><span class="ts">${t(f.ts)}</span><span class="sev ${f.severity}" style="margin:0">${esc(f.severity)}</span><span class="what">${esc(f.rule_id)} ${esc(f.name)}<span class="arg">${esc(f.server)}.${esc(f.tool)}</span></span></div>`).join('');
- document.querySelectorAll('.row').forEach(r=>r.onclick=()=>showEntry(+r.dataset.id));}
-function graph(){const g=D.graph;const cols={source:0,agent:1,server:2,resource:3,destination:3};const byCol=[[],[],[],[]];for(const n of g.nodes)byCol[cols[n.kind]].push(n);
- const W=920,colX=[40,250,460,690],rowH=44,H=Math.max(...byCol.map(c=>c.length))*rowH+60;const pos={};byCol.forEach((c,ci)=>c.forEach((n,i)=>{pos[n.id]={x:colX[ci],y:40+i*rowH}}));
- const node=n=>`<g class="node ${n.kind}"><rect x="${pos[n.id].x}" y="${pos[n.id].y}" width="190" height="34"/><text x="${pos[n.id].x+8}" y="${pos[n.id].y+15}">${esc(n.label.length>24?n.label.slice(0,23)+'…':n.label)}</text><text class="meta" x="${pos[n.id].x+8}" y="${pos[n.id].y+28}">${esc((n.meta||'').slice(0,34))}</text></g>`;
- const edge=e=>{const a=pos[e.from],b=pos[e.to];if(!a||!b)return'';const x1=a.x+190,y1=a.y+17,x2=b.x,y2=b.y+17;return`<path class="edge ${e.severity||''} ${e.observed?'observed':''}" d="M${x1},${y1} C${x1+40},${y1} ${x2-40},${y2} ${x2},${y2}"/>`};
- $('#list').innerHTML=`<div class="legend">edges: <i style="background:var(--line)"></i>capability <i style="background:var(--green)"></i>exercised in this window <i style="background:var(--red)"></i>on a critical/high attack path <i style="background:var(--yellow)"></i>medium</div><svg width="${W}" height="${H}">${g.edges.map(edge).join('')}${g.nodes.map(node).join('')}</svg>`;
- $('#detail').innerHTML=`<h2>Blast radius <span class="blast ${esc(D.blast_radius.level)}">${esc(D.blast_radius.level)}</span></h2>${D.blast_radius.why.map(r=>`<div class="why">${r.present?'✓':'✗'} ${esc(r.text)}</div>`).join('')}<div class="why" style="margin-top:14px">The graph shows what is configured. Green edges are the subset your agents actually used in this window. A red edge is part of a composition an instruction could walk; it does not mean it was walked.</div>`;}
+function findings(){const rows=D.findings.filter(f=>!session||D.timeline[f.entry_id].session===session);
+ let h='';if(D.attack_paths.length){h+=`<h2>Attack paths (from configuration)</h2>`+D.attack_paths.map((p,i)=>`<div class="card path" data-i="${i}"><span class="sev ${esc(p.severity)}">${esc(p.severity)}</span> <b>${esc(p.id)}</b> ${esc(p.name)} <span class="why">${p.servers.map(esc).join(' + ')} · confidence ${esc(p.confidence)}</span></div>`).join('');}
+ if(D.killchains.length){h+=`<h2>Kill chains (from the trace)</h2>`+D.killchains.map((k,i)=>`<div class="card kc" data-i="${i}"><span class="sev ${esc(k.severity)}">${esc(k.severity)}</span> <b>${esc(k.name)}</b> <span class="ts">${t(k.start)}</span></div>`).join('');}
+ if(rows.length){const order={critical:0,high:1,medium:2,low:3,info:4};rows.sort((a,b)=>order[a.severity]-order[b.severity]);h+=`<h2>Flagged events</h2>`+rows.map(f=>`<div class="row" data-id="${f.entry_id}"><span class="ts">${t(f.ts)}</span><span class="sev ${esc(f.severity)}" style="margin:0">${esc(f.severity)}</span><span class="what">${esc(f.rule_id)} ${esc(f.name)}<span class="arg">${esc(f.server)}.${esc(f.tool)}</span></span></div>`).join('');}
+ $('#list').innerHTML=h||'<div class="empty">No findings, paths or chains.</div>';
+ document.querySelectorAll('.row').forEach(r=>r.onclick=()=>showEntry(+r.dataset.id));
+ document.querySelectorAll('.card.path').forEach(c=>c.onclick=()=>showPath(D.attack_paths[+c.dataset.i]));
+ document.querySelectorAll('.card.kc').forEach(c=>c.onclick=()=>{const k=D.killchains[+c.dataset.i];$('#detail').innerHTML=`<h2>${esc(k.name)}</h2><div class="why">${esc(k.tactic)}</div>${k.steps.map(s=>`<div class="hop">${esc(s)}</div>`).join('')}<h2>Why does Aspex believe this?</h2>${k.evidence.map(ev).join('')}`;});}
+function showPath(p){const key=p.id+'|'+p.servers.join(',');const ctl=(D.controls[key]||[]);const persist=p.id==='AP003'||p.id==='AP004';
+ let steps=p.steps.map((s,i)=>{let row=`<div class="hop">${i?'<span class="arrow">↓</span> ':''}${esc(s)}</div>`; if(persist&&/session ends/i.test(s)) row+=`<div class="hop" style="color:var(--salmon);border-top:1px dashed var(--salmon);border-bottom:1px dashed var(--salmon);text-align:center;margin:6px 0">SESSION BOUNDARY: what is written here is trusted by the next session</div>`; return row;}).join('');
+ $('#detail').innerHTML=`<h2>${esc(p.id)} · ${esc(p.name)} <span class="sev ${esc(p.severity)}">${esc(p.severity)}</span></h2><div class="why">confidence ${esc(p.confidence)} · ${esc(p.mitre_tactic)} (${esc(p.mitre_ref)})</div><h2>Path</h2>${steps}<h2>Why does Aspex believe this?</h2>${p.evidence.map(e=>ev({level:'OBSERVED CONFIGURATION',text:(e.tool?e.server+'.'+e.tool:e.server)+': '+e.detail})).join('')}${ev({level:'INFERRED',text:'these capabilities can be composed by the agent; an instruction it processes could chain them'})}${ev({level:'NOT OBSERVED',text:'that this path was ever walked; see the Timeline for what actually happened'})}<h2>Impact</h2><div>${esc(p.impact)}</div><h2>What breaks this path</h2>${ctl.length?ctl.map(c=>`<div class="hop ctl">→ ${esc(c)}</div>`).join(''):`<div>${esc(p.remediation)}</div>`}<div class="why">Evaluate one: aspex simulate …</div>`;}
+function flow(){const fl=D.data_flows;if(!fl.length)return $('#list').innerHTML='<div class="empty">No server reads a sensitive resource in this environment.</div>';
+ $('#list').innerHTML=`<div class="legend">REACHABLE = within a reader's scope · POTENTIAL = the capabilities allow it · OBSERVED = that server or tool was invoked in this window (not that this data moved)</div>`+fl.map((f,i)=>`<div class="flow" data-i="${i}"><div class="res">${esc(f.resource)}</div>${[...new Map(f.sources.map(s=>[s.reader,s])).values()].slice(0,4).map(s=>`<div class="hop">├── <b>${esc(s.reader)}</b><span class="st ${esc(s.status)}">${esc(s.status)}</span></div>`).join('')}<div class="hop arrow">↓ agent context</div>${f.sinks.map((s,j)=>`<div class="hop">${j===f.sinks.length-1?'└──':'├──'} <b>${esc(s.via)}</b> → ${esc(s.destination)}<span class="st ${esc(s.status)}">${esc(s.status)}</span>${s.kind==='persistence'?' <span style="color:var(--salmon)">⟶ survives the session</span>':''}</div>`).join('')}</div>`).join('');
+ $('#detail').innerHTML=`<h2>Follow the data</h2><div class="why">Each block starts at a sensitive resource, passes through the agent context, and lists every sink it could reach. Nothing here says data moved: OBSERVED marks a server or tool that was invoked in this window.</div><h2>Blast radius <span class="blast ${esc(D.blast_radius.level)}">${esc(D.blast_radius.level)}</span></h2>${D.blast_radius.why.map(r=>`<div class="why">${r.present?'✓':'✗'} ${esc(r.text)}</div>`).join('')}`;}
+function graph(){const g=D.graph;const lanes=['EXTERNAL CONTENT','AGENT CONTEXT','LOCAL MACHINE','PERSISTENT STATE','DATABASE','EXTERNAL NETWORK'];
+ const byLane={};for(const n of g.nodes){(byLane[n.boundary]=byLane[n.boundary]||[]).push(n);}
+ // Columns: sources | agent+servers | resources (local, persistent, db) | destinations
+ const col=n=>n.boundary==='EXTERNAL CONTENT'?0:n.boundary==='AGENT CONTEXT'?(n.kind==='agent'?1:2):n.boundary==='EXTERNAL NETWORK'?4:3;
+ const cols=[[],[],[],[],[]];for(const n of g.nodes)cols[col(n)].push(n);
+ const W=1060,colX=[24,220,420,650,880],rowH=44,H=Math.max(...cols.map(c=>c.length),3)*rowH+90;const pos={};cols.forEach((c,ci)=>c.forEach((n,i)=>{pos[n.id]={x:colX[ci],y:56+i*rowH}}));
+ const laneLabel=['EXTERNAL CONTENT','AGENT CONTEXT','','LOCAL MACHINE · PERSISTENT STATE · DATABASE','EXTERNAL NETWORK'];
+ const node=n=>`<g class="node ${esc(n.kind)} ${n.persists?'persists':''}" data-id="${esc(n.id)}"><rect x="${pos[n.id].x}" y="${pos[n.id].y}" width="180" height="34"/><text x="${pos[n.id].x+8}" y="${pos[n.id].y+15}">${esc(n.label.length>23?n.label.slice(0,22)+'…':n.label)}</text><text class="meta" x="${pos[n.id].x+8}" y="${pos[n.id].y+28}">${esc((n.persists?'persists · ':'')+(n.meta||'').slice(0,30))}</text></g>`;
+ const edge=e=>{const a=pos[e.from],b=pos[e.to];if(!a||!b)return'';const x1=a.x+180,y1=a.y+17,x2=b.x,y2=b.y+17;return`<path class="edge ${esc(e.severity||'')} ${e.observed?'observed':''} ${e.persists?'persists':''}" d="M${x1},${y1} C${x1+40},${y1} ${x2-40},${y2} ${x2},${y2}"/>`};
+ const lanesSvg=laneLabel.map((l,i)=>l?`<text class="lane" x="${colX[i]}" y="30">${esc(l)}</text>`:'').join('')+`<line class="laneline" x1="${colX[1]-14}" y1="40" x2="${colX[1]-14}" y2="${H}"/><line class="laneline" x1="${colX[3]-14}" y1="40" x2="${colX[3]-14}" y2="${H}"/><line class="boundary" x1="${colX[4]-14}" y1="40" x2="${colX[4]-14}" y2="${H}"/><text class="lane" x="${colX[4]-10}" y="${H-6}" fill="var(--salmon)">leaves the machine</text>`;
+ $('#list').innerHTML=`<div class="legend">edges: <i></i>capability <i class="obs"></i>exercised in this window <i class="crit"></i>on a critical/high attack path <i class="pers"></i>dashed = a write that survives the session · nodes with a salmon border persist across sessions</div><svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;display:block">${lanesSvg}${g.edges.map(edge).join('')}${g.nodes.map(node).join('')}</svg>`;
+ document.querySelectorAll('.node').forEach(el=>el.onclick=()=>{document.querySelectorAll('.node').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');const n=g.nodes.find(x=>x.id===el.dataset.id);const es=g.edges.filter(e=>e.from===n.id||e.to===n.id);const paths=D.attack_paths.filter(p=>p.servers.includes(n.label));
+  $('#detail').innerHTML=`<h2>${esc(n.kind)} · ${esc(n.label)}</h2><div class="why">boundary: ${esc(n.boundary)}${n.persists?' · a write here survives the session':''}</div>${n.meta?`<div>${esc(n.meta)}</div>`:''}<h2>Edges</h2>${es.map(e=>`<div class="hop">${esc(e.from.replace(/^\\w+:/,''))} → ${esc(e.to.replace(/^\\w+:/,''))} ${e.label?'('+esc(e.label)+')':''} ${e.observed?'<span class="st OBSERVED">OBSERVED</span>':'<span class="st POTENTIAL">POTENTIAL</span>'}${e.severity?` <span class="sev ${esc(e.severity)}">${esc(e.severity)}</span>`:''}</div>`).join('')}${paths.length?`<h2>On attack paths</h2>`+paths.map(p=>`<div class="card path" data-key="${esc(p.id)}|${esc(p.servers.join(','))}"><span class="sev ${esc(p.severity)}">${esc(p.severity)}</span> ${esc(p.id)} ${esc(p.name)}</div>`).join(''):''}`;
+  $('#detail').querySelectorAll('.card.path').forEach(c=>c.onclick=()=>{const [id,srv]=c.dataset.key.split('|');showPath(D.attack_paths.find(p=>p.id===id&&p.servers.join(',')===srv));});});
+ $('#detail').innerHTML=`<h2>Attack graph</h2><div class="why">Left to right: external content → the agent and its servers → what they reach on this machine → what leaves it. The dashed red line is the trust boundary of the machine. Click a node for its edges and the paths it is on.</div><h2>Blast radius <span class="blast ${esc(D.blast_radius.level)}">${esc(D.blast_radius.level)}</span></h2>${D.blast_radius.why.map(r=>`<div class="why">${r.present?'✓':'✗'} ${esc(r.text)}</div>`).join('')}`;}
 </script>

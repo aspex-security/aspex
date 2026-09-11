@@ -1,0 +1,425 @@
+{
+  "$schema": "aspex-lock/v1",
+  "generator": "aspex 0.8.1",
+  "environment": {
+    "schema_version": 1,
+    "agents": [
+      {
+        "name": "Claude Code",
+        "client": "claude-code"
+      }
+    ],
+    "mcp_servers": [
+      {
+        "name": "browser",
+        "client": "claude-code",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@playwright/mcp@0.0.30"
+        ],
+        "config_path": "/Users/steven/Onyx/oss-suite/examples/demo/home/.claude.json",
+        "package": "@playwright/mcp",
+        "pinned": true,
+        "static": true,
+        "identity": "eac7db177299f039",
+        "tools": [],
+        "capabilities": [
+          "network-send",
+          "untrusted-ingress",
+          "browser"
+        ],
+        "egress_open": true,
+        "destinations": [
+          "arbitrary https"
+        ],
+        "fingerprint": "7a8a044f53f8b583"
+      },
+      {
+        "name": "filesystem",
+        "client": "claude-code",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-filesystem@0.6.2",
+          "/Users/demo"
+        ],
+        "config_path": "/Users/steven/Onyx/oss-suite/examples/demo/home/.claude.json",
+        "package": "@modelcontextprotocol/server-filesystem",
+        "pinned": true,
+        "static": true,
+        "identity": "764c575889a2982d",
+        "tools": [],
+        "capabilities": [
+          "file-read",
+          "file-write",
+          "persistence-write"
+        ],
+        "filesystem_roots": [
+          "/Users/demo"
+        ],
+        "filesystem_scope": "project",
+        "egress_open": false,
+        "agent_state_writes": [
+          {
+            "path": "/Users/demo/.claude/settings.json",
+            "kind": "hooks",
+            "executes": true
+          },
+          {
+            "path": "/Users/demo/.cursor/rules",
+            "kind": "instructions",
+            "executes": false
+          },
+          {
+            "path": "/Users/demo/.cursorrules",
+            "kind": "instructions",
+            "executes": false
+          },
+          {
+            "path": "/Users/demo/.mcp.json",
+            "kind": "mcp-config",
+            "executes": true
+          },
+          {
+            "path": "/Users/demo/.vscode/mcp.json",
+            "kind": "mcp-config",
+            "executes": true
+          },
+          {
+            "path": "/Users/demo/CLAUDE.md",
+            "kind": "instructions",
+            "executes": false
+          }
+        ],
+        "fingerprint": "212a7ffd587c633a"
+      },
+      {
+        "name": "github",
+        "client": "claude-code",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-github@2025.4.8"
+        ],
+        "config_path": "/Users/steven/Onyx/oss-suite/examples/demo/home/.claude.json",
+        "package": "@modelcontextprotocol/server-github",
+        "pinned": true,
+        "env_keys": [
+          "GITHUB_TOKEN"
+        ],
+        "static": true,
+        "identity": "989d3606e0e69e00",
+        "tools": [],
+        "capabilities": [
+          "external-send",
+          "untrusted-ingress",
+          "data-read"
+        ],
+        "egress_open": false,
+        "destinations": [
+          "github.com"
+        ],
+        "fingerprint": "f955131fea5289dc"
+      },
+      {
+        "name": "sequential-thinking",
+        "client": "claude-code",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-sequential-thinking@0.6.2"
+        ],
+        "config_path": "/Users/steven/Onyx/oss-suite/examples/demo/home/.claude.json",
+        "package": "@modelcontextprotocol/server-sequential-thinking",
+        "pinned": true,
+        "static": true,
+        "identity": "3f839acbc904a3b7",
+        "tools": [],
+        "capabilities": [],
+        "egress_open": false,
+        "fingerprint": "6692f4dbf0da1fe8"
+      }
+    ],
+    "hooks": [
+      {
+        "event": "PostToolUse",
+        "command": "prettier --write .",
+        "source": "/Users/steven/Onyx/oss-suite/examples/demo/home/.claude/settings.json",
+        "scope": "user",
+        "hash": "f68b51ec231eb214",
+        "severity": "info",
+        "judgment": "Hook runs a command automatically"
+      }
+    ],
+    "skills": [],
+    "instructions": [
+      {
+        "path": "/Users/steven/Onyx/oss-suite/examples/demo/home/.claude.json",
+        "kind": "mcp-config",
+        "scope": "user",
+        "hash": "057b7cdd423ecbba"
+      },
+      {
+        "path": "/Users/steven/Onyx/oss-suite/examples/demo/home/.claude/CLAUDE.md",
+        "kind": "instructions",
+        "scope": "user",
+        "hash": "57236995fbd731b5"
+      },
+      {
+        "path": "/Users/steven/Onyx/oss-suite/examples/demo/home/.claude/settings.json",
+        "kind": "hooks",
+        "scope": "user",
+        "hash": "793d1294dd5d6ba4"
+      }
+    ],
+    "sensitive_resources": [
+      {
+        "path": "/Users/demo/.claude/settings.json",
+        "kind": "agent-state",
+        "via": [
+          "filesystem"
+        ],
+        "access": "write"
+      },
+      {
+        "path": "/Users/demo/.cursor/rules",
+        "kind": "agent-state",
+        "via": [
+          "filesystem"
+        ],
+        "access": "write"
+      },
+      {
+        "path": "/Users/demo/.cursorrules",
+        "kind": "agent-state",
+        "via": [
+          "filesystem"
+        ],
+        "access": "write"
+      },
+      {
+        "path": "/Users/demo/.mcp.json",
+        "kind": "agent-state",
+        "via": [
+          "filesystem"
+        ],
+        "access": "write"
+      },
+      {
+        "path": "/Users/demo/.vscode/mcp.json",
+        "kind": "agent-state",
+        "via": [
+          "filesystem"
+        ],
+        "access": "write"
+      },
+      {
+        "path": "/Users/demo/CLAUDE.md",
+        "kind": "agent-state",
+        "via": [
+          "filesystem"
+        ],
+        "access": "write"
+      }
+    ],
+    "destinations": [
+      "arbitrary https",
+      "github.com"
+    ],
+    "attack_paths": [
+      {
+        "id": "AP003",
+        "name": "Potential persistent agent compromise path",
+        "severity": "critical",
+        "confidence": "medium",
+        "description": "filesystem can write files the agent trusts in future sessions: /Users/demo/.mcp.json (mcp-config, runs code at next session start); /Users/demo/.claude/settings.json (hooks, runs code at next session start); /Users/demo/CLAUDE.md (instructions); and 3 more.",
+        "mitre_tactic": "Persistence",
+        "mitre_ref": "TA0003",
+        "servers": [
+          "filesystem",
+          "browser"
+        ],
+        "steps": [
+          "browser brings external content into the agent's context",
+          "filesystem (file-write) modifies /Users/demo/.mcp.json (mcp-config, runs code at next session start)",
+          "current session ends",
+          "next session loads the modified state and trusts it"
+        ],
+        "evidence": [
+          {
+            "server": "filesystem",
+            "detail": "official filesystem server (server-filesystem)",
+            "source": "package"
+          },
+          {
+            "server": "filesystem",
+            "detail": "allowed root /Users/demo",
+            "source": "config"
+          },
+          {
+            "server": "filesystem",
+            "detail": "can write /Users/demo/.mcp.json (mcp-config)",
+            "source": "config"
+          },
+          {
+            "server": "filesystem",
+            "detail": "can write /Users/demo/.claude/settings.json (hooks)",
+            "source": "config"
+          },
+          {
+            "server": "filesystem",
+            "detail": "can write /Users/demo/CLAUDE.md (instructions)",
+            "source": "config"
+          },
+          {
+            "server": "filesystem",
+            "detail": "can write /Users/demo/.cursorrules (instructions)",
+            "source": "config"
+          },
+          {
+            "server": "filesystem",
+            "detail": "can write /Users/demo/.cursor/rules (instructions)",
+            "source": "config"
+          },
+          {
+            "server": "filesystem",
+            "detail": "can write /Users/demo/.vscode/mcp.json (mcp-config)",
+            "source": "config"
+          },
+          {
+            "server": "browser",
+            "detail": "browser automation server (playwright)",
+            "source": "package"
+          },
+          {
+            "server": "browser",
+            "detail": "web content entering the browser enters the agent's context",
+            "source": "tool"
+          }
+        ],
+        "impact": "A modification made in one session would shape every later session. Because the writable state includes MCP configuration or hooks, a modification can start arbitrary code at the next session without any further instruction.",
+        "remediation": "Scope filesystem to a directory that holds no agent configuration, instruction files, or hooks; keep a copy of those files under version control so changes are visible."
+      },
+      {
+        "id": "AP001",
+        "name": "Potential sensitive data exfiltration path",
+        "severity": "high",
+        "confidence": "medium",
+        "description": "filesystem can read project files, including any .env or key files in the tree and browser can send data to any network destination. Together they form a path an injected instruction could walk.",
+        "mitre_tactic": "Exfiltration",
+        "mitre_ref": "TA0010",
+        "servers": [
+          "filesystem",
+          "browser"
+        ],
+        "steps": [
+          "instruction from a prompt, document, or tool result",
+          "filesystem (file-read) reads project files, including any .env or key files in the tree",
+          "contents enter the agent's context",
+          "browser (network-send) sends them to any network destination"
+        ],
+        "evidence": [
+          {
+            "server": "filesystem",
+            "detail": "official filesystem server (server-filesystem)",
+            "source": "package"
+          },
+          {
+            "server": "filesystem",
+            "detail": "allowed root /Users/demo",
+            "source": "config"
+          },
+          {
+            "server": "browser",
+            "detail": "browser automation server (playwright)",
+            "source": "package"
+          },
+          {
+            "server": "browser",
+            "detail": "browser session can reach any destination",
+            "source": "tool"
+          }
+        ],
+        "impact": "An instruction the agent processes could combine these two capabilities to expose project files, including any .env or key files in the tree outside this machine. Nothing here proves it has happened; the path exists.",
+        "remediation": "keep secrets out of the directories filesystem can read (use a secret manager rather than .env files); constrain browser to an allowlist of destinations. Either change alone removes the path."
+      },
+      {
+        "id": "AP001",
+        "name": "Potential sensitive data exfiltration path",
+        "severity": "medium",
+        "confidence": "medium",
+        "description": "filesystem can read project files, including any .env or key files in the tree and github can send data to an external service the agent is authenticated to. Together they form a path an injected instruction could walk.",
+        "mitre_tactic": "Exfiltration",
+        "mitre_ref": "TA0010",
+        "servers": [
+          "filesystem",
+          "github"
+        ],
+        "steps": [
+          "instruction from a prompt, document, or tool result",
+          "filesystem (file-read) reads project files, including any .env or key files in the tree",
+          "contents enter the agent's context",
+          "github (external-send) sends them to an external service the agent is authenticated to"
+        ],
+        "evidence": [
+          {
+            "server": "filesystem",
+            "detail": "official filesystem server (server-filesystem)",
+            "source": "package"
+          },
+          {
+            "server": "filesystem",
+            "detail": "allowed root /Users/demo",
+            "source": "config"
+          },
+          {
+            "server": "github",
+            "detail": "GitHub server (server-github)",
+            "source": "package"
+          }
+        ],
+        "impact": "An instruction the agent processes could combine these two capabilities to expose project files, including any .env or key files in the tree outside this machine. Nothing here proves it has happened; the path exists.",
+        "remediation": "keep secrets out of the directories filesystem can read (use a secret manager rather than .env files). Either change alone removes the path."
+      }
+    ],
+    "blast_radius": {
+      "level": "HIGH",
+      "why": [
+        {
+          "present": false,
+          "text": "reads credentials or sensitive files"
+        },
+        {
+          "present": true,
+          "text": "arbitrary external network egress"
+        },
+        {
+          "present": false,
+          "text": "sends data to an external service (fixed destination)"
+        },
+        {
+          "present": false,
+          "text": "command execution"
+        },
+        {
+          "present": true,
+          "text": "can rewrite agent config or hooks that run at next start"
+        },
+        {
+          "present": true,
+          "text": "can rewrite agent instructions or memory"
+        },
+        {
+          "present": false,
+          "text": "destructive database capability"
+        },
+        {
+          "present": true,
+          "text": "external content enters the agent's context"
+        }
+      ]
+    },
+    "static": true
+  }
+}
