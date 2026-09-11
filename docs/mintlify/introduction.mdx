@@ -1,69 +1,80 @@
 ---
-title: "Aspex: local security debugger for AI agents"
-description: "See what your AI agents actually did, then scan what they could do. MCP security from the logs your clients already write. No proxy, offline, one binary."
+title: "Know what your agents can do. Know what they actually did."
+sidebarTitle: "Introduction"
+description: "Aspex is a local security debugger for AI agents. It reads the MCP configs and client logs already on your machine and reasons about them together: offline, deterministic, one binary."
 ---
 
-Claude Code, Cursor, Windsurf and friends reach the world through **MCP servers**: programs that give the agent your filesystem, your GitHub, your database, your browser. Most people install them by pasting a config from a README.
-
-Every MCP security tool so far answers one question: *what could this server do?* Aspex answers five, on your machine, deterministically:
-
-| | Command |
-|---|---|
-| What exists? | `aspex scan` |
-| What could happen? | `aspex scan`, `aspex explain "…"` |
-| What actually happened? | `aspex trace`, `aspex explore` |
-| What changed? | `aspex lock`, `aspex verify`, `aspex diff main..HEAD` |
-| How do I reduce risk? | `aspex tighten` |
-
-It started from the question nobody else was answering: **what did my agents actually do?** It grew into a debugger: know what your agents can do, know what they actually did, know what changed, understand what could happen next.
-
-## Start here
-
 ```sh
-brew install aspex-security/tap/aspex && aspex     # macOS (cask) · Node: npx aspex
+brew install aspex-security/tap/aspex && aspex     # or: npx aspex
 ```
 
-`aspex` with no arguments reads your MCP configs and your AI clients' own logs, joins them, and shows one screen: how many tool calls your agents made in the last 30 days, how many went to servers no security scan had ever checked, how many tripped a detection rule, and the score of every configured server. Then a menu. Real output from the maintainer's machine:
-
-```
-  ▸ In the last 30 days your agents made 320 tool calls to 12 MCP servers.
-  ▸ 316 of those calls went to 11 servers no security scan had ever checked.
-  ▸ 2 calls tripped a detection rule. Most common: cross-server data chain (2).
-  ▸ 7 configured servers, overall security score 54/100.
-```
-
-`aspex share` prints the same headlines as a privacy-safe card (counts and score only, no names or paths) you can paste anywhere. See [the front door](/tools/launcher).
-
-## Two tools
-
-<CardGroup cols={2}>
-  <Card title="aspex-trace" icon="timeline" href="/tools/trace">
-    **After.** What did my agents do? Reads native client logs from Claude Code, Claude Desktop, Cursor, Windsurf, Cline and Roo. Reconstructs kill chains, traces injected instructions back to their source. 85+ rules. No proxy, no config change, works on last month's sessions.
+<CardGroup cols={3}>
+  <Card title="What can my agents do?" icon="radar" href="/tools/scan">
+    Every server, tool, hook and skill. Cross-server attack paths with evidence. Yes/no answers computed from the graph.
+    `aspex scan` · `aspex explain`
   </Card>
-  <Card title="aspex-scan" icon="magnifying-glass" href="/tools/scan">
-    **Before.** What can this server do? Static analysis of every configured MCP server. 140+ rules, 0-100 score, cross-server attack paths. Parallel, so a scan takes about as long as the slowest server.
+  <Card title="What did they actually do?" icon="list-timeline" href="/tools/trace">
+    Tool calls from your clients' own logs. Kill chains and provenance labeled OBSERVED, INFERRED, POSSIBLE.
+    `aspex trace` · `aspex explore`
+  </Card>
+  <Card title="What changed?" icon="code-compare" href="/tools/change-detection">
+    New tools, poisoned descriptions, wider scope, new attack paths. Exit 1 in CI on drift you did not accept.
+    `aspex lock` · `verify` · `diff`
   </Card>
 </CardGroup>
 
-Together: which risky servers are actually in use, and which servers your agents use that nothing has ever checked. `aspex-scan --with-trace` puts both in one report.
+## Run this first
 
-## Also included
+`aspex` with no arguments joins your MCP configs with your clients' logs and shows one screen. Real output from the maintainer's machine, nothing sent anywhere:
 
-- **`aspex-scan doctor`**: 2-second offline pre-flight for leaked secrets, over-broad filesystem grants, plaintext HTTP.
-- **`aspex-attack`**: red-team a server you own with adversarial inputs. Advanced, asks for confirmation first.
-- **`.aspex.yaml`** policy and finding baselines, so accepted risks are documented and CI only fails on new findings. See [Policy, baselines and prioritization](/guides/policy).
+```
+$ aspex
+
+  ▸ In the last 30 days your agents made 333 tool calls to 12 MCP servers.
+  ▸ 329 of those calls went to 11 servers no security scan had ever checked.
+  ▸ 1 call tripped a detection rule. Most common: cross-server data chain (1).
+  ▸ 7 configured servers, overall security score 39/100. […]
+
+    desktop-commander     80  HIGH      not used
+    filesystem            80  HIGH      not used
+    github                80  HIGH      not used
+    brave-search          80  HIGH      not used
+    playwright            90  MEDIUM    not used
+    slack                 95  clean     4 calls
+```
+$ aspex
+
+  ▸ In the last 30 days your agents made 320 tool calls to 12 MCP servers.
+  ▸ 316 of those calls went to 11 servers no security scan had ever checked.
+  ▸ 2 calls tripped a detection rule. Most common: cross-server data chain.
+  ▸ 7 configured servers, overall security score 54 / 100.
+
+    github                39   CRITICAL   not used
+    brave-search          39   CRITICAL   not used
+    playwright            90   MEDIUM     not used
+    slack                 95   clean      4 calls
+```
+
+Then a menu opens underneath. [The front door →](/tools/launcher)
+
+## How it reasons
+
+Three ideas are kept apart on purpose. Everything Aspex prints is one of them, and says which.
+
+| | |
+|---|---|
+| **Capability** | What a server *can* do, with evidence: the tool, or the allowed root in your config. [Capabilities & attack paths →](/concepts/capabilities-and-attack-paths) |
+| **Attack path** | A conclusion about a *composition* of capabilities. Severity from what it reaches; confidence from how the capabilities were observed. A single server is never a path. |
+| **Observed behavior** | What the logs show. A path says nothing about whether it was ever walked. [Observed vs inferred →](/concepts/observed-vs-inferred) |
 
 ## What Aspex is not
 
-- **Not a proxy.** It never sits in your agent's request path.
+- **Not a proxy.** Never in your agent's request path.
 - **Not a blocker.** It shows you. You decide.
-- **Not a SaaS.** Nothing to sign up for, no telemetry. The only network call is the download.
-- **Not omniscient.** Connectors added through claude.ai live in the cloud and cannot be scanned statically. Aspex shows you how much of your activity runs through them instead of pretending they do not exist.
+- **Not a SaaS.** No account, no telemetry. The only network call is the download.
+- **Not omniscient.** Cloud connectors it cannot scan are shown as "in use, never scanned".
 
-## Trust
-
-<Note>
-Aspex never phones home. Every command runs fully offline against local files. Apache-2.0, with SHA-256 checksums and an SPDX SBOM on every release. Detection is under contract: a corpus of known-malicious servers that must trigger, and popular real servers that must not, runs in CI on every change.
-</Note>
-
-Findings map to OWASP LLM Top 10 2025, MITRE ATLAS, and 20+ CWEs. [All rules](/reference/rules).
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="arrow-right" href="/quickstart">Install, see what your agents did, scan what they could do. About a minute.</Card>
+  <Card title="How Aspex reasons" icon="book-open" href="/concepts/how-aspex-reasons">For anyone who wants to know why a finding exists and reproduce it.</Card>
+</CardGroup>

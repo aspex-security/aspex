@@ -1,6 +1,6 @@
 ---
 title: "Quickstart"
-description: "Get MCP security scanning running in under a minute."
+description: "Install, see what your agents did, scan what they could do. About a minute."
 ---
 
 <Steps>
@@ -13,117 +13,149 @@ description: "Get MCP security scanning running in under a minute."
 brew install aspex-security/tap/aspex
 ```
 
+```bash npm
+npx aspex              # run without installing
+npm install -g aspex   # or put it on PATH
+```
+
 ```bash curl
 curl -fsSL https://raw.githubusercontent.com/aspex-security/aspex/main/install.sh | sh
 ```
 
-```bash npm
-npx aspex              # run without installing
-npm install -g aspex   # or put all five commands on PATH
-```
-
-```bash GitHub Releases
-# Download the binary for your platform from:
-# https://github.com/aspex-security/aspex/releases
+```bash Binary
+# macOS, Linux, Windows: https://github.com/aspex-security/aspex/releases
 ```
 
 </CodeGroup>
 
-</Step>
-
-<Step title="Your first scan">
-
-Run `aspex-scan` to audit every MCP server configured on your machine.
-
-```bash
-aspex-scan
-```
-
-```
-aspex-scan v0.6.0
-
-Clients   Claude Desktop · Claude Code · Cursor
-Servers   12 discovered
-
-  filesystem   score 41   HIGH    3 critical findings
-  github       score 78   MEDIUM  2 findings
-  postgres     score 55   HIGH    4 findings
-  ...
-
-Overall score  61 / 100   MEDIUM
-Attack paths   2 cross-server kill chains detected
-
-Run aspex-scan --explain for full advisories.
-```
-
-Add `--explain` for a full advisory on every finding (WHY, EXPLOIT, IMPACT, CONFIDENCE), or `--html` to generate a shareable report.
-
-</Step>
-
-<Step title="Check what happened">
-
-`aspex-trace` reads native log files from Claude Desktop, Claude Code, Cursor, Windsurf, Cline, and Roo - no proxy, no config change required.
-
-```bash
-aspex-trace
-```
-
-```
-aspex-trace v0.6.0
-
-Sessions   47 analysed
-Findings   3 kill chains reconstructed
-
-  CRITICAL  Credential Exfiltration     session a3f2 · 14:02
-  HIGH      Prompt Injection Signature  session b91c · 09:45
-  MEDIUM    Recon to Credential Theft   session d007 · yesterday
-
-Run aspex-trace session <id> for session forensics.
-Run aspex-trace killchain for full MITRE-mapped chains.
-```
-
-</Step>
-
-<Step title="Health check">
-
-`aspex-doctor` runs a fast offline health check in ~2 seconds.
-
-```bash
-aspex-doctor
-```
-
-```
-aspex-doctor v0.6.0
-
-Clients      ✓ 3 installed, configs valid
-Environment  ✗ GITHUB_TOKEN exposed in shell env (zshrc)
-Config secrets  ✗ API_KEY hardcoded in claude_desktop_config.json
-Filesystem   ✗ Path grant covers home directory (~/): filesystem server
-Network      ✓ All servers use HTTPS
-
-3 issues found. Run aspex-scan fix env to migrate credentials to Keychain.
-```
+One Go binary. Every release ships SHA-256 checksums.
 
 </Step>
 
 <Step title="See the whole picture">
 
-Run `aspex` with no arguments. It shows what your agents did in the last 30 days, joined with how risky each configured server is, then opens the tool menu.
-
-```bash
-aspex
-```
+Run `aspex` with no arguments. It joins your MCP configs with your clients' own logs.
 
 ```
-  ◆  Your AI agents, last 30 days
+$ aspex
+
+  ▸ In the last 30 days your agents made 333 tool calls to 12 MCP servers.
+  ▸ 329 of those calls went to 11 servers no security scan had ever checked.
+  ▸ 1 call tripped a detection rule. Most common: cross-server data chain (1).
+  ▸ 7 configured servers, overall security score 39/100. […]
+```
+$ aspex
 
   ▸ In the last 30 days your agents made 320 tool calls to 12 MCP servers.
   ▸ 316 of those calls went to 11 servers no security scan had ever checked.
-  ▸ 2 calls tripped a detection rule. Most common: cross-server data chain (2).
+  ▸ 2 calls tripped a detection rule. Most common: cross-server data chain.
   ▸ 7 configured servers, overall security score 54/100.
 ```
 
-That is real output, 1.9 seconds after typing the command. `aspex share` prints the same headlines as a privacy-safe card (no names or paths) you can paste anywhere.
+Then a menu opens underneath. `aspex share` prints the same headlines with no names or paths.
+
+</Step>
+
+<Step title="Scan what your agents could do">
+
+```
+$ aspex scan
+
+  ╭─────────────────────────────────────────────────────────────╮
+  │   18 / 100  ████░░░░░░░░░░░░░░░░░░░░  HIGH RISK (100 = safe)  │
+  │  7 servers · 99 tools · 34 findings · 7s elapsed           │
+  │  5 critical  17 high  12 medium                               │
+  │  ↓ -21 pts since last scan (was 39/100)                     │
+  ╰─────────────────────────────────────────────────────────────╯
+
+  Blast radius HIGH  ✓ reads credentials or sensitive files · ✓ arbitrary external network egress · ✓ command execution · ✓ can rewrite agent config or hooks that run at next start · ✓ can rewrite agent instructions or memory · ✓ external content enters the agent's context
+
+  CRITICAL  AP001  Potential sensitive data exfiltration path  confidence: high
+     filesystem
+       └─ read_file: reads files by path
+       └─ read_text_file: reads files by path
+       └─ read_media_file: reads files by path
+       └─ read_multiple_files: reads files by path
+       └─ allowed root /Users/steven (home directory: includes ~/.ssh, ~/.aws, browser profiles)
+       └─ and 5 more items (see --json)
+     playwright
+       └─ browser_navigate: reaches network destinations (takes a URL parameter)
+       └─ browser_navigate_back: reaches network destinations
+       └─ browser_network_request: reaches network destinations
+       └─ browser_tabs: reaches network destinations (takes a URL parameter)
+       └─ and 1 more item (see --json)
+  […]
+```
+$ aspex scan
+
+  39 / 100  █████████░░░░░░░░░░░░░░░  HIGH RISK
+  7 servers · 8 findings · 2 critical  5 high  1 medium
+
+  Blast radius HIGH  ✓ reads credentials · ✓ arbitrary egress · ✓ command execution
+
+  CRITICAL  AP001  Potential sensitive data exfiltration path  confidence: high
+     filesystem   └─ allowed root /Users/steven (home: ~/.ssh, ~/.aws, browser profiles)
+     playwright   └─ browser_navigate: reaches network destinations
+```
+
+Every finding carries evidence, a hop-by-hop path and a fix. [aspex scan →](/tools/scan)
+
+</Step>
+
+<Step title="Ask it a question">
+
+```
+$ aspex explain "Can this agent exfiltrate SSH keys?"
+
+  YES  plausible path exists
+
+  A potential exfiltration path exists: filesystem reads credentials (~/.ssh, ~/.aws, keychains), playwright can send it to any network destination.
+
+     credentials (~/.ssh, ~/.aws, keychains)
+       ↓
+     filesystem (read, inferred)
+       ↓
+     agent context
+       ↓
+     playwright (network, inferred)
+       ↓
+     any network destination
+
+  Required conditions
+     ✓ external content enters the agent's context
+       via brave-search, github, playwright; also any pasted document or prompt
+     ✓ a server can read credentials (~/.ssh, ~/.aws, keychains)
+       filesystem (read, inferred): reads credential files such as ~/.ssh and ~/.aws (root /Users/steven)
+     ✓ a server can send data off this machine
+       playwright (network, inferred) reaches any network destination
+
+  Not proven
+     ✗ no runtime evidence that credentials (~/.ssh, ~/.aws, keychains) was transmitted; payloads are not in the logs
+     ✗ whether an instruction to do so ever reached the agent
+
+  Confidence: MEDIUM
+```
+$ aspex explain "Can this agent exfiltrate SSH keys?"
+
+  YES  a plausible path exists
+     ✓ external content enters the agent's context      brave-search, playwright
+     ✓ a file read reaches ~/.ssh                        filesystem (root /Users/steven)
+     ✓ network egress to any destination                 playwright.browser_navigate
+  Confidence: HIGH
+```
+
+Computed from the graph, never generated. A YES never claims anything happened. [aspex explain →](/tools/explain)
+
+</Step>
+
+<Step title="Lock it">
+
+```sh
+aspex lock          # write .aspex.lock, commit it
+aspex verify        # exit 1 on drift: NEW TOOL, DESCRIPTION CHANGED, SCOPE EXPANDED, NEW ATTACK PATH
+```
+
+From here: [daily workflow](/guides/daily-workflow), [CI integration](/guides/ci-integration), or [how Aspex reasons](/concepts/how-aspex-reasons).
 
 </Step>
 

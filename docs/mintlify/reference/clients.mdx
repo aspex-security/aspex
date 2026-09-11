@@ -7,7 +7,7 @@ description: "MCP clients supported by Aspex tools"
 
 The table below shows which MCP clients each Aspex tool works with.
 
-| Client | aspex-scan | aspex-trace | aspex-doctor |
+| Client | aspex scan | aspex trace | aspex doctor |
 |--------|:----------:|:-----------:|:------------:|
 | Claude Desktop | ✓ | ✓ | auto-detected |
 | Claude Code | ✓ | ✓ | auto-detected |
@@ -19,9 +19,9 @@ The table below shows which MCP clients each Aspex tool works with.
 | Continue | ✓ | - | auto-detected |
 | Zed | ✓ | - | auto-detected |
 
-**aspex-doctor** detects all installed clients automatically by probing their config file paths - no flags required.
+**aspex doctor** detects all installed clients automatically by probing their config file paths - no flags required.
 
-**aspex-trace** reads the log files each client already writes to disk - no proxy, no interception. Clients marked `-` do not yet write MCP tool calls to a parseable log.
+**aspex trace** reads the log files each client already writes to disk - no proxy, no interception. Clients marked `-` do not yet write MCP tool calls to a parseable log.
 
 ---
 
@@ -37,7 +37,7 @@ The table below shows which MCP clients each Aspex tool works with.
 
 ### Claude Code
 
-Claude Code keeps MCP servers in three places, and aspex-scan reads all of them:
+Claude Code keeps MCP servers in three places, and aspex scan reads all of them:
 
 | Scope | Path | Notes |
 |----|------|------|
@@ -46,7 +46,7 @@ Claude Code keeps MCP servers in three places, and aspex-scan reads all of them:
 | Project | `<repo>/.mcp.json` | Committed to the repo; read from the current directory |
 | Plugin | `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/.mcp.json` | Only plugins listed in `installed_plugins.json` |
 
-Connectors added through **claude.ai** (the remote connector directory) are configured in the cloud and have no local file. aspex-scan cannot see them; `aspex-scan --with-trace` lists them as "in use but not in any scanned config" from aspex-trace logs, and `aspex-scan inspect <url>` can scan one directly.
+Connectors added through **claude.ai** (the remote connector directory) are configured in the cloud and have no local file. aspex scan cannot see them; `aspex scan --with-trace` lists them as "in use but not in any scanned config" from aspex trace logs, and `aspex scan inspect <url>` can scan one directly.
 
 ### Cursor
 
@@ -117,7 +117,7 @@ MCP servers are declared under `"context_servers"` in Zed's `settings.json`.
 
 ## Notes
 
-- `aspex-scan` reads all config files **read-only** and never modifies them.
+- `aspex scan` reads all config files **read-only** and never modifies them.
 - The `env` block values inside config files are never read or reported - only key names are surfaced in findings, so secrets stay local.
 - Paths marked above are for default single-profile installs. Custom `--user-data-dir` or multi-profile setups may differ.
 

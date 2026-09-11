@@ -1,15 +1,15 @@
 ---
-title: "aspex-trace"
+title: "aspex trace"
 description: "What did your agents actually do? A full audit trail from the logs your AI clients already write. No proxy, no config change."
 ---
 
-`aspex-trace` reads the native log files that Claude Code, Claude Desktop, Cursor, Windsurf, Cline, and Roo write to disk, normalizes every MCP tool call into one event stream, and runs 85+ detection rules over it. Nothing sits in the request path, nothing changes in your config, and it works on last month's sessions as well as today's.
+`aspex trace` reads the native log files that Claude Code, Claude Desktop, Cursor, Windsurf, Cline, and Roo write to disk, normalizes every MCP tool call into one event stream, and runs 85+ detection rules over it. Nothing sits in the request path, nothing changes in your config, and it works on last month's sessions as well as today's.
 
 ```sh
-aspex-trace                  # last 24 hours, all clients
-aspex-trace --since 7d       # last week
-aspex-trace killchain        # multi-step attack patterns
-aspex-trace provenance       # where did an injected instruction come from?
+aspex trace                  # last 24 hours, all clients
+aspex trace --since 7d       # last week
+aspex trace killchain        # multi-step attack patterns
+aspex trace provenance       # where did an injected instruction come from?
 ```
 
 ## Flags
@@ -48,8 +48,8 @@ Every command accepts `--since`, `--client`, and `--no-color`; `session`, `killc
 A single suspicious call is a hint. A sequence is evidence. `killchain` correlates events into known attack patterns and reports each chain with its MITRE ATT&CK reference.
 
 ```sh
-aspex-trace killchain --since 7d
-aspex-trace killchain --client cursor --json
+aspex trace killchain --since 7d
+aspex trace killchain --client cursor --json
 ```
 
 | Pattern | What it looks for |
@@ -75,8 +75,8 @@ Each chain reports its evidence in three labels, so a fact is never dressed up a
 When something bad happened, the next question is *what made the agent do that?* `provenance` links each HIGH or CRITICAL finding backward to the ingestion event most likely to have carried the instruction: a file read, a URL fetch, a resource load.
 
 ```sh
-aspex-trace provenance --since 48h
-aspex-trace provenance --json | jq '.attributions[] | select(.confidence=="high")'
+aspex trace provenance --since 48h
+aspex trace provenance --json | jq '.attributions[] | select(.confidence=="high")'
 ```
 
 | Confidence | Criteria |
@@ -95,9 +95,9 @@ CRITICAL  AT001  Sensitive file read
 ## Sessions
 
 ```sh
-aspex-trace session                          # recent sessions
-aspex-trace session filesystem --since 7d    # sessions touching one server
-aspex-trace session <id> --json              # one session, machine-readable
+aspex trace session                          # recent sessions
+aspex trace session filesystem --since 7d    # sessions touching one server
+aspex trace session <id> --json              # one session, machine-readable
 ```
 
 ## Behavioral baseline
@@ -105,19 +105,19 @@ aspex-trace session <id> --json              # one session, machine-readable
 Learn what your agents normally do, then get told only about what changed: new tools called for the first time, new outbound hosts, new file path prefixes, unusual hours, oversized arguments.
 
 ```sh
-aspex-trace baseline --learn --since 7d
-aspex-trace baseline --learn --since 30d --output ~/aspex-baseline.json
-aspex-trace --baseline ~/aspex-baseline.json
+aspex trace baseline --learn --since 7d
+aspex trace baseline --learn --since 30d --output ~/aspex-baseline.json
+aspex trace --baseline ~/aspex-baseline.json
 ```
 
-The default baseline path is `~/.config/aspex/aspex-trace-baseline.json`.
+The default baseline path is `~/.config/aspex/aspex trace-baseline.json`.
 
 ## Live monitoring
 
 ```sh
-aspex-trace live
-aspex-trace live --client claude-code --interval 2
-aspex-trace live --notify https://hooks.slack.com/services/...
+aspex trace live
+aspex trace live --client claude-code --interval 2
+aspex trace live --notify https://hooks.slack.com/services/...
 ```
 
 Polls the log files (default every 5 seconds) and prints new findings. `--notify` posts HIGH and CRITICAL findings to a Slack or generic JSON webhook.
@@ -125,8 +125,8 @@ Polls the log files (default every 5 seconds) and prints new findings. `--notify
 ## Export for your SIEM
 
 ```sh
-aspex-trace export --since 7d --format csv --output events.csv
-aspex-trace export --format jsonl | jq 'select(.severity=="critical")'
+aspex trace export --since 7d --format csv --output events.csv
+aspex trace export --format jsonl | jq 'select(.severity=="critical")'
 ```
 
 `--format` is `jsonl` (default) or `csv`; without `--output` it writes to stdout.
@@ -134,7 +134,7 @@ aspex-trace export --format jsonl | jq 'select(.severity=="critical")'
 ## CI
 
 ```sh
-aspex-trace --since 24h --suppress-noise --fail-on high --sarif > trace.sarif
+aspex trace --since 24h --suppress-noise --fail-on high --sarif > trace.sarif
 ```
 
 Exit code 1 means a finding at or above the threshold. See the [CI guide](/guides/ci-integration).
