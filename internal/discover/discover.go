@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 // Client names.
@@ -24,15 +25,20 @@ const (
 
 // ServerEntry represents one MCP server entry from a client config.
 type ServerEntry struct {
-	Name        string
-	Client      string
-	ConfigPath  string
-	Command     string
-	Args        []string
-	EnvKeys     []string // key names only, never values
-	URL         string   // for HTTP/SSE servers
-	Description string   // from metadata.description, if present
-	Disabled    bool
+	Name       string
+	Client     string
+	ConfigPath string
+	Command    string
+	Args       []string
+	EnvKeys    []string // key names only, never values
+	// PlaintextEnvKeys is the subset of EnvKeys whose value is a literal in the
+	// config file, not a $(...)/${...} reference and not empty. Values are never
+	// stored; only which keys hold a literal. Lets rules tell a plaintext secret
+	// from one resolved at runtime from a keychain or the environment.
+	PlaintextEnvKeys []string
+	URL              string // for HTTP/SSE servers
+	Description      string // from metadata.description, if present
+	Disabled         bool
 	// OAuth is true when the config declares an OAuth flow for a remote server
 	// (Claude Code plugins do this). Such servers authenticate without a token
 	// in env, so "no auth token" rules must not fire on them.
@@ -360,14 +366,15 @@ func parseClaudeDesktop(path string, data []byte) ([]ServerEntry, error) {
 	var entries []ServerEntry
 	for name, s := range cfg.MCPServers {
 		entries = append(entries, ServerEntry{
-			Name:       name,
-			Client:     ClientClaudeDesktop,
-			ConfigPath: path,
-			Command:    s.Command,
-			Args:       s.Args,
-			EnvKeys:    envKeys(s.Env),
-			URL:        s.URL,
-			Disabled:   s.Disabled,
+			Name:             name,
+			Client:           ClientClaudeDesktop,
+			ConfigPath:       path,
+			Command:          s.Command,
+			Args:             s.Args,
+			EnvKeys:          envKeys(s.Env),
+			PlaintextEnvKeys: plaintextEnvKeys(s.Env),
+			URL:              s.URL,
+			Disabled:         s.Disabled,
 		})
 	}
 	return entries, nil
@@ -403,16 +410,17 @@ func parseClaudeCode(path string, data []byte) ([]ServerEntry, error) {
 	var entries []ServerEntry
 	add := func(name string, s claudeCodeServer, scope string) {
 		entries = append(entries, ServerEntry{
-			Name:        name,
-			Client:      ClientClaudeCode,
-			ConfigPath:  path,
-			Command:     s.Command,
-			Args:        s.Args,
-			EnvKeys:     envKeys(s.Env),
-			URL:         s.URL,
-			Description: scope,
-			Disabled:    s.Disabled,
-			OAuth:       len(s.OAuth) > 0 && string(s.OAuth) != "null",
+			Name:             name,
+			Client:           ClientClaudeCode,
+			ConfigPath:       path,
+			Command:          s.Command,
+			Args:             s.Args,
+			EnvKeys:          envKeys(s.Env),
+			PlaintextEnvKeys: plaintextEnvKeys(s.Env),
+			URL:              s.URL,
+			Description:      scope,
+			Disabled:         s.Disabled,
+			OAuth:            len(s.OAuth) > 0 && string(s.OAuth) != "null",
 		})
 	}
 	for name, s := range cfg.MCPServers {
@@ -434,15 +442,16 @@ func parseCursor(path string, data []byte) ([]ServerEntry, error) {
 	var entries []ServerEntry
 	for name, s := range cfg.MCPServers {
 		entries = append(entries, ServerEntry{
-			Name:        name,
-			Client:      ClientCursor,
-			ConfigPath:  path,
-			Command:     s.Command,
-			Args:        s.Args,
-			EnvKeys:     envKeys(s.Env),
-			URL:         s.URL,
-			Description: s.Metadata.Description,
-			Disabled:    s.Disabled,
+			Name:             name,
+			Client:           ClientCursor,
+			ConfigPath:       path,
+			Command:          s.Command,
+			Args:             s.Args,
+			EnvKeys:          envKeys(s.Env),
+			PlaintextEnvKeys: plaintextEnvKeys(s.Env),
+			URL:              s.URL,
+			Description:      s.Metadata.Description,
+			Disabled:         s.Disabled,
 		})
 	}
 	return entries, nil
@@ -456,14 +465,15 @@ func parseVSCode(path string, data []byte) ([]ServerEntry, error) {
 	var entries []ServerEntry
 	for name, s := range cfg.MCPServers {
 		entries = append(entries, ServerEntry{
-			Name:       name,
-			Client:     ClientVSCode,
-			ConfigPath: path,
-			Command:    s.Command,
-			Args:       s.Args,
-			EnvKeys:    envKeys(s.Env),
-			URL:        s.URL,
-			Disabled:   s.Disabled,
+			Name:             name,
+			Client:           ClientVSCode,
+			ConfigPath:       path,
+			Command:          s.Command,
+			Args:             s.Args,
+			EnvKeys:          envKeys(s.Env),
+			PlaintextEnvKeys: plaintextEnvKeys(s.Env),
+			URL:              s.URL,
+			Disabled:         s.Disabled,
 		})
 	}
 	return entries, nil
@@ -477,14 +487,15 @@ func parseWindsurf(path string, data []byte) ([]ServerEntry, error) {
 	var entries []ServerEntry
 	for name, s := range cfg.MCPServers {
 		entries = append(entries, ServerEntry{
-			Name:       name,
-			Client:     ClientWindsurf,
-			ConfigPath: path,
-			Command:    s.Command,
-			Args:       s.Args,
-			EnvKeys:    envKeys(s.Env),
-			URL:        s.URL,
-			Disabled:   s.Disabled,
+			Name:             name,
+			Client:           ClientWindsurf,
+			ConfigPath:       path,
+			Command:          s.Command,
+			Args:             s.Args,
+			EnvKeys:          envKeys(s.Env),
+			PlaintextEnvKeys: plaintextEnvKeys(s.Env),
+			URL:              s.URL,
+			Disabled:         s.Disabled,
 		})
 	}
 	return entries, nil
@@ -498,14 +509,15 @@ func parseCline(path string, data []byte) ([]ServerEntry, error) {
 	var entries []ServerEntry
 	for name, s := range cfg.MCPServers {
 		entries = append(entries, ServerEntry{
-			Name:       name,
-			Client:     ClientCline,
-			ConfigPath: path,
-			Command:    s.Command,
-			Args:       s.Args,
-			EnvKeys:    envKeys(s.Env),
-			URL:        s.URL,
-			Disabled:   s.Disabled,
+			Name:             name,
+			Client:           ClientCline,
+			ConfigPath:       path,
+			Command:          s.Command,
+			Args:             s.Args,
+			EnvKeys:          envKeys(s.Env),
+			PlaintextEnvKeys: plaintextEnvKeys(s.Env),
+			URL:              s.URL,
+			Disabled:         s.Disabled,
 		})
 	}
 	return entries, nil
@@ -520,14 +532,15 @@ func parseRooCline(path string, data []byte) ([]ServerEntry, error) {
 	var entries []ServerEntry
 	for name, s := range cfg.MCPServers {
 		entries = append(entries, ServerEntry{
-			Name:       name,
-			Client:     ClientRooCline,
-			ConfigPath: path,
-			Command:    s.Command,
-			Args:       s.Args,
-			EnvKeys:    envKeys(s.Env),
-			URL:        s.URL,
-			Disabled:   s.Disabled,
+			Name:             name,
+			Client:           ClientRooCline,
+			ConfigPath:       path,
+			Command:          s.Command,
+			Args:             s.Args,
+			EnvKeys:          envKeys(s.Env),
+			PlaintextEnvKeys: plaintextEnvKeys(s.Env),
+			URL:              s.URL,
+			Disabled:         s.Disabled,
 		})
 	}
 	return entries, nil
@@ -546,13 +559,14 @@ func parseContinue(path string, data []byte) ([]ServerEntry, error) {
 			name = s.Command
 		}
 		entries = append(entries, ServerEntry{
-			Name:       name,
-			Client:     ClientContinue,
-			ConfigPath: path,
-			Command:    s.Command,
-			Args:       s.Args,
-			EnvKeys:    envKeys(s.Env),
-			URL:        s.URL,
+			Name:             name,
+			Client:           ClientContinue,
+			ConfigPath:       path,
+			Command:          s.Command,
+			Args:             s.Args,
+			EnvKeys:          envKeys(s.Env),
+			PlaintextEnvKeys: plaintextEnvKeys(s.Env),
+			URL:              s.URL,
 		})
 	}
 	return entries, nil
@@ -567,12 +581,13 @@ func parseZed(path string, data []byte) ([]ServerEntry, error) {
 	var entries []ServerEntry
 	for name, s := range cfg.ContextServers {
 		entries = append(entries, ServerEntry{
-			Name:       name,
-			Client:     ClientZed,
-			ConfigPath: path,
-			Command:    s.Command.Path,
-			Args:       s.Command.Args,
-			EnvKeys:    envKeys(s.Command.Env),
+			Name:             name,
+			Client:           ClientZed,
+			ConfigPath:       path,
+			Command:          s.Command.Path,
+			Args:             s.Command.Args,
+			EnvKeys:          envKeys(s.Command.Env),
+			PlaintextEnvKeys: plaintextEnvKeys(s.Command.Env),
 		})
 	}
 	return entries, nil
@@ -584,4 +599,36 @@ func envKeys(m map[string]string) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// plaintextEnvKeys returns the keys whose value is a literal secret rather than
+// a reference resolved at runtime. The value itself is never returned or stored.
+func plaintextEnvKeys(m map[string]string) []string {
+	var keys []string
+	for k, v := range m {
+		if isRuntimeRef(v) {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// isRuntimeRef reports whether an env value is resolved at runtime (shell
+// substitution, variable expansion, or empty) rather than a literal secret.
+func isRuntimeRef(v string) bool {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return true
+	}
+	if strings.HasPrefix(v, "$(") || strings.HasPrefix(v, "${") || strings.HasPrefix(v, "$") {
+		return true
+	}
+	// op:// (1Password), vault:, keychain: style references.
+	for _, pre := range []string{"op://", "vault:", "keychain:", "aws-vault:", "secret://"} {
+		if strings.HasPrefix(v, pre) {
+			return true
+		}
+	}
+	return false
 }

@@ -69,6 +69,7 @@ func EvalServer(srv *inspect.Server) []Finding {
 	// Server-level rules.
 	f = append(f, checkMCP001StaticDescription(srv)...)
 	f = append(f, checkMCP006SecretsInEnv(srv)...)
+	f = append(f, checkMCP200WritableAgentState(srv)...)
 	f = append(f, checkMCP007UnpinnedSource(srv)...)
 	f = append(f, checkMCP010UnauthRemote(srv)...)
 	f = append(f, checkMCP021PlaintextHTTP(srv)...)
@@ -439,22 +440,67 @@ var secretKeyPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)^(RSA|DSA|ECDSA|ED25519)_PRIVATE`),
 }
 
+// highBlastRadiusSecret matches credentials whose exposure is catastrophic on
+// its own: private keys and long-lived cloud/root secrets. These stay CRITICAL.
+// Ordinary API tokens (GitHub, Slack, OpenAI, ...) are a real exposure at rest
+// but HIGH, not CRITICAL: they are scoped and revocable.
+var highBlastRadiusSecret = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)^(AWS_)?SECRET`),
+	regexp.MustCompile(`(?i)^(AWS_)?ACCESS_KEY`),
+	regexp.MustCompile(`(?i)^AKIA[0-9A-Z]{16}`),
+	regexp.MustCompile(`(?i)^(AZURE|GCP|GOOGLE)_(KEY|SECRET|CREDENTIALS?)`),
+	regexp.MustCompile(`(?i)_PRIVATE_KEY$`),
+	regexp.MustCompile(`(?i)^(RSA|DSA|ECDSA|ED25519)_PRIVATE`),
+	regexp.MustCompile(`(?i)^(DB|DATABASE)_(PASSWORD|PASS|SECRET)`),
+	regexp.MustCompile(`(?i)^ENCRYPTION_(KEY|SECRET)`),
+}
+
+func isHighBlastRadius(key string) bool {
+	for _, p := range highBlastRadiusSecret {
+		if p.MatchString(key) {
+			return true
+		}
+	}
+	return false
+}
+
+// checkMCP006SecretsInEnv flags secrets stored as plaintext literals in a
+// config file. A secret-shaped key whose value is a runtime reference (a
+// keychain lookup, a $VAR, a vault URI) is the recommended state, not a
+// finding: the value never touches disk. This is why the official GitHub or
+// Slack server configured with a keychain reference now scores clean instead
+// of CRITICAL.
 func checkMCP006SecretsInEnv(srv *inspect.Server) []Finding {
+	plaintext := map[string]bool{}
+	for _, k := range srv.Entry.PlaintextEnvKeys {
+		plaintext[k] = true
+	}
 	var findings []Finding
 	seen := map[string]bool{}
 	for _, key := range srv.Entry.EnvKeys {
+		if seen[key] || !plaintext[key] {
+			continue
+		}
 		for _, pat := range secretKeyPatterns {
-			if pat.MatchString(key) && !seen[key] {
-				seen[key] = true
-				findings = append(findings, Finding{
-					RuleID:   "MCP006",
-					Name:     "Secrets in config env",
-					Severity: SeverityCritical,
-					Detail:   "Env key '" + key + "' matches a known secret/credential pattern and is stored in plaintext config.",
-					Fix:      "Move secrets to a vault or OS keychain. Set the env var outside the MCP config file.",
-					Mapping:  "OWASP LLM02, CWE-312, CWE-522",
-				})
+			if !pat.MatchString(key) {
+				continue
 			}
+			seen[key] = true
+			sev := SeverityHigh
+			radius := "This credential is scoped and revocable, but it is exposed at rest in a config file."
+			if isHighBlastRadius(key) {
+				sev = SeverityCritical
+				radius = "This is a high-blast-radius secret (cloud, database, or private key); exposure at rest is critical."
+			}
+			findings = append(findings, Finding{
+				RuleID:   "MCP006",
+				Name:     "Plaintext secret in config env",
+				Severity: sev,
+				Detail:   "Env key '" + key + "' holds a plaintext secret value in the config file. " + radius,
+				Fix:      "Replace the literal with a keychain or vault reference. On macOS: aspex-scan fix env migrates these automatically.",
+				Mapping:  "OWASP LLM02, CWE-312, CWE-522",
+			})
+			break
 		}
 	}
 	return findings

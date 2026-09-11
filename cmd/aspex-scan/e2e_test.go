@@ -82,8 +82,15 @@ func TestE2E_ScanDiscoversClaudeCodeServersAndFindsRisks(t *testing.T) {
 		if s.Client != "claude-code" {
 			t.Errorf("%s: client = %q", s.Name, s.Client)
 		}
-		if s.Name == testenv.ServerFilesystem && len(s.Findings) != 0 {
-			t.Errorf("pinned, scoped filesystem server should be clean in static mode: %+v", s.Findings)
+		if s.Name == testenv.ServerFilesystem {
+			// Project-scoped and writable: MCP200 flags that this repo's own
+			// .mcp.json is reachable (MEDIUM), but nothing higher. No secrets,
+			// no plaintext env, no critical per-server finding.
+			for _, f := range s.Findings {
+				if f.Severity == "CRITICAL" || f.Severity == "HIGH" {
+					t.Errorf("project-scoped filesystem server should have no HIGH/CRITICAL per-server finding: %+v", f)
+				}
+			}
 		}
 	}
 	if res.Overall.Score >= 100 {

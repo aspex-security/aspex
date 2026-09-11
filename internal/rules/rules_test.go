@@ -112,28 +112,35 @@ func TestMCP005_FetchWithAllowList_NoFinding(t *testing.T) {
 
 // ---- MCP006: Secrets in env -------------------------------------------------
 
-func TestMCP006_AWSKey(t *testing.T) {
-	entry := discover.ServerEntry{EnvKeys: []string{"AWS_SECRET_ACCESS_KEY"}}
+// plaintext holds a secret literal in the config; high-blast-radius secrets
+// (cloud, private keys, DB) are CRITICAL, scoped API tokens are HIGH.
+func TestMCP006_AWSKeyPlaintextIsCritical(t *testing.T) {
+	entry := discover.ServerEntry{EnvKeys: []string{"AWS_SECRET_ACCESS_KEY"}, PlaintextEnvKeys: []string{"AWS_SECRET_ACCESS_KEY"}}
 	assertFinding(t, rules.EvalServer(makeServer(entry, nil)), "MCP006", rules.SeverityCritical)
 }
 
-func TestMCP006_OpenAIKey(t *testing.T) {
-	entry := discover.ServerEntry{EnvKeys: []string{"OPENAI_API_KEY"}}
-	assertFinding(t, rules.EvalServer(makeServer(entry, nil)), "MCP006", rules.SeverityCritical)
+func TestMCP006_APITokenPlaintextIsHigh(t *testing.T) {
+	for _, key := range []string{"OPENAI_API_KEY", "GITHUB_TOKEN", "JWT_SECRET"} {
+		entry := discover.ServerEntry{EnvKeys: []string{key}, PlaintextEnvKeys: []string{key}}
+		fs := rules.EvalServer(makeServer(entry, nil))
+		assertFinding(t, fs, "MCP006", rules.SeverityHigh)
+		for _, f := range fs {
+			if f.RuleID == "MCP006" && f.Severity == rules.SeverityCritical {
+				t.Errorf("%s: scoped API token should be HIGH, not CRITICAL", key)
+			}
+		}
+	}
 }
 
-func TestMCP006_GitHubToken(t *testing.T) {
-	entry := discover.ServerEntry{EnvKeys: []string{"GITHUB_TOKEN"}}
-	assertFinding(t, rules.EvalServer(makeServer(entry, nil)), "MCP006", rules.SeverityCritical)
-}
-
-func TestMCP006_JWTSecret(t *testing.T) {
-	entry := discover.ServerEntry{EnvKeys: []string{"JWT_SECRET"}}
-	assertFinding(t, rules.EvalServer(makeServer(entry, nil)), "MCP006", rules.SeverityCritical)
+// A secret-shaped key whose value is a keychain/env reference is the fix, not a
+// finding: the value never touches disk.
+func TestMCP006_ReferenceValueIsNotAFinding(t *testing.T) {
+	entry := discover.ServerEntry{EnvKeys: []string{"GITHUB_TOKEN", "AWS_SECRET_ACCESS_KEY"}} // none plaintext
+	assertNoFinding(t, rules.EvalServer(makeServer(entry, nil)), "MCP006")
 }
 
 func TestMCP006_SafeKey_NoFinding(t *testing.T) {
-	entry := discover.ServerEntry{EnvKeys: []string{"DEBUG", "PORT", "LOG_LEVEL"}}
+	entry := discover.ServerEntry{EnvKeys: []string{"DEBUG", "PORT", "LOG_LEVEL"}, PlaintextEnvKeys: []string{"DEBUG", "PORT", "LOG_LEVEL"}}
 	assertNoFinding(t, rules.EvalServer(makeServer(entry, nil)), "MCP006")
 }
 

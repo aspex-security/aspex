@@ -23,6 +23,7 @@ import (
 	"github.com/aspex-security/aspex/internal/doctor"
 	"github.com/aspex-security/aspex/internal/history"
 	"github.com/aspex-security/aspex/internal/hook"
+	"github.com/aspex-security/aspex/internal/hooks"
 	"github.com/aspex-security/aspex/internal/inspect"
 	"github.com/aspex-security/aspex/internal/logparse"
 	"github.com/aspex-security/aspex/internal/mcpclient"
@@ -186,6 +187,7 @@ COMPARING OVER TIME
 
 	root.AddCommand(newDoctorCmd())
 	root.AddCommand(newInitCmd())
+	root.AddCommand(newHooksCmd(&gf))
 	root.AddCommand(newInspectCmd(&gf))
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newDiffCmd(&gf))
@@ -1842,6 +1844,100 @@ func parseWindow(s string) (time.Duration, error) {
 		}
 	}
 	return 0, fmt.Errorf("invalid window %q (use 24h, 7d, 4w)", s)
+}
+
+func newHooksCmd(gf *globalFlags) *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:   "hooks",
+		Short: "Discover and judge agent lifecycle hooks (commands the agent runs automatically)",
+		Long: `A hook is a shell command your agent runs on its own on a lifecycle event
+(before or after a tool call, on stop, on prompt submit). Hooks are code that
+runs without a prompt, on every matching event. They are the persistent state a
+compromised agent could rewrite; this command reads what is configured today
+and judges each command.
+
+Reads ~/.claude/settings.json and this project's .claude/settings.json.`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			home, _ := os.UserHomeDir()
+			cwd, _ := os.Getwd()
+			found := hooks.Discover(home, cwd)
+			findings := hooks.Analyze(found)
+
+			if jsonOut || gf.jsonOut {
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				return enc.Encode(struct {
+					Version  string          `json:"version"`
+					Total    int             `json:"total_hooks"`
+					Findings []hooks.Finding `json:"findings"`
+				}{version.Version, len(found), findings})
+			}
+
+			c := func(col, text string) string {
+				if gf.noColor {
+					return text
+				}
+				return col + text + ansiReset
+			}
+			fmt.Fprintf(os.Stdout, "\n  %s  %s\n\n", c(ansiPurple+ansiBold, "◆"), c(ansiBold, "Agent hooks"))
+			if len(found) == 0 {
+				fmt.Fprintf(os.Stdout, "  %s  No lifecycle hooks configured.\n\n", c(ansiGreen, "✓"))
+				return nil
+			}
+			sevColor := map[string]string{"critical": ansiRed + ansiBold, "high": ansiYellow + ansiBold, "medium": ansiYellow, "low": ansiCyan, "info": ansiDim}
+			worst := ""
+			for _, f := range findings {
+				col := sevColor[f.Severity]
+				fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
+					c(col, fmt.Sprintf("%-8s", strings.ToUpper(f.Severity))),
+					c(ansiPurple, f.Hook.Event),
+					c(ansiBold, report.SanitizeForTerminal(f.Title)),
+				)
+				fmt.Fprintf(os.Stdout, "     %s %s\n", c(ansiDim, "command:"), c(ansiDim, report.SanitizeForTerminal(truncateCmd(f.Hook.Command))))
+				fmt.Fprintf(os.Stdout, "     %s %s\n", c(ansiDim, "source: "), c(ansiDim, f.Hook.Source))
+				if f.Severity != "info" {
+					fmt.Fprintf(os.Stdout, "     %s %s\n", c(ansiCyan, "fix:"), report.SanitizeForTerminal(f.Fix))
+				}
+				fmt.Fprintln(os.Stdout)
+				if severityRankStr(f.Severity) > severityRankStr(worst) {
+					worst = f.Severity
+				}
+			}
+			fmt.Fprintf(os.Stdout, "  %s %d hook(s). A hook runs on every matching event without a prompt.\n\n",
+				c(ansiDim, "─"), len(found))
+			if gf.failOn != "off" && severityRankStr(worst) >= severityRankStr(gf.failOn) {
+				return errExitOne
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	return cmd
+}
+
+func severityRankStr(s string) int {
+	switch strings.ToLower(s) {
+	case "critical":
+		return 4
+	case "high":
+		return 3
+	case "medium":
+		return 2
+	case "low":
+		return 1
+	}
+	return 0
+}
+
+func truncateCmd(s string) string {
+	s = strings.TrimSpace(strings.ReplaceAll(s, "\n", " "))
+	if len(s) > 90 {
+		return s[:90] + "…"
+	}
+	return s
 }
 
 func newInitCmd() *cobra.Command {

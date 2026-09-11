@@ -149,6 +149,10 @@ type AgentStateTarget struct {
 	Path     string `json:"path"`
 	Kind     string `json:"kind"`     // "mcp-config" | "hooks" | "instructions" | "memory" | "shell-startup"
 	Executes bool   `json:"executes"` // writing it yields code execution at the next session start
+	// Global is true for user/home-level state that affects every project and
+	// every session (e.g. ~/.claude.json). Project-local state (a repo's own
+	// .mcp.json) is a smaller blast radius: you already opened that repo.
+	Global bool `json:"global,omitempty"`
 }
 
 // ServerCapabilities is everything the analyzer concluded about one server.
@@ -233,6 +237,18 @@ func AnalyzeWithOptions(servers []*inspect.Server, opts Options) ([]ServerCapabi
 		caps = append(caps, detectCapabilities(srv, home))
 	}
 	return caps, detectChains(caps)
+}
+
+// DetectServer returns the capabilities of a single server, including its
+// filesystem scope and the agent-state files a writable root reaches. Exported
+// so per-server scan rules can reason about writable agent state without
+// duplicating the scope logic.
+func DetectServer(srv *inspect.Server, opts Options) ServerCapabilities {
+	home := opts.Home
+	if home == "" {
+		home, _ = os.UserHomeDir()
+	}
+	return detectCapabilities(srv, home)
 }
 
 // ---------------------------------------------------------------------------
@@ -599,6 +615,7 @@ func agentStateTargets(roots []string, scope FileScope, home string) []AgentStat
 	for _, r := range roots {
 		for _, t := range homeTargets {
 			if r == filepath.Clean(t.Path) || isAncestor(r, t.Path) {
+				t.Global = true
 				add(t)
 			}
 		}
