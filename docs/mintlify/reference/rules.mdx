@@ -55,6 +55,29 @@ All aspex findings map to **OWASP LLM Top 10 2025**, **MITRE ATLAS**, and **CWE*
 
 ---
 
+## Agent hooks (HOOK000-HOOK005)
+
+`aspex-scan hooks` reads the lifecycle hooks in `~/.claude/settings.json` and the project's `.claude/settings.json` - commands the agent runs on its own, before or after a tool call, on stop, or on prompt submit - and judges each one.
+
+| ID | Meaning | Severity |
+|---|---|---|
+| HOOK001 | Hook fetches and executes remote code (curl\|sh, base64\|sh) | critical |
+| HOOK002 | Hook opens a reverse shell | critical |
+| HOOK003 | Hook reads credentials and reaches the network | high |
+| HOOK004 | Hook accesses sensitive paths | medium |
+| HOOK005 | Hook makes network calls | medium |
+| HOOK000 | Hook runs a command automatically (nothing suspicious) | info |
+
+Every hook is surfaced, benign ones included: a hook is standing executable state most people forget, and the target a persistence path (AP003) would write.
+
+---
+
+## Authoring rules
+
+The substring rules below live in [`internal/rules/catalog_rules.yaml`](https://github.com/aspex-security/aspex/blob/main/internal/rules/catalog_rules.yaml) - data, not code. Adding one is a YAML entry plus a corpus fixture, no Go. See [CONTRIBUTING](https://github.com/aspex-security/aspex/blob/main/CONTRIBUTING.md#adding-a-detection-rule).
+
+---
+
 ## Attack paths (AP001-AP006)
 
 Attack paths are compositions of capabilities across servers, produced by `aspex-scan` alongside the rules below. They are conclusions, not observations: each names the two capabilities, the evidence for both, the path hop by hop, the impact, and a remediation. Severity reflects what the composition reaches and confidence reflects how the capabilities were observed (live tool list: high; inferred from a well-known package: medium).
@@ -80,9 +103,10 @@ aspex-scan evaluates every MCP server it connects to against a ruleset covering 
 |---|---|---|
 | **Prompt injection** | MCP001, MCP002, MCP018, MCP151-MCP156 | Hidden Unicode, "ignore previous instructions", homoglyph tool names, injection phrases in prompt descriptions |
 | **Code execution** | MCP003, MCP020, MCP027-MCP034 | `run_command`, `bash`, `eval_code`, container exec, kubectl exec, language REPLs, build system invocations |
-| **Credential access** | MCP006, MCP011, MCP014, MCP035-MCP041, MCP093 | API keys in env, `get_env`, browser cookies/keychain, Vault reads, private key/SSH key extraction |
+| **Credential access** | MCP006, MCP011, MCP014, MCP035-MCP041, MCP093 | Plaintext secrets in config env (MCP006 fires only on literal values, not keychain/`$VAR` references; cloud/DB/private keys CRITICAL, scoped API tokens HIGH), `get_env`, browser cookies/keychain, Vault reads, private key/SSH key extraction |
 | **Data exfiltration** | MCP042-MCP047 | Email send, Slack/Teams post, webhooks, S3/GCS upload, FTP upload, pastebin creation |
 | **Filesystem** | MCP004, MCP008, MCP017 | Arbitrary write, cron/LaunchAgent/rc-file persistence, CI/CD config write |
+| **Agent-trusted state** | MCP200 | A server whose writable root reaches the agent's own MCP config, hooks, instruction, or memory files. Global/executable state (~/.claude.json, hooks) is HIGH; project .mcp.json MEDIUM; instruction files LOW |
 | **Persistence** | MCP063-MCP068 | Windows registry Run keys, login items, daemon install, systemd units, scheduled tasks |
 | **Surveillance** | MCP012, MCP013, MCP048-MCP053 | Clipboard read, screen capture, audio/microphone, camera/video, keystroke logging, location tracking |
 | **Recon** | MCP009, MCP024, MCP054-MCP056 | Process spawn, port scan, user/AD enumeration, cloud resource enumeration |

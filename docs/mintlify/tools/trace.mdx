@@ -60,6 +60,16 @@ aspex-trace killchain --client cursor --json
 | Cross-server data chain | Data read through one server, network call through another |
 | Prompt injection signature | A server becomes active with high-risk calls in an unexpected context |
 
+Every chain is confined to one agent session (Claude Code's session id, or a 30-minute idle gap for clients that record none), so a file read in one conversation and an outbound call in another are never joined.
+
+Each chain reports its evidence in three labels, so a fact is never dressed up as a conclusion:
+
+- **OBSERVED** - the event is in the log. `filesystem.read_file read ~/.aws/credentials at 14:23`.
+- **INFERRED** - a relationship drawn from order and timing. "These calls are 30s apart in the same session; the ordering matches the pattern, but the log does not prove one caused the other."
+- **POSSIBLE** - what the composition would allow, and what the log cannot show. "The file's contents could have left in the outbound call; payloads are not captured, so exfiltration is not proven."
+
+`--json` adds `evidence` (level + text) and `same_session` to each chain.
+
 ## Provenance
 
 When something bad happened, the next question is *what made the agent do that?* `provenance` links each HIGH or CRITICAL finding backward to the ingestion event most likely to have carried the instruction: a file read, a URL fetch, a resource load.
