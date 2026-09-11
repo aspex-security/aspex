@@ -16,6 +16,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/aspex-security/aspex/internal/agentenv"
 	"github.com/aspex-security/aspex/internal/attackpath"
 	"github.com/aspex-security/aspex/internal/correlate"
 	"github.com/aspex-security/aspex/internal/diff"
@@ -201,6 +202,7 @@ COMPARING OVER TIME
 	root.AddCommand(newMCPCmd(&gf))
 	root.AddCommand(newExploreCmd(&gf))
 	root.AddCommand(newCorpusCmd(&gf))
+	root.AddCommand(newHistoryCmd(&gf))
 	root.AddCommand(newInventoryCmd(&gf))
 	root.AddCommand(newAttackPathsCmd(&gf))
 	root.AddCommand(newShadowCmd(&gf))
@@ -1413,6 +1415,19 @@ func truncate(s string, max int) string {
 }
 
 func runScan(gf globalFlags) error {
+	_, err := runScanEnv(gf)
+	return err
+}
+
+// runScanEnv is runScan that also returns the environment it analyzed, so
+// watch mode can diff consecutive scans without inspecting twice.
+func runScanEnv(gf globalFlags) (agentenv.Environment, error) {
+	var env agentenv.Environment
+	err := runScanInner(gf, &env)
+	return env, err
+}
+
+func runScanInner(gf globalFlags, envOut *agentenv.Environment) error {
 	start := time.Now()
 
 	// Spinner only on interactive (non-JSON, non-SARIF) runs.
@@ -1563,6 +1578,19 @@ func runScan(gf globalFlags) error {
 	overall := score.ScoreOverall(scores)
 	overall = score.ApplyAttackPaths(overall, chainSeverities(chains), chainNames(chains))
 
+	// The environment model: blast radius for the report, and a snapshot for
+	// history when something changed. Attack paths were computed above from
+	// the same servers; Build reuses that engine.
+	cwd, _ := os.Getwd()
+	env := agentenv.Build(inspected, agentenv.Options{Cwd: cwd})
+	if envOut != nil {
+		*envOut = env
+	}
+	blast := toReportBlast(env.BlastRadius)
+	if gf.baselineFile == "" { // a filtered view is not the environment's state
+		history.SaveSnapshot(env, version.Version)
+	}
+
 	var jsonServers []report.JSONServerResult
 	for i, srv := range inspected {
 		jsonServers = append(jsonServers, toJSONServer(srv, scores[i]))
@@ -1575,6 +1603,7 @@ func runScan(gf globalFlags) error {
 		Activity:       activity,
 		AttackPaths:    chains,
 		ScoreCapReason: overall.CapReason,
+		BlastRadius:    blast,
 	}
 	if cfg != nil {
 		out.Policy = cfg.Path
@@ -1667,6 +1696,7 @@ func runScan(gf globalFlags) error {
 		ScoreDelta:      history.Delta(prev, overall.Score),
 		IsFirstRun:      isFirstRun,
 		AttackPaths:     chains,
+		BlastRadius:     blast,
 	}
 	if prev != nil {
 		r.PrevScore = prev.Score
@@ -1945,8 +1975,9 @@ func newInitCmd() *cobra.Command {
 }
 
 func runWatch(gf globalFlags) error {
-	// Initial scan.
-	if err := runScan(gf); err != nil {
+	// Initial scan; keep the environment so each rescan can be diffed.
+	prevEnv, err := runScanEnv(gf)
+	if err != nil && err != errExitOne {
 		return err
 	}
 
@@ -1965,10 +1996,26 @@ func runWatch(gf globalFlags) error {
 	watcher.Watch(ctx, func(path string) {
 		// Clear screen.
 		fmt.Print("\033[2J\033[H")
-		fmt.Fprintf(os.Stderr, "Config changed: %s -- rescanning...\n\n", report.SanitizeForTerminal(path))
-		_ = runScan(gf)
+		fmt.Fprintf(os.Stderr, "[%s] %s changed\n", time.Now().Format("15:04:05"), report.SanitizeForTerminal(path))
+		env, _ := runScanEnv(gf)
+		// What changed in security terms since the previous scan: new
+		// capabilities, scope, hooks, skills, attack paths. Informational
+		// changes stay out of the way; --json users get them from verify.
+		d := agentenv.Compare(prevEnv, env)
+		if !d.Empty() {
+			agentenv.PrintDrift(os.Stdout, d, gf.noColor, false)
+		}
+		prevEnv = env
 	})
 	return nil
+}
+
+func toReportBlast(b agentenv.BlastRadius) *report.BlastRadius {
+	out := &report.BlastRadius{Level: b.Level}
+	for _, r := range b.Why {
+		out.Why = append(out.Why, report.BlastReason{Present: r.Present, Text: r.Text})
+	}
+	return out
 }
 
 // extractNPMPackage tries to detect the npm package name from a server entry's args.

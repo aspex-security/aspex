@@ -72,6 +72,9 @@ type ScanReport struct {
 	// AttackPaths are cross-server compositions; rendered after the per-server
 	// findings because they are the conclusions those findings feed.
 	AttackPaths []attackpath.AttackChain
+	// BlastRadius, when set, is printed under the score box: the qualitative
+	// reach with its reasons, so the number is never the only summary.
+	BlastRadius *BlastRadius
 }
 
 // PrintAttackPaths renders compositions the way a reviewer needs to read them:
@@ -375,6 +378,30 @@ func PrintScanReport(w io.Writer, r ScanReport) {
 	}
 	fmt.Fprintf(w, "  %s\n\n", c(colorDim, "╰─────────────────────────────────────────────────────────────╯"))
 	_ = elapsed
+
+	// Blast radius: the qualitative answer next to the number. Present
+	// reasons only; the full list is in --json and aspex-scan bom.
+	if r.BlastRadius != nil {
+		var present []string
+		for _, why := range r.BlastRadius.Why {
+			if why.Present {
+				present = append(present, why.Text)
+			}
+		}
+		lvlColor := colorGreen
+		switch r.BlastRadius.Level {
+		case "HIGH":
+			lvlColor = colorRed + colorBold
+		case "MEDIUM":
+			lvlColor = colorYellow + colorBold
+		}
+		fmt.Fprintf(w, "  %s %s", c(colorDim, "Blast radius"), c(lvlColor, r.BlastRadius.Level))
+		if len(present) > 0 {
+			fmt.Fprintf(w, "  %s", c(colorDim, "✓ "+strings.Join(present, " · ✓ ")))
+		}
+		fmt.Fprintln(w)
+		fmt.Fprintln(w)
+	}
 
 	// Category breakdown.
 	if len(r.Scores) > 0 {

@@ -28,6 +28,22 @@ type JSONScanOutput struct {
 	AttackPaths []attackpath.AttackChain `json:"attackPaths,omitempty"`
 	// Why the overall score was capped, when an attack path lowered it.
 	ScoreCapReason string `json:"scoreCapReason,omitempty"`
+	// Blast radius: how far an instruction the agent follows could reach, with
+	// every reason listed present or absent. Mirrors agentenv.BlastRadius.
+	BlastRadius *BlastRadius `json:"blastRadius,omitempty"`
+}
+
+// BlastRadius is the qualitative reach of the environment (HIGH | MEDIUM |
+// LOW | NONE) and the auditable reasons behind it.
+type BlastRadius struct {
+	Level string        `json:"level"`
+	Why   []BlastReason `json:"why"`
+}
+
+// BlastReason is one factor, present or not.
+type BlastReason struct {
+	Present bool   `json:"present"`
+	Text    string `json:"text"`
 }
 
 // JSONSuppressed is an accepted risk removed by policy.
