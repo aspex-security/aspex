@@ -78,3 +78,27 @@ engine, and `report` stays below `agentenv` (it has its own small
   `internal/hooks` and the environment model.
 - CycloneDX export covers servers, destinations, hooks, skills and attack
   paths; capabilities and scope ride as properties by design.
+
+## Debugger phase (simulate, data flow, explain, reproduction)
+
+Added on top of the environment model, reusing it:
+
+| Capability | State |
+|---|---|
+| `aspex simulate` (counterfactual) | NEW: clone inputs, apply hypotheticals, rebuild, compare. Side-effect free (tested). |
+| Data-flow queries (`explain "where could data from X go"` / "what could reach Y") | NEW: forward and reverse over the same graph; REACHABLE / POTENTIAL / OBSERVED. |
+| `explain <finding-id>` | NEW: stable per-path definitions, evidence, and simulated path-breaking controls. |
+| `explain "…?"` with "what breaks this path" | IMPROVED: every YES ends with concrete controls, each simulated. |
+| Path-breaking controls (remediation engine) | NEW: one engine feeds explain, diff, tighten, PR review, MCP, explorer. |
+| `diff` | IMPROVED: Markdown leads with the story and a recommended fix from the control engine. |
+| `tighten` | IMPROVED: each recommendation carries its simulated security impact and honest functional note. |
+| `aspex inspect <cmd|path>` | IMPROVED: environment-aware pre-install inspection via the simulator; static by default, never executes packages. |
+| `aspex-trace repro create` / `replay` | NEW: redacted, analysis-only reproduction bundles; malicious bundles refused. |
+| `corpus import` | NEW: bundle -> scenario skeleton (home anonymized). |
+| `explore` | IMPROVED: trust-boundary lanes, data-flow view, persistence/session boundary, per-path controls, colour-independent evidence, escaped untrusted content. |
+| `aspex mcp` | IMPROVED: simulate_change, explain_path, data_flow (read-only). |
+| Terminal hardening | IMPROVED: OSC escape stripping; adversarial-content tests. |
+
+The moat is now the combination working off one model: what CAN happen (scan),
+what DID (trace), what CHANGED (diff), WHY (explain, data flow), WHAT IF
+(simulate), reproduced safely (repro) and benchmarked (corpus).

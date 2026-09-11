@@ -26,15 +26,17 @@ Your coding agent reaches the world through MCP servers, skills and hooks. Each 
 
 No proxy. No LLM. No SaaS. Dependabot tells you when dependencies change; Aspex tells you when your agent's *capabilities* change.
 
-## Three questions
+## Five questions
 
 | Question | Run | You get |
 |---|---|---|
-| **What can my agents do?** | `aspex scan`<br>`aspex explain "…"` | Every server, tool, hook and skill; cross-server attack paths with evidence; yes/no answers computed from the capability graph. [Docs →](https://aspex.mintlify.site/tools/scan) |
-| **What did they actually do?** | `aspex trace`<br>`aspex explore` | Tool calls from your clients' own logs; kill chains and provenance labeled OBSERVED / INFERRED / POSSIBLE. [Docs →](https://aspex.mintlify.site/tools/trace) |
-| **What changed?** | `aspex lock` / `verify`<br>`aspex diff main..HEAD` | New tools, poisoned descriptions, wider scope, new attack paths. Exit 1 in CI on drift you did not accept. [Docs →](https://aspex.mintlify.site/tools/change-detection) |
+| **What CAN happen?** | `aspex scan` | Every server, tool, hook and skill; cross-server attack paths with evidence; a blast radius with reasons. [Docs →](https://aspex.mintlify.site/tools/scan) |
+| **What DID happen?** | `aspex trace` · `aspex explore` | Tool calls from your clients' own logs; kill chains and provenance labeled OBSERVED / INFERRED / POSSIBLE. [Docs →](https://aspex.mintlify.site/tools/trace) |
+| **What CHANGED?** | `aspex diff main..HEAD` | New tools, poisoned descriptions, wider scope, new attack paths. Exit 1 in CI on drift you did not accept. [Docs →](https://aspex.mintlify.site/tools/change-detection) |
+| **WHY does it matter?** | `aspex explain "…"` | Deterministic yes/no answers from the capability graph, data-flow queries, and finding definitions. Never generated. [Docs →](https://aspex.mintlify.site/tools/explain) |
+| **WHAT IF I change it?** | `aspex simulate …` | Remove or restrict something and see which attack paths disappear, before you touch a config. [Docs →](https://aspex.mintlify.site/tools/simulate) |
 
-Then `aspex tighten` turns what your agents actually used into least-privilege allowlists. It recommends; it never edits your config.
+`aspex tighten` turns what your agents actually used into least-privilege allowlists, each with its simulated impact. `aspex inspect` shows what a server would add before you install it. Everything recommends; nothing edits your config.
 
 ## What a finding looks like
 
@@ -62,7 +64,21 @@ $ aspex scan
        destinations. Either change alone removes the path.
 ```
 
-Nothing here claims the path was walked; that is `aspex trace`'s job. [More real output: explain, diff, trace →](https://aspex.mintlify.site/quickstart)
+Ask what removes it, then try the change without touching your config:
+
+```
+$ aspex simulate --restrict-filesystem filesystem=~/projects/acme
+
+  BEFORE   blast radius HIGH   3 attack path(s)
+  AFTER    blast radius MEDIUM 1 attack path(s)
+
+  REMOVED ATTACK PATHS
+     ✓ Potential sensitive data exfiltration path  CRITICAL · filesystem + playwright
+
+  No configuration was modified.
+```
+
+Nothing here claims the path was walked; that is `aspex trace`'s job. [More real output: explain, simulate, diff, trace →](https://aspex.mintlify.site/quickstart)
 
 ## Why you can trust it
 
@@ -87,6 +103,15 @@ Or a static binary from [Releases](https://github.com/aspex-security/aspex/relea
 |---|---|---|
 | [**Quickstart**](https://aspex.mintlify.site/quickstart)<br><sub>First scan in a minute</sub> | [**How Aspex reasons**](https://aspex.mintlify.site/concepts/how-aspex-reasons)<br><sub>Capabilities, paths, confidence</sub> | [**CI integration**](https://aspex.mintlify.site/guides/ci-integration)<br><sub>Gate PRs on security drift</sub> |
 | [**Commands**](https://aspex.mintlify.site/tools/launcher)<br><sub>scan · trace · explain · lock · diff · tighten · bom · mcp</sub> | [**Rules**](https://aspex.mintlify.site/reference/rules)<br><sub>225+ rules, OWASP / ATLAS / CWE</sub> | [**Let your agent ask Aspex**](https://aspex.mintlify.site/tools/mcp)<br><sub>Read-only MCP server</sub> |
+
+## Try it in two minutes
+
+```sh
+git clone https://github.com/aspex-security/aspex && cd aspex
+./examples/demo/run.sh
+```
+
+A deterministic fake environment (no real credentials, no servers launched, nothing sent anywhere) that walks the whole loop: a critical exfiltration path, `explain` naming the two controls, `simulate` removing them, and the recorded session where a README fetch precedes a credential read.
 
 ## Contributing
 

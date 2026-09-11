@@ -7,6 +7,55 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [Unreleased]
+
+### Added
+- `aspex simulate`: counterfactual security analysis. Clone the environment in
+  memory, apply hypothetical changes (--remove-server, --restrict-filesystem,
+  --deny-network, --remove-tool, --remove-hook, --remove-skill, combinable),
+  recompute capabilities and attack paths, and compare before/after. Nothing is
+  modified. Versioned aspex-simulate/v1 JSON.
+- `aspex explain` answers data-flow questions ("where could data from
+  ~/.aws/credentials go?", "what sensitive data could reach Slack?") over the
+  capability graph, with REACHABLE / POTENTIAL / OBSERVED hops, and explains
+  finding ids (`aspex explain AP003`): definition, evidence, and the controls
+  that break the path. Every YES answer ends with concrete, simulated
+  path-breaking controls.
+- Path-breaking remediation engine feeding explain, diff, tighten, PR review,
+  the MCP interface and the explorer: concrete changes, never "apply least
+  privilege".
+- `aspex inspect` now accepts a command string or a local package directory and
+  shows the security impact of adding it to your current environment (via the
+  simulator); static by default, never executes a package.
+- `aspex-trace repro create` / `aspex-trace replay`: redacted reproduction
+  bundles (secret-shaped values, content bodies and credential-file contents
+  removed; environment model carries no secrets) and analysis-only replay that
+  never executes a recorded tool, command or network call. `aspex-scan corpus
+  import` turns a bundle into a scenario skeleton.
+- `aspex mcp` gains aspex_simulate_change, aspex_explain_path and
+  aspex_data_flow (read-only).
+- `examples/demo`: a deterministic fake environment and run.sh that walks
+  scan -> explain -> simulate -> provenance.
+- Issue templates (false positive, bug, feature).
+
+### Changed
+- `aspex diff` Markdown leads with the security story (what was added, what it
+  composes with) and a recommended fix from the remediation engine; the
+  terminal view gains a Suggested mitigation block.
+- `aspex tighten` shows each recommendation's simulated security impact (blast
+  radius, attack paths removed) and an honest functional note.
+- `aspex explore`: trust-boundary lanes in the attack graph, a data-flow view,
+  session-boundary markers on persistence paths, per-path controls, evidence
+  levels distinguished without colour, and a responsive layout.
+- The `aspex` launcher help leads with the five questions (scan, trace, diff,
+  explain, simulate) and lists supporting commands separately.
+
+### Fixed
+- Terminal safety: OSC escape sequences (hyperlinks, window-title) in untrusted
+  tool names or descriptions are now stripped whole, not just their opener.
+- Provenance explanations are labelled INFERRED and paired with a NOT OBSERVED
+  note; NO_COLOR is honoured by every aspex-scan command.
+
 ## [0.8.1] - 2026-09-11
 
 ### Changed
