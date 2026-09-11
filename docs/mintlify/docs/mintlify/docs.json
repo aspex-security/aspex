@@ -19,50 +19,23 @@
         "groups": [
           {
             "group": "Getting Started",
-            "pages": [
-              "introduction",
-              "quickstart"
-            ]
+            "pages": ["introduction", "quickstart"]
           },
           {
             "group": "Core Tools",
-            "pages": [
-              "tools/launcher",
-              "tools/scan",
-              "tools/trace",
-              "tools/change-detection",
-              "tools/explain",
-              "tools/explore",
-              "tools/tighten",
-              "tools/bom",
-              "tools/mcp"
-            ]
+            "pages": ["tools/launcher", "tools/scan", "tools/trace"]
           },
           {
             "group": "Advanced",
-            "pages": [
-              "tools/attack",
-              "tools/doctor"
-            ]
+            "pages": ["tools/attack", "tools/doctor"]
           },
           {
             "group": "Guides",
-            "pages": [
-              "guides/policy",
-              "guides/ci-integration",
-              "guides/daily-workflow",
-              "guides/vscode"
-            ]
+            "pages": ["guides/policy", "guides/ci-integration", "guides/daily-workflow", "guides/vscode"]
           },
           {
             "group": "Reference",
-            "pages": [
-              "reference/security-model",
-              "reference/rules",
-              "reference/clients",
-              "privacy",
-              "reference/corpus"
-            ]
+            "pages": ["reference/rules", "reference/clients", "privacy"]
           }
         ]
       }

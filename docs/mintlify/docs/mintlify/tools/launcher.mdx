@@ -61,21 +61,3 @@ aspex snapshot      # no menu; good for a shell prompt, a cron job, or CI logs
 ## What "never scanned" means
 
 Connectors added through claude.ai are configured in the cloud and have no local file, so no static scanner can score them. Aspex is honest about that: they appear as **in use, never scanned**, with their call counts, so you know exactly how much of your agents' activity runs through servers nobody has looked at. `aspex-scan inspect <url>` can scan one directly.
-
-## Every command through `aspex`
-
-`aspex` is the front door; you never need to know which binary owns a command.
-
-| | |
-|---|---|
-| `aspex scan` | every server, hook, skill, attack path, blast radius |
-| `aspex trace` | what your agents actually did, from their clients' logs |
-| `aspex explain "…"` | deterministic yes/no security questions |
-| `aspex lock` / `aspex verify` | the security lockfile and drift against it |
-| `aspex diff main..HEAD` | security impact of a config change |
-| `aspex tighten` | least-privilege recommendations |
-| `aspex bom` | Agent Security BOM |
-| `aspex explore` | local session explorer |
-| `aspex mcp` | read-only MCP server for your agent |
-| `aspex history` | posture over time |
-| `aspex hooks`, `aspex doctor`, `aspex attack` | hooks, pre-flight, red team |

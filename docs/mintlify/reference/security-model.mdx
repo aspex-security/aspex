@@ -1,0 +1,76 @@
+---
+title: "Security model"
+description: "How Aspex reasons: capabilities, resources, trust boundaries, attack paths, provenance, persistence, confidence, and observed versus inferred behaviour."
+---
+
+This page is for researchers who want to know *why* a finding exists and reproduce it. Nothing in Aspex is a black box: every conclusion is a deterministic function of local data, and the code paths are named below.
+
+## Entities
+
+An **Environment** (`internal/agentenv`) is the normalized state of one machine's agent setup: agents (clients), MCP servers with their tools, lifecycle hooks, skills, instruction files, and what follows from them. It is assembled from detectors that already existed (`internal/attackpath`, `internal/hooks`, `internal/skills`) and adds nothing of its own except fingerprints, derived resources, destinations and the blast radius. Two builds over the same state are byte-identical.
+
+## Capabilities
+
+A **capability** is what a server can do, with **evidence**: the tool that grants it, or the config line (an allowed root, a package identity). Aspex classifies tools by whole tokens in their names, descriptions and schemas (`create_pull_request` is a GitHub channel, not HTTP egress; `slack_reply_to_thread` is not a REPL). In static scans (`--no-exec`) capabilities are inferred for well-known packages at lower confidence.
+
+| Capability | Meaning |
+|---|---|
+| `file-read`, `file-write` | files by path; **scope** from the allowed roots in the config: `sensitive` (home, `/`, credential directories), `project`, `unknown` (undeclared, treated as sensitive at lower confidence) |
+| `shell-exec` | arbitrary command or code execution |
+| `network-send` | egress; `egress_open` unless the tool declares a destination allowlist |
+| `external-send` | a fixed external channel (GitHub, Slack, email) |
+| `untrusted-ingress` | brings external content into the agent's context (fetch, browser, web search, issues) |
+| `credential-read`, `env-read` | explicit secret or environment access |
+| `data-read`, `db-write` | database access and writes |
+| `memory-write`, `persistence-write` | persists what the agent remembers; writes to startup locations |
+| `browser` | drives a browser session (also egress and ingress) |
+| `package-install` | installs code |
+
+A writable root is resolved to the **agent-state files** it reaches (`~/.claude.json`, `.mcp.json`, `~/.claude/settings.json` hooks, `CLAUDE.md`, `.cursorrules`, memory, shell startup files) and whether writing them **executes** code at the next session start. Global (user-level) state has a larger blast radius than a project's own files.
+
+## Resources and destinations
+
+Sensitive resources are derived, not configured: credential directories and browser profiles when a read reaches home; agent-state files when a write reaches them; the database when a database server exists. Destinations are fixed hosts implied by a package (github.com, slack.com, ...) or "arbitrary https" for open egress.
+
+## Trust boundary
+
+The boundary Aspex reasons about is **the agent's context**. Anything that enters it (a prompt, a pasted document, a fetched page, an issue body, a tool result) can carry an instruction; anything the agent can do, an instruction can ask for. This is why the first hop of every attack path is "instruction from a prompt, document, or tool result" and why ingress capabilities matter: they widen who can write into the context.
+
+## Attack paths
+
+A **path** is a security conclusion about a composition of capabilities, never about a single one. A shell server alone, or a fetch server alone, produces no path. Six compositions (AP001-AP006) are documented in [aspex-scan](/tools/scan#attack-paths); severity comes from what the composition reaches (credential exfiltration through open egress is critical; project files through a fixed channel is medium), confidence from how the capabilities were observed (live tool list: high; package inference: medium; undeclared scope lowers it). Paths compose over name-sorted servers so they never depend on discovery order.
+
+## Persistence
+
+Persistence is first-class because an agent's own configuration, hooks, skills, instruction files and memory are what future sessions trust. AP003 (persistent agent compromise) is ingress plus a writable root that reaches such a file; MCP200 flags the writable half on its own; `aspex-scan hooks` judges the commands hooks actually run; skills are hashed with their scripts; `lock`/`verify` detect any change to these.
+
+## Provenance and observed behaviour
+
+`aspex-trace` reads what clients log. Its conclusions carry three labels:
+
+| Label | Meaning |
+|---|---|
+| **OBSERVED** | the event is in the log; a fact about the log |
+| **INFERRED** | a relationship between observed events drawn from order and timing ("these calls are 12s apart in the same session") |
+| **POSSIBLE** | a consequence the observed events would allow but the log cannot show ("the file's contents could have left in the outbound call; payloads are not captured") |
+| **NOT OBSERVED** | explicitly, what Aspex cannot show |
+
+Sequence is never turned into causality. Provenance confidence is timed: under 30 seconds and 3 events apart is high, under 2 minutes and 8 events is medium, otherwise low. Analysis is per session; nothing joins events across sessions.
+
+## Confidence
+
+Every conclusion states its confidence, and every lowering has a reason in the output: static inference, undeclared scope, a fixed channel rather than open egress, execution only via hooks rather than a tool the agent chooses.
+
+## Change
+
+`agentenv.Compare(before, after)` classifies each change as **informational**, **security-relevant** or **suspicious** based on content (`rules.ClassifyText` reuses the injection patterns) and on capability deltas, and reports attack paths added or removed and blast radius before and after. A tool-description change is security-significant even when the executable did not change; that is the rug-pull case.
+
+## Blast radius
+
+Not a number. `HIGH` when a critical path exists, when execution meets open egress, when credential or sensitive reads meet open egress, or when persistent executable state is writable while content can enter; `MEDIUM` for any one of those factors alone (plus destructive database capability or a fixed channel next to sensitive reads); `LOW` otherwise; `NONE` for an empty environment. Every factor is listed present or absent in `aspex scan`, `bom`, `diff` and the lockfile.
+
+## Reproducing a finding
+
+- Static: `aspex-scan --no-exec --json` on the same configs yields the same `attackPaths` and `blastRadius`; `aspex lock --no-exec --stdout` yields the same lockfile.
+- Live: tool lists come from the servers; `aspex lock` captures them so a later `verify` can show exactly which description or schema changed.
+- Scenarios: `testdata/corpus/scenarios/*.yaml` state truth and expectation for whole environments; `aspex-scan corpus test` runs them. Adding a scenario is how to report a disagreement with Aspex's reasoning.

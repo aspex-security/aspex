@@ -31,26 +31,26 @@ design; the code is the detail.
 - Detection contract (corpus) prevents regressions and false positives.
 - Local-first is real: no network calls except downloads; no telemetry.
 
-## Missing pieces (spec mapping)
+## Spec mapping (after this pass)
 
-| Spec feature | Status | Notes |
+| Spec feature | Before | After |
 |---|---|---|
-| Normalized environment/capability graph | PARTIAL | `attackpath.ServerCapabilities` covers servers. No shared model that also holds hooks, skills, instructions, destinations, blast radius; each command re-derives. |
-| Skills discovery | MISSING | Hooks yes (`internal/hooks`), skills no. |
-| `aspex lock` | MISSING | `inventory --json` is the closest; no fingerprints, no schema version, not designed for diffing. |
-| `aspex verify` (drift) | MISSING | `aspex-scan verify` today = known-bad registry lookup. Name clash to resolve. `diff --baseline` compares findings, not capabilities. |
-| `aspex diff` (security impact) | PARTIAL | `internal/diff` compares finding sets. No capability/scope/path/blast-radius diff, no git revisions, no markdown. |
-| PR/CI security review | PARTIAL | Scan action uploads SARIF and gates on severity. No capability diff comment. |
-| `aspex explore` | MISSING | |
-| `aspex explain <question>` | MISSING | `aspex-scan explain <server>` prints a per-server narrative. Different thing; keep both under one command. |
-| `aspex tighten` | MISSING | `--with-trace` shows usage per server; no recommendations. |
-| `aspex bom` | MISSING | |
-| `aspex mcp` (read-only) | MISSING | |
-| Corpus as scenario benchmark | PARTIAL | Server-level fixtures only; no environment scenarios with expected capabilities/paths/forbidden findings; no TP/FN/FP summary command. |
-| Capability-aware history | PARTIAL | `internal/history` stores score deltas only. |
-| Watch integration | PARTIAL | Rescans on mtime; reports findings, not drift. |
-| Finding evidence levels | EXISTS (trace) / PARTIAL (scan) | Attack paths carry evidence; per-rule findings carry Detail only. |
-| Blast radius | MISSING | One number (score) with a cap reason. |
+| Normalized environment/capability graph | PARTIAL | EXISTS: `internal/agentenv` (servers, hooks, skills, instructions, resources, destinations, paths, blast radius; fingerprints; deterministic) |
+| Skills discovery | MISSING | EXISTS: `internal/skills` |
+| `aspex lock` | MISSING | EXISTS: schema v1, byte-identical, no secrets |
+| `aspex verify` | MISSING | EXISTS: classified drift, `--fail-on` by class; registry lookup moved to `check-package` |
+| `aspex diff` (security impact) | PARTIAL | EXISTS: revisions, lockfiles, lock vs now; Markdown; engine independent of git |
+| PR / CI review | PARTIAL | EXISTS: `aspex-diff-action` (comment + gate); scan action unchanged |
+| `aspex explain <question>` | MISSING | EXISTS: bounded queries, computed verdicts; server narrative kept |
+| `aspex tighten` | MISSING | EXISTS: allowlists + roots, qualitative reduction, never edits |
+| `aspex bom` | MISSING | EXISTS: tree + `aspex-asbom/v1`; CycloneDX/SPDX mapping documented, not claimed |
+| `aspex mcp` | MISSING | EXISTS: read-only, six tools, `security_impact` for proposals |
+| `aspex explore` | MISSING | EXISTS: loopback-only, embedded UI, dataset tested; frontend is vanilla JS, untested beyond serving |
+| Corpus as scenario benchmark | PARTIAL | EXISTS: scenarios with truth/expect/must_not_report, `corpus test`, README |
+| Capability-aware history | PARTIAL | EXISTS: environment snapshots + `history` |
+| Watch integration | PARTIAL | EXISTS: drift printed between rescans (still mtime polling) |
+| Finding evidence levels (scan) | PARTIAL | PARTIAL: paths and drift carry evidence; per-rule findings still Detail only |
+| Blast radius | MISSING | EXISTS: level + reasons in scan, bom, diff, lock |
 
 ## Weak implementations / duplicated concepts
 
@@ -62,21 +62,21 @@ design; the code is the detail.
   lifecycle hooks). Names are close; kept, documented.
 - `history` parses old JSON with capitalized field names; brittle.
 
-## Architecture decision for this pass
+## Architecture decision
 
-Introduce `internal/agentenv`: one deterministic `Environment` assembled from
-the existing detectors (attackpath for servers, hooks, new skills discovery,
-instruction files) with fingerprints, destinations, blast radius and attack
-paths. Every new command (lock, verify, diff, explain, tighten, bom, mcp,
-explore's graph view) consumes this one model. Nothing existing is rewritten;
-attackpath stays the capability engine.
+`internal/agentenv` is one deterministic `Environment` assembled from the
+existing detectors (attackpath for servers, hooks, skills, instruction files)
+with fingerprints, destinations, blast radius and attack paths. lock, verify,
+diff, explain, tighten, bom, mcp, explore, history and watch all consume this
+one model. Nothing existing was rewritten; attackpath stays the capability
+engine, and `report` stays below `agentenv` (it has its own small
+`BlastRadius` type to avoid an import cycle).
 
-## Implementation priorities
+## Remaining
 
-1. agentenv + skills discovery + blast radius (foundation).
-2. lock / verify / diff (+ markdown for PRs, git revisions).
-3. explain (deterministic queries over agentenv).
-4. tighten (agentenv + trace activity).
-5. bom, mcp (read-only), explore (loopback, embedded UI).
-6. corpus scenarios + runner; history/watch integration; CLI unification;
-   README/docs.
+- P0: per-rule scan findings should carry Evidence like paths do.
+- P1: watch should use fsnotify-style events rather than 2s mtime polling;
+  explore frontend tests (rendering) beyond the served-page check; Cursor and
+  Windsurf hooks/skills equivalents when those clients grow them.
+- P2: CycloneDX export for the server/destination subset of the BOM; GoReleaser
+  `brews` -> `homebrew_casks` migration (release-engineering, needs a test tap).

@@ -1,21 +1,13 @@
 ---
-title: "Aspex: local security debugger for AI agents"
+title: "What is Aspex?"
 description: "See what your AI agents actually did, then scan what they could do. MCP security from the logs your clients already write. No proxy, offline, one binary."
 ---
 
 Claude Code, Cursor, Windsurf and friends reach the world through **MCP servers**: programs that give the agent your filesystem, your GitHub, your database, your browser. Most people install them by pasting a config from a README.
 
-Every MCP security tool so far answers one question: *what could this server do?* Aspex answers five, on your machine, deterministically:
+Every MCP security tool so far answers one question: *what could this server do?* Aspex answers that too. But it started from the other one, the one nobody was answering:
 
-| | Command |
-|---|---|
-| What exists? | `aspex scan` |
-| What could happen? | `aspex scan`, `aspex explain "…"` |
-| What actually happened? | `aspex trace`, `aspex explore` |
-| What changed? | `aspex lock`, `aspex verify`, `aspex diff main..HEAD` |
-| How do I reduce risk? | `aspex tighten` |
-
-It started from the question nobody else was answering: **what did my agents actually do?** It grew into a debugger: know what your agents can do, know what they actually did, know what changed, understand what could happen next.
+**What did my agents actually do?**
 
 ## Start here
 

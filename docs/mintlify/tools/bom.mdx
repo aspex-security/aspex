@@ -1,0 +1,64 @@
+---
+title: "aspex bom"
+description: "Agent Security Bill of Materials: a portable, versioned description of what constitutes an agent environment."
+---
+
+```sh
+aspex bom                          # tree for humans
+aspex bom --json > agent.asbom.json
+```
+
+```
+  Agent: Claude Code
+
+  MCP servers
+  ├── filesystem  12 tools · file-read, file-write · sensitive scope
+  ├── github  26 tools · external-send, untrusted-ingress, data-read
+  └── playwright  21 tools · network-send, untrusted-ingress, browser
+
+  Skills
+  ├── deploy  project · runs commands
+  └── use-spark  user · runs commands
+
+  Hooks
+  └── PostToolUse  INFO · /Users/steven/.claude/onyx/onyx-scanner
+
+  Sensitive resources reachable
+  ├── ~/.ssh  read-write via filesystem
+  ├── ~/.aws  read-write via filesystem
+  └── agent config, hooks, instructions, memory (9 files)  write via filesystem
+
+  External destinations
+  ├── arbitrary https
+  └── github.com
+
+  Attack paths
+  └── 2 CRITICAL, 1 HIGH
+
+  Blast radius: HIGH
+     ✓ reads credentials or sensitive files
+     ✓ arbitrary external network egress
+     ✗ command execution
+     ...
+```
+
+## JSON schema
+
+`aspex-asbom/v1` wraps the same `environment` object that `.aspex.lock` uses (`schema_version: 1`), so a BOM and a lockfile are the same data with different headers:
+
+| Field | Contents |
+|---|---|
+| `agents` | clients found (Claude Code, Cursor, ...) |
+| `mcp_servers[]` | name, client, command, args, url, config_path, package, pinned, env_keys (names only), identity, tools (name, description, schema_hash), capabilities, filesystem_roots, filesystem_scope, egress_open, destinations, agent_state_writes, fingerprint |
+| `hooks[]`, `skills[]`, `instructions[]` | as in the lockfile; content hashed, never stored |
+| `sensitive_resources[]` | path, kind (credentials, agent-state, database, browser-profile), via, access |
+| `destinations[]` | fixed hosts and "arbitrary https" |
+| `attack_paths[]` | AP001-AP006 with evidence, steps, impact, remediation, confidence |
+| `blast_radius` | level and every reason, present or absent |
+| `static` | true when no server was launched |
+
+No secret values appear anywhere in the document.
+
+## CycloneDX / SPDX
+
+The ASBOM is **not** a CycloneDX or SPDX document and does not claim to be. Parts of it map cleanly and could be exported in a future version: MCP servers as `components` (type `application`, `purl` from the package and pin, the identity fingerprint as a hash), destinations as `externalReferences`, and attack paths as CycloneDX `vulnerabilities` with a custom rating. Capabilities, filesystem scope, hooks and blast radius have no standard home in either format; forcing them into properties would lose their meaning, so the native schema stays primary.

@@ -1,0 +1,69 @@
+---
+title: "aspex explain"
+description: "Ask a security question about your agent environment and get a deterministic answer computed from the capability graph. No LLM."
+---
+
+```sh
+aspex explain "Can a malicious README steal my AWS credentials?"
+aspex explain "Can this agent delete production data?"
+aspex explain "Can external content change my agent's hooks or instructions?"
+```
+
+## How it works
+
+1. The question is reduced by keyword matching to a bounded query: a **source** (`UNTRUSTED_CONTENT` or `USER`), a **verb** (`REACH`, `EXFIL`, `DESTROY`, `EXECUTE`, `PERSIST`) and a **target** (`CREDENTIALS`, `ENV_SECRETS`, `DATABASE`, `COMMAND_EXECUTION`, `AGENT_STATE`, `MEMORY`, `BROWSER`, `PROJECT_FILES`, `SENSITIVE_FILES`). The reduction is printed as "Understood as: …" so you can see whether it was understood.
+2. The answer is computed from the environment model: which servers can read the target (a filesystem tool whose roots include home, a credential tool, or a shell), which can send data out (open egress, or a fixed channel such as GitHub or Slack), which bring external content in.
+3. A question that cannot be mapped is rejected with the list of supported shapes. Nothing is guessed.
+
+## What an answer contains
+
+```
+  YES  plausible path exists
+  Understood as: Can an instruction the agent follows … cause credential material … to leave this machine?
+
+  A potential exfiltration path exists: filesystem reads credentials (~/.ssh, ~/.aws, keychains), playwright can send it to any network destination.
+
+     credentials (~/.ssh, ~/.aws, keychains)
+       ↓
+     filesystem.read_file
+       ↓
+     agent context
+       ↓
+     playwright.browser_navigate
+       ↓
+     any network destination
+
+  Required conditions
+     ✓ external content enters the agent's context
+       via brave-search, github, playwright; also any pasted document or prompt
+     ✓ a server can read credentials (~/.ssh, ~/.aws, keychains)
+       filesystem.read_file: reads credential files such as ~/.ssh and ~/.aws (root /Users/steven)
+     ✓ a server can send data off this machine
+       playwright.browser_navigate reaches any network destination
+
+  Not proven
+     ✗ no runtime evidence that credentials was transmitted; payloads are not in the logs
+     ✗ whether an instruction to do so ever reached the agent
+
+  Confidence: HIGH
+```
+
+- **YES** means a plausible path exists. Every required condition is listed as met, with the evidence. The "Not proven" block says what the model cannot show; a YES never claims anything happened.
+- **NO COMPLETE PATH** names the condition that failed and the missing capabilities (for a database question: UPDATE, DELETE, arbitrary SQL, a destructive tool). When command execution exists, the answer notes that a shell could reach a local database client.
+- **Confidence** follows the evidence: `high` from live tool lists and declared sensitive scope; `medium` when capabilities were inferred from packages or the filesystem scope is undeclared; lowered again when egress is a fixed channel rather than arbitrary.
+
+## Verbs and what they require
+
+| Verb | Triggered by | Path requires |
+|---|---|---|
+| EXFIL | exfiltrate, leak, steal, send, upload, disclose, expose | a reader of the target and an egress or external channel |
+| REACH | read, access, reach, see, open | a reader of the target |
+| DESTROY | delete, drop, wipe, overwrite, modify | a write-capable tool over the target (db-write; file-write or shell for files) |
+| EXECUTE | run/execute commands, shell | a shell-exec server, a hook, or a skill that runs scripts |
+| PERSIST | persist, future sessions, rewrite, poison, influence | a writable root reaching agent config, hooks, instructions or memory |
+
+The same question against two environments gives opposite answers; the verdict is state, not template. `--json` returns the query, verdict, path, conditions, not-proven list and confidence.
+
+## Server narrative
+
+`aspex explain <server-name>` (a single word, no spaces) keeps the older behaviour: that server's findings, advisories and risk narrative.

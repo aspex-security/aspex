@@ -1,0 +1,110 @@
+---
+title: "Policy, baselines and prioritization"
+description: "Make aspex-scan enforce your team's rules, adopt it on an estate with existing findings, and fix the risky servers that are actually in use first."
+---
+
+Three features turn `aspex-scan` from a scanner a developer runs into a control a security team owns.
+
+| Problem | Feature |
+|---|---|
+| A finding you have consciously accepted keeps failing CI | **`.aspex.yaml` ignore** - accept a risk with a reason and an expiry |
+| The default severities are not your severities | **`.aspex.yaml` severity** - promote, demote, or disable any rule |
+| 90 findings on day one, and you cannot fix them all before enabling the gate | **Baseline** - hide pre-existing findings, fail only on new ones |
+| 30 risky servers, and you do not know which to fix first | **`--with-trace`** - rank by static risk x observed use |
+
+## Policy file: `.aspex.yaml`
+
+```sh
+aspex-scan init      # writes a starter .aspex.yaml in the current directory
+```
+
+`aspex-scan` looks for `./.aspex.yaml`, then `~/.config/aspex/config.yaml`. Pass `--config <path>` to use a specific file. Commit the project-local file so the whole team and CI share one policy.
+
+```yaml
+# Accept a specific risk. Every entry needs a reason.
+# Add an expiry so accepted risks get re-reviewed instead of forgotten.
+ignore:
+  - rule: MCP004
+    server: filesystem
+    reason: "Intentionally scoped to ~/projects for the monorepo"
+    expires: 2027-01-01
+  - rule: MCP026
+    server: "internal-*"          # globs match server names
+    reason: "Our internal servers expose many tools by design"
+
+# Your severity for a rule. "off" disables it entirely.
+severity:
+  MCP021: critical   # plaintext HTTP is never acceptable here
+  MCP026: low
+
+# Default gate when --fail-on is not passed on the command line.
+fail_on: high
+```
+
+Rules:
+
+- `reason` is required. A policy file with an unexplained ignore is rejected.
+- `server` is optional. Omit it to ignore a rule everywhere; use a glob like `internal-*` for a group.
+- An expired ignore stops suppressing and prints a warning, so the finding comes back into view instead of being silently forgotten.
+- Severity overrides are applied **before** scoring and **before** the `--fail-on` gate. Your score and your CI result reflect your policy, not the defaults.
+
+Suppressed findings are always listed at the end of the report and in `--json` output under `suppressed`, so a clean run is never mistaken for "nothing found".
+
+Attack paths (`AP001`...`AP006`, see [aspex-scan](/tools/scan#attack-paths)) are governed the same way: `- rule: AP003` with a `reason` accepts a path, optionally scoped with `server:` to one of the servers on it. Baselines record paths too, so `--baseline` hides pre-existing compositions and only new ones fail the gate.
+
+## Baseline: adopt on an existing estate
+
+Turning on `--fail-on high` against 30 servers with 90 existing findings fails forever. A baseline snapshots what exists today so only **new** findings fail the gate, then you burn the baseline down at your own pace.
+
+```sh
+# Day one: snapshot the current state
+aspex-scan --save-baseline aspex-baseline.json
+
+# From then on: only new findings are shown and gated
+aspex-scan --baseline aspex-baseline.json --fail-on high
+```
+
+Commit `aspex-baseline.json`. Re-run `--save-baseline` after you fix things to shrink it. Findings are keyed by server and rule ID, so the same rule appearing on a new server is correctly treated as new.
+
+<Tip>
+Use `--baseline` for the transition and `.aspex.yaml` ignores for permanent, explained decisions. A baseline entry means "not yet"; an ignore entry means "we decided".
+</Tip>
+
+## Prioritize with `--with-trace`
+
+`aspex-scan` knows what a server **can** do. `aspex-trace` knows what your agents **did**. `--with-trace` joins them:
+
+```sh
+aspex-scan --with-trace                 # last 7 days of agent activity
+aspex-scan --with-trace --trace-since 30d
+```
+
+```
+  ◆  Observed activity  last 7d, from aspex-trace logs
+
+  postgres             CRITICAL  340 calls · 3 tools  12 flagged (critical)
+  filesystem           CRITICAL  88 calls · 6 tools
+  github               HIGH      not seen
+  memory               clean     41 calls · 4 tools
+
+  ▲  Prioritize - risky AND in active use:
+     CRITICAL  postgres    340 calls, tools: execute_sql, list_tables, describe_table
+     CRITICAL  filesystem  88 calls, tools: read_file, write_file, ...
+```
+
+A critical server that was never invoked is a latent risk: remove it or scope it down. The same server invoked 340 times last week, twelve of them tripping a trace rule, is the one to fix today. The `Prioritize` list is servers with a HIGH or CRITICAL static finding **and** observed calls in the window.
+
+`--json` output includes the per-server activity under `activity`.
+
+## CI example
+
+```yaml
+- uses: aspex-security/aspex/.github/actions/aspex-scan-action@main
+  with:
+    fail-on: high
+# .aspex.yaml and aspex-baseline.json are read from the checked-out repo.
+```
+
+## Detection contract
+
+Aspex ships a corpus of known-malicious and known-benign MCP servers under `testdata/corpus/`. Every malicious fixture declares the rule IDs that must fire; every benign fixture (real, popular servers such as the official filesystem, GitHub, Slack, and fetch servers) declares the highest severity Aspex may report. CI runs both on every change, so a rule cannot regress detection or start crying wolf on a server people actually use. Contributing a fixture is the highest-signal way to improve Aspex: see [CONTRIBUTING.md](https://github.com/aspex-security/aspex/blob/main/CONTRIBUTING.md).

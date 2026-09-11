@@ -123,6 +123,31 @@ rules.Finding{
 
 ---
 
+## Adding a capability, an attack path, or a client
+
+The environment model is small on purpose. Before adding, check whether an
+existing capability already covers the case.
+
+- **Capability**: add a `Cap...` bit in `internal/attackpath/attackpath.go`
+  (`AllCapabilities`, `String()`), classify the tool tokens that grant it in
+  `classifyTool`, add static inference for well-known packages in
+  `knownPackages` if applicable, and give it a human name in
+  `agentenv.dangerousCaps` so drift reads well. Add a corpus scenario that
+  expects it.
+- **Attack path**: add an `APnnn` composition in `attackpath.detectChains`
+  with Steps that name real tools, an Impact that never claims the path was
+  used, a Remediation, and a severity that comes from what the composition
+  reaches. Add a scenario under `testdata/corpus/scenarios/` that expects it
+  and a `false-positive` scenario that must not report it.
+- **Client (config discovery)**: see below; also add its project-level files
+  to `agentenv.projectFiles` so `aspex diff` between revisions sees them, and
+  to `agentenv.discoverInstructions` for user-level instruction files.
+- **Trace parser**: see below; set `Event.Session` when the client records a
+  session id so analysis stays per session.
+- **Corpus scenario**: `testdata/corpus/README.md`.
+
+---
+
 ## Adding an aspex-trace anomaly rule
 
 Trace rules operate on `logparse.Event` values. Stateful rules can also update `*SessionState` to track patterns across multiple events.

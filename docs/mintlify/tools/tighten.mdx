@@ -1,0 +1,54 @@
+---
+title: "aspex tighten"
+description: "Least-privilege recommendations from what is configured versus what your agents actually used."
+---
+
+```sh
+aspex tighten                 # last 30 days
+aspex tighten --since 7d
+aspex tighten --json
+```
+
+`tighten` joins the environment model (every server's tools and filesystem roots) with `aspex-trace` activity (which tools were called, which paths were read or written) and recommends the narrowest configuration that would have supported what actually happened.
+
+## Tool allowlists
+
+```
+  github  312 calls · strong evidence
+     Exposed tools: 31    Observed: 6
+     Candidates for removal (not observed in available traces):
+       - delete_branch
+       - merge_pull_request
+       ...
+     Recommended allowlist:
+       + create_issue
+       + get_pull_request
+       + search_repositories
+       ...
+```
+
+Observed tools are always kept. Unobserved tools are **candidates**, phrased as such: "not observed in available traces" is not "never needed". Below `--min-calls` (default 20) the evidence is labelled **weak** and the list is a hint, not a recommendation.
+
+## Filesystem roots
+
+```
+  filesystem  1 204 calls · strong evidence
+     Current scope: /Users/steven
+     Observed usage: 41 path(s), e.g. /Users/steven/projects/acme/src/main.go, ...
+     Never observed: ~/.ssh, ~/.aws, ~/.gnupg, ~/.kube, ~/Documents, ~/Downloads
+     Recommendation:
+       - /Users/steven
+       + ~/.gitconfig
+       + ~/projects/acme
+     Blast-radius reduction: SIGNIFICANT: from the whole home directory to 2 directories
+```
+
+Roots are collapsed to two components below home. Paths that appear inside file *contents* (a README mentioning `~/.ssh`) are ignored; only path-shaped arguments count. A server already scoped to a project gets no root recommendation.
+
+The reduction is **qualitative**: SIGNIFICANT, MODERATE, or LIKELY SIGNIFICANT when the evidence is weak. Aspex does not print a percentage it cannot justify.
+
+## What it never does
+
+- It never edits your configuration. Apply the change in your client, then run `aspex lock` again.
+- It never calls an unobserved server unused. Servers with no activity in the window are listed separately with the caveat that absence in traces is not proof of disuse.
+- It needs real traces: with no events in the window it says so and recommends nothing.

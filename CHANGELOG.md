@@ -7,6 +7,64 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [Unreleased]
+
+Aspex becomes a local security debugger for AI agents: know what your agents
+can do, what they actually did, what changed, and what could happen next.
+
+### Added
+- `internal/agentenv`: one deterministic environment model (agents, servers
+  with capabilities and evidence, hooks, skills, hashed instruction files,
+  sensitive resources, destinations, attack paths, blast radius with
+  auditable reasons). Server identity and tool-surface fingerprints. Every
+  new command consumes this model.
+- `aspex lock`: `.aspex.lock`, schema `aspex-lock/v1`, byte-identical for an
+  unchanged setup, no secret values.
+- `aspex verify`: drift against the lock explained by security meaning and
+  classified informational / security-relevant / suspicious from content
+  (a tool description that starts instructing the model is suspicious).
+  `--fail-on` by class. The old `verify <package>` is `check-package`.
+- `aspex diff`: security impact diff between git revisions (`main..HEAD`,
+  `HEAD~1`), two lockfiles, or lock vs now; reads only the project's agent
+  files at each revision, statically. `--markdown` for PR comments.
+  `aspex-diff-action` posts one comment per PR and fails on a drift class.
+- `aspex explain "<question>"`: deterministic YES / NO COMPLETE PATH answers
+  from the capability graph with conditions, evidence, what is not proven,
+  and confidence. Unmappable questions are rejected, not guessed.
+- `aspex tighten`: least-privilege allowlists and narrower filesystem roots
+  from configured vs observed use; qualitative reductions; never edits.
+- `aspex bom`: Agent Security BOM as a tree or `aspex-asbom/v1` JSON.
+- `aspex mcp`: read-only MCP server (`aspex_security_impact` for a proposed
+  `.mcp.json`, `aspex_explain`, `aspex_scan`, `aspex_get_attack_paths`,
+  `aspex_get_capabilities`, `aspex_verify`).
+- `aspex explore`: loopback-only session explorer (timeline, provenance with
+  OBSERVED / INFERRED / NOT OBSERVED, kill chains, capability graph, finding
+  detail); `--dataset` for the JSON.
+- `aspex history`: posture over time from environment snapshots recorded on
+  each scan; `--watch` prints security-relevant drift between rescans.
+- Skills discovery (`internal/skills`): SKILL.md frontmatter, scripts,
+  referenced hosts, content hash.
+- Blast radius (HIGH / MEDIUM / LOW with reasons) in the scan report and in
+  `--json` as `blastRadius`.
+- Agent Security Corpus scenarios (`testdata/corpus/scenarios`, tool-agnostic
+  `truth` plus Aspex `expect`), `aspex-scan corpus test`, and a corpus README
+  for contributors. `rules.ClassifyText`, `discover.ParseConfigBytes`,
+  `hooks.ParseBytes`, `skills.FromContents`, `provenance.IngestionKind`.
+- Docs: change detection, explain, tighten, bom, mcp, explore, security model
+  for researchers, corpus. README repositioned.
+
+### Changed
+- `aspex-scan verify <package>` (registry lookup) renamed `check-package`;
+  the old spelling still works with a note.
+- `aspex-scan diff` without `--baseline` is now the security-impact diff;
+  `--baseline <scan.json>` keeps the finding-level comparison.
+- `aspex-scan explain` accepts a question; a single bare word is still a
+  server name.
+- Attack paths compose over name-sorted servers, so chain wording no longer
+  depends on config discovery order.
+- The `aspex` launcher routes lock, verify, diff, explain, tighten, bom, mcp,
+  explore, hooks, history, corpus to aspex-scan; help text repositioned.
+
 ## [0.7.1] - 2026-09-11
 
 ### Fixed
