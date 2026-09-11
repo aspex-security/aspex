@@ -29,6 +29,41 @@ type OverallScore struct {
 	Medium   int
 	Low      int
 	Info     int
+	// CapReason explains a cap applied by ApplyAttackPaths, or "" if none applied.
+	CapReason string
+}
+
+// ApplyAttackPaths lowers the overall score to reflect cross-server
+// compositions. Per-server deductions cannot see a path that spans two
+// servers, so an environment where every server looks fine in isolation can
+// still hold a critical exfiltration path. One critical path caps the overall
+// at 39 (HIGH RISK); one high path caps it at 69 (AT RISK). Caps only lower a
+// score, never raise it, and the reason is recorded so the report can say why.
+func ApplyAttackPaths(overall OverallScore, pathSeverities []string, pathNames []string) OverallScore {
+	cap := 100
+	reason := ""
+	for i, sev := range pathSeverities {
+		name := ""
+		if i < len(pathNames) {
+			name = pathNames[i]
+		}
+		switch sev {
+		case "critical":
+			if cap > 39 {
+				cap, reason = 39, "critical attack path: "+name
+			}
+		case "high":
+			if cap > 69 {
+				cap, reason = 69, "high attack path: "+name
+			}
+		}
+	}
+	if overall.Score > cap {
+		overall.Score = cap
+		overall.Band = Band(cap)
+		overall.CapReason = reason
+	}
+	return overall
 }
 
 // ScoreServer computes a 0-100 score for a single server based on its findings.

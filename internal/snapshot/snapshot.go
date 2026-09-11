@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aspex-security/aspex/internal/attackpath"
 	"github.com/aspex-security/aspex/internal/correlate"
 	"github.com/aspex-security/aspex/internal/discover"
 	"github.com/aspex-security/aspex/internal/inspect"
@@ -41,6 +42,8 @@ type Snapshot struct {
 	Overall    score.OverallScore
 	Policy     string // path of .aspex.yaml applied, if any
 	Suppressed int
+	// Paths are cross-server capability compositions, most severe first.
+	Paths []attackpath.AttackChain
 
 	Events        int
 	Calls         int
@@ -83,6 +86,12 @@ func Build(ctx context.Context, version string, window time.Duration) *Snapshot 
 		s.Servers = append(s.Servers, ServerLine{Name: srv.Entry.Name, Client: srv.Entry.Client, Score: sc.Score, MaxSev: maxSev})
 	}
 	s.Overall = score.ScoreOverall(scores)
+	_, s.Paths = attackpath.Analyze(inspected)
+	var sevs, names []string
+	for _, p := range s.Paths {
+		sevs, names = append(sevs, p.Severity), append(names, p.Name)
+	}
+	s.Overall = score.ApplyAttackPaths(s.Overall, sevs, names)
 
 	// Runtime side.
 	events, clients, _ := logparse.CollectEvents(nil, now.Add(-window))
@@ -196,6 +205,10 @@ func (s *Snapshot) Headlines() []string {
 	} else {
 		line := fmt.Sprintf("%d configured %s, overall security score %d/100.",
 			len(s.Servers), plural(len(s.Servers), "server", "servers"), s.Overall.Score)
+		if len(s.Paths) > 0 {
+			line += fmt.Sprintf(" %d potential attack %s across servers; worst: %s (%s).",
+				len(s.Paths), plural(len(s.Paths), "path", "paths"), strings.ToLower(s.Paths[0].Name), s.Paths[0].Severity)
+		}
 		worst := s.Servers[0]
 		if worst.MaxSev >= rules.SeverityHigh {
 			if worst.Calls > 0 {

@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/aspex-security/aspex/internal/attackpath"
 	"github.com/aspex-security/aspex/internal/inspect"
 	"github.com/aspex-security/aspex/internal/rules"
 	"github.com/aspex-security/aspex/internal/score"
@@ -68,6 +69,110 @@ type ScanReport struct {
 	PrevBand        string
 	ScoreDelta      string // "+12", "-5", "=" or "" if no history
 	IsFirstRun      bool
+	// AttackPaths are cross-server compositions; rendered after the per-server
+	// findings because they are the conclusions those findings feed.
+	AttackPaths []attackpath.AttackChain
+}
+
+// PrintAttackPaths renders compositions the way a reviewer needs to read them:
+// what is wrong, the evidence for each half, the path hop by hop, why it
+// matters, and what to change. Nothing here asserts that the path was used.
+func PrintAttackPaths(w io.Writer, noColor bool, chains []attackpath.AttackChain) {
+	if len(chains) == 0 {
+		return
+	}
+	c := newColorizer(noColor)
+	fmt.Fprintf(w, "  %s  %s  %s\n\n",
+		c(colorPurple+colorBold, "◆"),
+		c(colorBold, "Potential attack paths"),
+		c(colorDim, fmt.Sprintf("%d found · compositions of capabilities across servers", len(chains))),
+	)
+	for _, ch := range chains {
+		sevCol := severityColorName(ch.Severity)
+		fmt.Fprintf(w, "  %s  %s  %s  %s\n",
+			c(sevCol+colorBold, fmt.Sprintf("%-8s", strings.ToUpper(ch.Severity))),
+			c(colorPurple, ch.ID),
+			c(colorBold, SanitizeForTerminal(ch.Name)),
+			c(colorDim, "confidence: "+ch.Confidence),
+		)
+
+		// Evidence grouped by server, in first-seen order.
+		var order []string
+		byServer := map[string][]attackpath.Evidence{}
+		for _, e := range ch.Evidence {
+			if _, ok := byServer[e.Server]; !ok {
+				order = append(order, e.Server)
+			}
+			byServer[e.Server] = append(byServer[e.Server], e)
+		}
+		// Scope evidence (allowed roots, package identity) is always shown. The
+		// rest is capped per server: four items make the point, twenty bury it.
+		// JSON output keeps every item.
+		const maxItems = 4
+		for _, s := range order {
+			fmt.Fprintf(w, "     %s\n", c(colorCyan, SanitizeForTerminal(s)))
+			shown, hidden := 0, 0
+			for _, e := range byServer[s] {
+				always := e.Source == "package" || strings.HasPrefix(e.Detail, "allowed root")
+				if !always {
+					shown++
+					if shown > maxItems {
+						hidden++
+						continue
+					}
+				}
+				label := e.Detail
+				if e.Tool != "" {
+					label = e.Tool + ": " + e.Detail
+				}
+				fmt.Fprintf(w, "       %s %s\n", c(colorDim, "└─"), SanitizeForTerminal(label))
+			}
+			if hidden > 0 {
+				noun := "items"
+				if hidden == 1 {
+					noun = "item"
+				}
+				fmt.Fprintf(w, "       %s %s\n", c(colorDim, "└─"), c(colorDim, fmt.Sprintf("and %d more %s (see --json)", hidden, noun)))
+			}
+		}
+
+		fmt.Fprintf(w, "\n     %s\n", c(colorDim, "Path"))
+		for i, step := range ch.Steps {
+			arrow := "  "
+			if i > 0 {
+				arrow = c(colorDim, "↓ ")
+			}
+			fmt.Fprintf(w, "       %s%s\n", arrow, SanitizeForTerminal(step))
+		}
+		if ch.Impact != "" {
+			fmt.Fprintf(w, "\n     %s\n", c(colorDim, "Why it matters"))
+			for _, line := range wrapText(SanitizeForTerminal(ch.Impact), 66) {
+				fmt.Fprintf(w, "       %s\n", line)
+			}
+		}
+		if ch.Remediation != "" {
+			fmt.Fprintf(w, "\n     %s\n", c(colorCyan, "Fix"))
+			for _, line := range wrapText(SanitizeForTerminal(ch.Remediation), 66) {
+				fmt.Fprintf(w, "       %s\n", line)
+			}
+		}
+		if ch.MITRERef != "" {
+			fmt.Fprintf(w, "     %s\n", c(colorDim, "MITRE ATT&CK "+ch.MITRETactic+" ("+ch.MITRERef+")"))
+		}
+		fmt.Fprintln(w)
+	}
+}
+
+func severityColorName(s string) string {
+	switch s {
+	case "critical":
+		return colorBrRed
+	case "high":
+		return colorBrYellow
+	case "medium":
+		return colorYellow
+	}
+	return colorBlue
 }
 
 // Spinner shows an animated progress indicator on stderr during scanning.
@@ -422,6 +527,21 @@ func PrintScanReport(w io.Writer, r ScanReport) {
 		fmt.Fprintln(w)
 	}
 
+	// Cross-server compositions: the conclusions the findings above feed into.
+	// The default report shows the most severe few; the subcommand and JSON show all.
+	const maxInline = 4
+	shown := r.AttackPaths
+	if len(shown) > maxInline {
+		shown = shown[:maxInline]
+	}
+	PrintAttackPaths(w, r.NoColor, shown)
+	if len(r.AttackPaths) > maxInline {
+		fmt.Fprintf(w, "  %s\n\n", c(colorDim, fmt.Sprintf("+%d more attack paths. See them all: aspex-scan attack-paths", len(r.AttackPaths)-maxInline)))
+	}
+	if r.Overall.CapReason != "" {
+		fmt.Fprintf(w, "  %s %s\n\n", c(colorDim, "Score capped at "+fmt.Sprint(r.Overall.Score)+":"), c(colorDim, SanitizeForTerminal(r.Overall.CapReason)))
+	}
+
 	// Discovery warnings.
 	if len(r.DiscoveryErrors) > 0 {
 		fmt.Fprintf(w, "  %s\n", c(colorYellow, "Warnings"))
@@ -481,18 +601,17 @@ func PrintScanReport(w io.Writer, r ScanReport) {
 
 	// Next-step hints based on findings.
 	if r.Overall.Score == 100 {
-		fmt.Fprintf(w, "  %s All servers passed. Next: check for cross-server attack paths with %s\n\n",
+		fmt.Fprintf(w, "  %s All servers passed and no cross-server attack paths were found.\n\n",
 			c(colorBrGreen, "✓"),
-			c(colorCyan, "aspex-scan attack-paths"),
 		)
-	} else if r.Overall.Critical > 0 || r.Overall.High > 0 {
+	} else if r.Overall.Critical > 0 || r.Overall.High > 0 || len(r.AttackPaths) > 0 {
 		fmt.Fprintf(w, "  %s  Deep-inspect a server:   %s\n",
 			c(colorDim, "→"),
 			c(colorCyan, "aspex-scan inspect <server-name>"),
 		)
-		fmt.Fprintf(w, "  %s  Check cross-server risk: %s\n\n",
+		fmt.Fprintf(w, "  %s  Attack paths as JSON:    %s\n\n",
 			c(colorDim, "→"),
-			c(colorCyan, "aspex-scan attack-paths"),
+			c(colorCyan, "aspex-scan attack-paths --json"),
 		)
 	}
 

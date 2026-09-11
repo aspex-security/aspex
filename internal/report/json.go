@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 
+	"github.com/aspex-security/aspex/internal/attackpath"
 	"github.com/aspex-security/aspex/internal/correlate"
 	"github.com/aspex-security/aspex/internal/score"
 	"github.com/aspex-security/aspex/internal/trace"
@@ -23,6 +24,10 @@ type JSONScanOutput struct {
 	Baselined int `json:"baselined,omitempty"`
 	// Observed runtime activity per server (--with-trace).
 	Activity map[string]*correlate.Activity `json:"activity,omitempty"`
+	// Cross-server compositions of capabilities. See internal/attackpath.
+	AttackPaths []attackpath.AttackChain `json:"attackPaths,omitempty"`
+	// Why the overall score was capped, when an attack path lowered it.
+	ScoreCapReason string `json:"scoreCapReason,omitempty"`
 }
 
 // JSONSuppressed is an accepted risk removed by policy.

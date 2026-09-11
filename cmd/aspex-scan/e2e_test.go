@@ -89,6 +89,30 @@ func TestE2E_ScanDiscoversClaudeCodeServersAndFindsRisks(t *testing.T) {
 	if res.Overall.Score >= 100 {
 		t.Errorf("overall score should reflect critical findings, got %d", res.Overall.Score)
 	}
+
+	// Compositions: statically inferred from the official packages. The
+	// project-scoped filesystem server (read+write) and GitHub (external
+	// content in, data out) yield an exfiltration path and a persistence path.
+	var pathIDs []string
+	for _, p := range res.AttackPaths {
+		pathIDs = append(pathIDs, p.ID+"/"+p.Severity+"/"+p.Confidence)
+		if len(p.Evidence) == 0 || p.Remediation == "" || p.Impact == "" {
+			t.Errorf("path %s lacks evidence, impact, or remediation", p.ID)
+		}
+		if p.Confidence != "medium" {
+			t.Errorf("static inference must report medium confidence, got %s for %s", p.Confidence, p.ID)
+		}
+	}
+	joined := strings.Join(pathIDs, " ")
+	if !strings.Contains(joined, "AP003/critical") {
+		t.Errorf("expected a critical persistence path (writable .mcp.json + GitHub ingress), got %v", pathIDs)
+	}
+	if !strings.Contains(joined, "AP001/medium") {
+		t.Errorf("expected a medium exfiltration path (project files -> GitHub channel), got %v", pathIDs)
+	}
+	if res.ScoreCapReason == "" || res.Overall.Score > 39 {
+		t.Errorf("a critical path must cap the score at 39 with a stated reason, got %d %q", res.Overall.Score, res.ScoreCapReason)
+	}
 }
 
 func TestE2E_PolicySuppressesOverridesAndGates(t *testing.T) {
@@ -101,11 +125,17 @@ func TestE2E_PolicySuppressesOverridesAndGates(t *testing.T) {
 		t.Fatalf("expected fail-on sentinel without policy, got %v", err)
 	}
 
+	// The fixture also holds a critical attack path: the project-scoped
+	// filesystem server can write .mcp.json and GitHub brings external content
+	// in (AP003). Policy must be able to accept a path by its ID, with a reason,
+	// exactly like a rule finding.
 	os.WriteFile(filepath.Join(dir, policy.FileName), []byte(`
 ignore:
   - rule: MCP021
     server: kb
     reason: "internal network only, TLS terminated upstream"
+  - rule: AP003
+    reason: "project directory is a throwaway sandbox with no .mcp.json"
 severity:
   MCP006: low
 fail_on: critical
@@ -118,8 +148,20 @@ fail_on: critical
 	if res.Policy == "" {
 		t.Error("policy path should be reported")
 	}
-	if len(res.Suppressed) != 1 || res.Suppressed[0].RuleID != "MCP021" || res.Suppressed[0].Reason == "" {
-		t.Errorf("suppressed = %+v", res.Suppressed)
+	got := map[string]bool{}
+	for _, s := range res.Suppressed {
+		if s.Reason == "" {
+			t.Errorf("suppressed entry without reason: %+v", s)
+		}
+		got[s.RuleID] = true
+	}
+	if !got["MCP021"] || !got["AP003"] || len(res.Suppressed) != 2 {
+		t.Errorf("suppressed = %+v, want MCP021 and AP003", res.Suppressed)
+	}
+	for _, p := range res.AttackPaths {
+		if p.ID == "AP003" {
+			t.Error("ignored path must not appear in attackPaths")
+		}
 	}
 	ids := ruleIDs(res)
 	if ids["MCP021"] != 0 {

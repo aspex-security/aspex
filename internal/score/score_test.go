@@ -63,3 +63,22 @@ func TestBands(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyAttackPathsCapsButNeverRaises(t *testing.T) {
+	healthy := score.OverallScore{Score: 95, Band: score.BandHealthy}
+	capped := score.ApplyAttackPaths(healthy, []string{"critical"}, []string{"Potential credential exfiltration path"})
+	if capped.Score != 39 || capped.Band != score.BandHighRisk || capped.CapReason == "" {
+		t.Errorf("one critical path must cap a healthy score at 39: %+v", capped)
+	}
+	high := score.ApplyAttackPaths(healthy, []string{"high", "medium"}, []string{"x", "y"})
+	if high.Score != 69 || high.Band != score.BandAtRisk {
+		t.Errorf("one high path caps at 69: %+v", high)
+	}
+	low := score.OverallScore{Score: 20, Band: score.BandHighRisk}
+	if got := score.ApplyAttackPaths(low, []string{"high"}, []string{"x"}); got.Score != 20 || got.CapReason != "" {
+		t.Errorf("caps never raise a score: %+v", got)
+	}
+	if got := score.ApplyAttackPaths(healthy, nil, nil); got.Score != 95 || got.CapReason != "" {
+		t.Errorf("no paths, no change: %+v", got)
+	}
+}

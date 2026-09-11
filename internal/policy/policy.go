@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -183,6 +184,38 @@ func (c *Config) Apply(server string, findings []rules.Finding, now time.Time) (
 		}
 	}
 	return kept, suppressed, expired
+}
+
+// IgnoresPath reports whether an ignore entry accepts an attack path. The
+// entry's rule is the path ID (AP001...) and its server, if set, must match
+// one of the servers on the path. Returns the accepting entry.
+func (c *Config) IgnoresPath(id string, servers []string, now time.Time) (IgnoreEntry, bool) {
+	if c == nil {
+		return IgnoreEntry{}, false
+	}
+	for _, e := range c.Ignore {
+		if e.Rule != id || e.Expired(now) {
+			continue
+		}
+		if e.Server == "" {
+			return e, true
+		}
+		for _, s := range servers {
+			if e.matches(s, id) {
+				return e, true
+			}
+		}
+	}
+	return IgnoreEntry{}, false
+}
+
+// PathKey is the baseline key for an attack path: the path ID against the
+// sorted set of servers it spans, so the same composition on the same
+// servers is recognised across runs.
+func PathKey(servers []string) string {
+	s := append([]string(nil), servers...)
+	sort.Strings(s)
+	return strings.Join(s, "+")
 }
 
 // Example returns a starter .aspex.yaml for `aspex-scan init`.

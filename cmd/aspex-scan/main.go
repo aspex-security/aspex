@@ -444,56 +444,44 @@ func runAttackPaths(gf *globalFlags, jsonOut bool) error {
 
 	if jsonOut || gf.jsonOut {
 		type jsonCap struct {
-			Server string              `json:"server"`
-			Client string              `json:"client"`
-			Caps   []string            `json:"capabilities"`
-			Tools  map[string][]string `json:"contributing_tools"`
-		}
-		type jsonChain struct {
-			Name        string   `json:"name"`
-			Severity    string   `json:"severity"`
-			Description string   `json:"description"`
-			MITRETactic string   `json:"mitre_tactic"`
-			MITRERef    string   `json:"mitre_ref"`
-			Servers     []string `json:"servers"`
-			Steps       []string `json:"steps"`
+			Server      string                           `json:"server"`
+			Client      string                           `json:"client"`
+			Static      bool                             `json:"static"`
+			FileScope   string                           `json:"fileScope,omitempty"`
+			Roots       []string                         `json:"roots,omitempty"`
+			Caps        []string                         `json:"capabilities"`
+			Tools       map[string][]string              `json:"contributing_tools"`
+			Evidence    map[string][]attackpath.Evidence `json:"evidence"`
+			StateWrites []attackpath.AgentStateTarget    `json:"agentStateWrites,omitempty"`
 		}
 		type jsonOut struct {
-			Version      string      `json:"version"`
-			TotalServers int         `json:"total_servers"`
-			TotalChains  int         `json:"total_chains"`
-			Capabilities []jsonCap   `json:"capabilities"`
-			Chains       []jsonChain `json:"chains"`
+			Version      string                   `json:"version"`
+			TotalServers int                      `json:"total_servers"`
+			TotalChains  int                      `json:"total_chains"`
+			Capabilities []jsonCap                `json:"capabilities"`
+			Chains       []attackpath.AttackChain `json:"chains"`
 		}
-		var jCaps []jsonCap
+		jCaps := make([]jsonCap, 0, len(caps))
 		for _, c := range caps {
-			var capNames []string
-			toolMap := map[string][]string{}
-			for bit := attackpath.CapReadFile; bit <= attackpath.CapEmailSend; bit <<= 1 {
+			jc := jsonCap{
+				Server: c.ServerName, Client: c.Client, Static: c.Static, Roots: c.Roots,
+				Tools: map[string][]string{}, Evidence: map[string][]attackpath.Evidence{}, StateWrites: c.StateWrites,
+			}
+			if c.Has(attackpath.CapReadFile) || c.Has(attackpath.CapWriteFile) {
+				jc.FileScope = c.Scope.String()
+			}
+			for _, bit := range attackpath.AllCapabilities {
 				if c.Has(bit) {
-					capName := bit.String()
-					capNames = append(capNames, capName)
-					toolMap[capName] = c.CapTools[bit]
+					name := bit.String()
+					jc.Caps = append(jc.Caps, name)
+					jc.Tools[name] = c.CapTools[bit]
+					jc.Evidence[name] = c.Evidence[bit]
 				}
 			}
-			jCaps = append(jCaps, jsonCap{
-				Server: c.ServerName,
-				Client: c.Client,
-				Caps:   capNames,
-				Tools:  toolMap,
-			})
+			jCaps = append(jCaps, jc)
 		}
-		var jChains []jsonChain
-		for _, ch := range chains {
-			jChains = append(jChains, jsonChain{
-				Name:        ch.Name,
-				Severity:    ch.Severity,
-				Description: ch.Description,
-				MITRETactic: ch.MITRETactic,
-				MITRERef:    ch.MITRERef,
-				Servers:     ch.Servers,
-				Steps:       ch.Steps,
-			})
+		if chains == nil {
+			chains = []attackpath.AttackChain{}
 		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -502,7 +490,7 @@ func runAttackPaths(gf *globalFlags, jsonOut bool) error {
 			TotalServers: len(caps),
 			TotalChains:  len(chains),
 			Capabilities: jCaps,
-			Chains:       jChains,
+			Chains:       chains,
 		})
 	}
 
@@ -510,78 +498,18 @@ func runAttackPaths(gf *globalFlags, jsonOut bool) error {
 		if gf.noColor {
 			return text
 		}
-		return col + text + "\033[0m"
+		return col + text + ansiReset
 	}
-	bold := "\033[1m"
-	dim := "\033[2m"
-	purple := "\033[35m"
-	red := "\033[91m"
-	yellow := "\033[93m"
-	cyan := "\033[36m"
-
-	fmt.Fprintf(os.Stdout, "\n  %s  %s\n\n",
-		c(purple+bold, "◆"),
-		c(bold, "Attack Path Analysis"),
-	)
-
 	if len(chains) == 0 {
-		fmt.Fprintf(os.Stdout, "  %s  No dangerous capability combinations found across %d servers.\n\n",
-			c("\033[92m", "✓"),
-			len(inspected),
-		)
+		fmt.Fprintf(os.Stdout, "\n  %s  No dangerous capability compositions found across %d servers.\n",
+			c(ansiGreen, "✓"), len(inspected))
+		fmt.Fprintf(os.Stdout, "  %s\n\n", c(ansiDim, "Capabilities were still recorded; see --json for what each server can do."))
 		return nil
 	}
-
-	sevColor := func(s string) string {
-		switch s {
-		case "critical":
-			return red + bold
-		case "high":
-			return yellow + bold
-		}
-		return dim
-	}
-
-	// Group chains by Name so repeated server-pair combinations collapse into one block.
-	type group struct {
-		chain       attackpath.AttackChain // representative entry (first seen)
-		serverPairs []string               // all server combinations for this attack type
-	}
-	var groupOrder []string
-	groups := map[string]*group{}
-	for _, ch := range chains {
-		if _, ok := groups[ch.Name]; !ok {
-			groupOrder = append(groupOrder, ch.Name)
-			cp := ch
-			groups[ch.Name] = &group{chain: cp}
-		}
-		groups[ch.Name].serverPairs = append(groups[ch.Name].serverPairs, strings.Join(ch.Servers, " → "))
-	}
-
-	for _, name := range groupOrder {
-		g := groups[name]
-		ch := g.chain
-		fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
-			c(sevColor(ch.Severity), strings.ToUpper(ch.Severity)),
-			c(bold, ch.Name),
-			c(dim, "· "+ch.MITRETactic+" ("+ch.MITRERef+")"),
-		)
-		// Generic description without server names (those vary per pair).
-		for _, step := range ch.Steps[len(ch.Steps)-1:] {
-			fmt.Fprintf(os.Stdout, "     %s\n", c(dim, step))
-		}
-		for _, pair := range g.serverPairs {
-			fmt.Fprintf(os.Stdout, "     %s %s\n", c(dim, "·"), c(cyan, pair))
-		}
-		fmt.Fprintln(os.Stdout)
-	}
-
-	fmt.Fprintf(os.Stdout, "  %s %d attack type(s) · %d chain(s) across %d server(s).\n\n",
-		c(dim, "─"),
-		len(groupOrder),
-		len(chains),
-		len(inspected),
-	)
+	fmt.Fprintln(os.Stdout)
+	report.PrintAttackPaths(os.Stdout, gf.noColor, chains)
+	fmt.Fprintf(os.Stdout, "  %s %d path(s) across %d server(s). Paths are compositions of capabilities, not observed activity; use aspex-trace for what actually happened.\n\n",
+		c(ansiDim, "─"), len(chains), len(inspected))
 	return nil
 }
 
@@ -1053,7 +981,7 @@ func newInspectCmd(gf *globalFlags) *cobra.Command {
 				Explain:   gf.explain,
 			}
 			report.PrintScanReport(os.Stdout, r)
-			return checkExitCode(gf.failOn, overall)
+			return checkExitCode(gf.failOn, overall, nil)
 		},
 	}
 }
@@ -1572,14 +1500,36 @@ func runScan(gf globalFlags) error {
 		failOn = cfg.FailOn
 	}
 
+	// Cross-server compositions. These are conclusions about how capabilities
+	// combine, kept separate from per-server findings; policy ignores apply by
+	// path ID (AP001...) and baselines record them by ID and server set.
+	_, chains := attackpath.Analyze(inspected)
+	var keptChains []attackpath.AttackChain
+	for _, ch := range chains {
+		if e, ok := cfg.IgnoresPath(ch.ID, ch.Servers, now); ok {
+			suppressed = append(suppressed, policy.Suppressed{
+				Server:  strings.Join(ch.Servers, "+"),
+				Finding: rules.Finding{RuleID: ch.ID, Name: ch.Name, Severity: parseSeverityString(ch.Severity)},
+				Reason:  e.Reason, Expires: e.Expires,
+			})
+			continue
+		}
+		keptChains = append(keptChains, ch)
+	}
+	chains = keptChains
+
 	// Baseline ratchet: snapshot the post-policy state if asked, then hide
-	// findings that were already present when the baseline was taken.
+	// findings and paths that were already present when the baseline was taken.
 	serverNames := make([]string, len(inspected))
 	for i, srv := range inspected {
 		serverNames[i] = srv.Entry.Name
 	}
 	if gf.saveBaseline != "" {
-		if err := policy.NewBaseline(version.Version, serverNames, allFindings).Save(gf.saveBaseline); err != nil {
+		base := policy.NewBaseline(version.Version, serverNames, allFindings)
+		for _, ch := range chains {
+			base.AddPath(ch.ID, ch.Servers)
+		}
+		if err := base.Save(gf.saveBaseline); err != nil {
 			return fmt.Errorf("saving baseline: %w", err)
 		}
 	}
@@ -1594,6 +1544,15 @@ func runScan(gf globalFlags) error {
 			allFindings[i] = fresh
 			baselined += len(known)
 		}
+		var fresh []attackpath.AttackChain
+		for _, ch := range chains {
+			if base.KnownPath(ch.ID, ch.Servers) {
+				baselined++
+				continue
+			}
+			fresh = append(fresh, ch)
+		}
+		chains = fresh
 	}
 
 	// Observed activity from aspex-trace logs, keyed by server name.
@@ -1616,17 +1575,20 @@ func runScan(gf globalFlags) error {
 	}
 
 	overall := score.ScoreOverall(scores)
+	overall = score.ApplyAttackPaths(overall, chainSeverities(chains), chainNames(chains))
 
 	var jsonServers []report.JSONServerResult
 	for i, srv := range inspected {
 		jsonServers = append(jsonServers, toJSONServer(srv, scores[i]))
 	}
 	out := report.JSONScanOutput{
-		Version:   version.Version,
-		Overall:   overall,
-		Servers:   jsonServers,
-		Baselined: baselined,
-		Activity:  activity,
+		Version:        version.Version,
+		Overall:        overall,
+		Servers:        jsonServers,
+		Baselined:      baselined,
+		Activity:       activity,
+		AttackPaths:    chains,
+		ScoreCapReason: overall.CapReason,
 	}
 	if cfg != nil {
 		out.Policy = cfg.Path
@@ -1644,7 +1606,7 @@ func runScan(gf globalFlags) error {
 		if err := report.WriteSARIFScan(os.Stdout, out); err != nil {
 			return err
 		}
-		return checkExitCode(failOn, overall)
+		return checkExitCode(failOn, overall, chains)
 	}
 
 	// SARIF output to file.
@@ -1675,7 +1637,7 @@ func runScan(gf globalFlags) error {
 		if err := report.WriteJSONScan(os.Stdout, out); err != nil {
 			return err
 		}
-		return checkExitCode(failOn, overall)
+		return checkExitCode(failOn, overall, chains)
 	}
 
 	// Auto-save a JSON log to the user cache dir.
@@ -1718,6 +1680,7 @@ func runScan(gf globalFlags) error {
 		Explain:         gf.explain,
 		ScoreDelta:      history.Delta(prev, overall.Score),
 		IsFirstRun:      isFirstRun,
+		AttackPaths:     chains,
 	}
 	if prev != nil {
 		r.PrevScore = prev.Score
@@ -1728,7 +1691,7 @@ func runScan(gf globalFlags) error {
 	if gf.withTrace {
 		printActivity(os.Stdout, gf.noColor, inspected, scores, activity, gf.traceSince)
 	}
-	return checkExitCode(failOn, overall)
+	return checkExitCode(failOn, overall, chains)
 }
 
 // printPolicySummary tells the user what the policy and baseline removed, so a
@@ -2018,7 +1981,23 @@ func writeScanLog(out report.JSONScanOutput) string {
 	return path
 }
 
-func checkExitCode(failOn string, overall score.OverallScore) error {
+func chainSeverities(chains []attackpath.AttackChain) []string {
+	out := make([]string, len(chains))
+	for i, ch := range chains {
+		out[i] = ch.Severity
+	}
+	return out
+}
+
+func chainNames(chains []attackpath.AttackChain) []string {
+	out := make([]string, len(chains))
+	for i, ch := range chains {
+		out[i] = ch.Name
+	}
+	return out
+}
+
+func checkExitCode(failOn string, overall score.OverallScore, chains []attackpath.AttackChain) error {
 	switch failOn {
 	case "off", "none", "":
 		return nil
@@ -2041,6 +2020,13 @@ func checkExitCode(failOn string, overall score.OverallScore) error {
 				found = true
 				break
 			}
+		}
+	}
+	// A composition is a finding for the gate's purposes: an environment with
+	// clean servers and a critical exfiltration path must still fail CI.
+	for _, ch := range chains {
+		if parseSeverityString(ch.Severity) >= threshold {
+			found = true
 		}
 	}
 	if found {

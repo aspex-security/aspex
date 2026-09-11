@@ -42,6 +42,29 @@ func NewBaseline(version string, servers []string, findings [][]rules.Finding) *
 	return b
 }
 
+// AddPath records an attack path (by ID and the servers it spans) in the baseline.
+func (b *Baseline) AddPath(id string, servers []string) {
+	if b.set == nil {
+		b.set = map[string]struct{}{}
+	}
+	k := key(PathKey(servers), id)
+	if _, dup := b.set[k]; dup {
+		return
+	}
+	b.set[k] = struct{}{}
+	b.Keys = append(b.Keys, k)
+	sort.Strings(b.Keys)
+}
+
+// KnownPath reports whether an attack path was present when the baseline was taken.
+func (b *Baseline) KnownPath(id string, servers []string) bool {
+	if b == nil {
+		return false
+	}
+	_, ok := b.set[key(PathKey(servers), id)]
+	return ok
+}
+
 // Save writes the baseline as JSON.
 func (b *Baseline) Save(path string) error {
 	data, err := json.MarshalIndent(b, "", "  ")
