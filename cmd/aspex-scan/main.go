@@ -200,6 +200,7 @@ COMPARING OVER TIME
 	root.AddCommand(newTightenCmd(&gf))
 	root.AddCommand(newMCPCmd(&gf))
 	root.AddCommand(newExploreCmd(&gf))
+	root.AddCommand(newCorpusCmd(&gf))
 	root.AddCommand(newInventoryCmd(&gf))
 	root.AddCommand(newAttackPathsCmd(&gf))
 	root.AddCommand(newShadowCmd(&gf))

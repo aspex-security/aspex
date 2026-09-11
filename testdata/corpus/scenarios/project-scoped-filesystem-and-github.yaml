@@ -1,0 +1,41 @@
+name: project-scoped-filesystem-and-github
+category: false-positive
+description: >
+  The everyday developer setup: a filesystem server scoped to one repository and
+  the official GitHub server with a keychain-resolved token. Project files can
+  reach GitHub (a real, medium path) but nothing reaches ~/.ssh and nothing is
+  critical. Reporting a credential exfiltration path here is a false positive.
+environment:
+  home: /Users/dev
+  servers:
+    - name: filesystem
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-filesystem@0.6.2", "/Users/dev/projects/x"]
+      tools:
+        - {name: read_file, description: "Read a file.", params: [path]}
+        - {name: write_file, description: "Write a file.", params: [path, content]}
+    - name: github
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-github@2025.4.8"]
+      env: {GITHUB_TOKEN: "$(security find-generic-password -s gh -w)"}
+      tools:
+        - {name: search_repositories, description: "Search repositories.", params: [query]}
+        - {name: create_issue, description: "Create an issue.", params: [owner, repo, title, body]}
+truth:
+  capabilities:
+    filesystem: [read-project-file, write-file]
+    github: [external-channel, untrusted-ingress]
+  attack_paths: [data-exfiltration, persistent-compromise]
+  severity: critical
+expect:
+  capabilities:
+    filesystem: [file-read, file-write]
+    github: [external-send, untrusted-ingress]
+  attack_paths: [AP001, AP003]
+  explain:
+    - {question: "Can this agent leak my SSH keys?", verdict: "NO COMPLETE PATH"}
+    - {question: "Can a malicious issue run commands on my machine?", verdict: "NO COMPLETE PATH"}
+must_not_report:
+  attack_paths: [AP002, AP005, AP006]
+  capabilities:
+    github: [network-send, shell-exec]

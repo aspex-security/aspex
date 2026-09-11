@@ -1,0 +1,37 @@
+name: shell-plus-fetch-remote-control
+category: destructive-actions
+description: >
+  Command execution plus an unconstrained fetch server: the shape of remote
+  control. The fetch server is also an ingress, so untrusted content can reach
+  the shell; that must be reported once (AP005), not twice (AP006). A shell can
+  read any file, but Aspex reports that as remote control, not as a separate
+  file-read exfiltration path: one composition, one finding.
+environment:
+  home: /Users/dev
+  servers:
+    - name: shell
+      command: npx
+      args: ["-y", "desktop-commander@0.2.3"]
+      tools:
+        - {name: start_process, description: "Start a process with a shell command.", params: [command]}
+    - name: fetch
+      command: uvx
+      args: ["mcp-server-fetch==2025.4.7"]
+      tools:
+        - {name: fetch, description: "Fetch a URL and return its content.", params: [url]}
+truth:
+  capabilities:
+    shell: [command-execution]
+    fetch: [network-egress, untrusted-ingress]
+  attack_paths: [remote-control]
+  severity: critical
+expect:
+  capabilities:
+    shell: [shell-exec]
+    fetch: [network-send, untrusted-ingress]
+  attack_paths: [AP005]
+  blast_radius: HIGH
+  explain:
+    - {question: "Can a malicious web page run commands on my machine?", verdict: "YES"}
+must_not_report:
+  attack_paths: [AP006, AP001]

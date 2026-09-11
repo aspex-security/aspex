@@ -1,0 +1,27 @@
+name: benign-sequential-thinking
+category: benign
+description: >
+  A reasoning-only server with no filesystem, network, or execution capability.
+  Nothing should be reported; blast radius LOW.
+environment:
+  home: /Users/dev
+  servers:
+    - name: sequential-thinking
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-sequential-thinking@0.6.2"]
+      tools:
+        - {name: sequentialthinking, description: "A detailed tool for dynamic and reflective problem-solving through thoughts.", params: [thought, nextThoughtNeeded, thoughtNumber, totalThoughts]}
+truth:
+  capabilities: {sequential-thinking: []}
+  attack_paths: []
+  severity: none
+expect:
+  blast_radius: LOW
+  explain:
+    - {question: "Can this agent exfiltrate my credentials?", verdict: "NO COMPLETE PATH"}
+    - {question: "Can this agent run commands?", verdict: "NO COMPLETE PATH"}
+must_not_report:
+  attack_paths: [AP001, AP002, AP003, AP004, AP005, AP006]
+  capabilities:
+    sequential-thinking: [shell-exec, network-send, file-read, file-write]
+  blast_radius_above: LOW

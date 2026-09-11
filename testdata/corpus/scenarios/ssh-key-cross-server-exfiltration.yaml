@@ -1,0 +1,39 @@
+name: ssh-key-cross-server-exfiltration
+category: cross-mcp
+description: >
+  A home-scoped filesystem server next to a browser automation server. Neither is
+  malicious; together they form a path from ~/.ssh to any HTTPS destination that an
+  injected instruction could walk.
+environment:
+  home: /Users/dev
+  servers:
+    - name: filesystem
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-filesystem@0.6.2", "/Users/dev"]
+      tools:
+        - {name: read_file, description: "Read the complete contents of a file.", params: [path]}
+        - {name: write_file, description: "Create or overwrite a file.", params: [path, content]}
+    - name: browser
+      command: npx
+      args: ["-y", "@playwright/mcp@0.0.30"]
+      tools:
+        - {name: browser_navigate, description: "Navigate to a URL.", params: [url]}
+        - {name: browser_click, description: "Click an element.", params: [ref]}
+truth:
+  capabilities:
+    filesystem: [read-sensitive-file, write-file]
+    browser: [network-egress, untrusted-ingress]
+  attack_paths: [credential-exfiltration, persistent-compromise]
+  severity: critical
+expect:
+  capabilities:
+    filesystem: [file-read, file-write]
+    browser: [network-send, untrusted-ingress, browser]
+  attack_paths: [AP001, AP003]
+  blast_radius: HIGH
+  explain:
+    - {question: "Can external content reach my AWS credentials?", verdict: "YES"}
+    - {question: "Can this agent exfiltrate SSH keys?", verdict: "YES"}
+    - {question: "Can this agent delete production data?", verdict: "NO COMPLETE PATH"}
+must_not_report:
+  attack_paths: [AP005, AP006]

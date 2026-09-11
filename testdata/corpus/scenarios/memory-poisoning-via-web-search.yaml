@@ -1,0 +1,33 @@
+name: memory-poisoning-via-web-search
+category: memory-poisoning
+description: >
+  A web search server (ingress) and a memory server (persistent writes). Search
+  results could plant memories that steer later sessions. Medium, not critical:
+  memories are advice, not code.
+environment:
+  home: /Users/dev
+  servers:
+    - name: brave-search
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-brave-search@0.6.2"]
+      env: {BRAVE_API_KEY: "$BRAVE_API_KEY"}
+    - name: memory
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-memory@0.6.2"]
+truth:
+  capabilities:
+    brave-search: [untrusted-ingress]
+    memory: [memory-write]
+  attack_paths: [memory-poisoning]
+  severity: medium
+expect:
+  capabilities:
+    brave-search: [untrusted-ingress]
+    memory: [memory-write]
+  attack_paths: [AP004]
+  explain:
+    - {question: "Can this agent poison its memory?", verdict: "YES"}
+    - {question: "Can external content reach my AWS credentials?", verdict: "NO COMPLETE PATH"}
+must_not_report:
+  attack_paths: [AP001, AP002, AP003, AP005, AP006]
+  blast_radius_above: MEDIUM
