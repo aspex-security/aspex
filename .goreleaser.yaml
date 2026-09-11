@@ -134,10 +134,9 @@ archives:
       - LICENSE
       - README.md
 
-# macOS: a cask (GoReleaser's replacement for binary formulae). No quarantine
-# prompt, no compile step. The formula below stays for Linux and for installs
-# that predate the cask; `brew install aspex-security/tap/aspex` keeps working,
-# `brew install --cask aspex-security/tap/aspex` gets the cask.
+# Homebrew: cask only (GoReleaser's replacement for binary formulae). No
+# quarantine prompt, no compile step. Casks are macOS; Linux installs use the
+# release archives or npm.
 homebrew_casks:
   - name: aspex
     ids: [aspex-combined]
@@ -170,54 +169,6 @@ homebrew_casks:
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/aspex-attack"]
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/aspex-doctor"]
           end
-
-brews:
-  - name: aspex
-    ids: [aspex-combined]
-    repository:
-      owner: aspex-security
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    commit_author:
-      name: goreleaserbot
-      email: bot@goreleaser.com
-    commit_msg_template: "Brew formula update for aspex version {{ .Tag }}"
-    directory: Formula
-    homepage: "https://github.com/aspex-security/aspex"
-    description: "Local security debugger for AI agents: know what your agents can do, know what they actually did"
-    license: "Apache-2.0"
-    skip_upload: auto
-    install: |
-      bin.install "aspex-scan"
-      bin.install "aspex-trace"
-      bin.install "aspex-attack"
-      bin.install "aspex"
-      bin.install "aspex-doctor"
-    test: |
-      system "#{bin}/aspex-scan version"
-      system "#{bin}/aspex-trace version"
-      system "#{bin}/aspex-attack --version"
-      system "#{bin}/aspex --version"
-      system "#{bin}/aspex-doctor --version"
-    caveats: |
-      Start here:
-
-        aspex                 What your AI agents did in the last 30 days, then the menu
-        aspex share           Same headlines as a privacy-safe card to paste anywhere
-
-      The two tools:
-
-        aspex-trace           Full audit trail from your AI clients' own logs. No proxy.
-        aspex-scan            Audit every MCP server you have configured. 140+ rules.
-        aspex-scan doctor     2-second pre-flight: leaked secrets, broad paths, plaintext HTTP
-
-      Make it yours:
-
-        aspex-scan init                                  .aspex.yaml: accept risks with a reason
-        aspex-scan --save-baseline aspex-baseline.json   then --baseline to fail only on new findings
-        aspex-scan --with-trace                          rank risky servers by how much you use them
-
-      Offline. No account. Nothing leaves your machine.
 
 checksum:
   name_template: "checksums.txt"

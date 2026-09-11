@@ -7,6 +7,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.8.1] - 2026-09-11
+
+### Changed
+- Homebrew: cask only. The formula is removed from the tap and from the
+  release configuration (GoReleaser's deprecated `brews`). `brew install
+  aspex-security/tap/aspex` installs the cask on macOS; Linux uses the release
+  archives or npm. Existing formula installs: `brew uninstall aspex && brew
+  install aspex-security/tap/aspex`.
+
 ## [0.8.0] - 2026-09-11
 
 Aspex becomes a local security debugger for AI agents: know what your agents
@@ -66,9 +75,7 @@ can do, what they actually did, what changed, and what could happen next.
   with purl and fingerprint hash, destinations as external references, attack
   paths as vulnerabilities, Aspex specifics as properties). The native
   `aspex-asbom/v1` stays authoritative.
-- Homebrew cask (`brew install --cask aspex-security/tap/aspex`) for macOS,
-  published alongside the formula; the formula remains for Linux and existing
-  installs.
+- Homebrew cask (`brew install aspex-security/tap/aspex`) for macOS.
 - Explorer UI contract test: every dataset field the page reads exists, every
   view has a renderer, no external resources, strings are escaped.
 

@@ -148,10 +148,10 @@ Narrow the root back to the project and run it again: the path is reported as re
 ## Install
 
 ```sh
-brew install aspex-security/tap/aspex      # macOS / Linux
-npx aspex                                  # Node
+brew install aspex-security/tap/aspex      # macOS (Homebrew cask, no Gatekeeper prompt)
+npx aspex                                  # macOS / Linux / Windows with Node
 ```
-Or download a binary from [Releases](https://github.com/aspex-security/aspex/releases). One static Go binary per tool; `aspex` is the front door and routes every command below.
+Or download a static binary for macOS, Linux or Windows from [Releases](https://github.com/aspex-security/aspex/releases). One Go binary per tool; `aspex` is the front door and routes every command below.
 
 ## Scan
 
@@ -290,7 +290,7 @@ Findings map to OWASP LLM Top 10, MITRE ATLAS, and CWE. [All 225+ rules](https:/
 ## Install
 
 ```sh
-brew install aspex-security/tap/aspex                                                  # macOS / Linux
+brew install aspex-security/tap/aspex                                                  # macOS (Homebrew cask)
 npx aspex                                                                              # anywhere with Node, no install
 npm install -g aspex                                                                   # all five commands on PATH
 curl -fsSL https://raw.githubusercontent.com/aspex-security/aspex/main/install.sh | sh  # Linux / WSL

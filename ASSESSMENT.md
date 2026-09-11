@@ -78,5 +78,3 @@ engine, and `report` stays below `agentenv` (it has its own small
   `internal/hooks` and the environment model.
 - CycloneDX export covers servers, destinations, hooks, skills and attack
   paths; capabilities and scope ride as properties by design.
-- After one release with both, retire the Homebrew formula in favour of the
-  cask for macOS (keep the formula for Linux).
