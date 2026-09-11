@@ -145,6 +145,8 @@ BASELINES
 	root.AddCommand(newLiveCmd())
 	root.AddCommand(newKillChainCmd())
 	root.AddCommand(newProvenanceCmd())
+	root.AddCommand(newReproCmd())
+	root.AddCommand(newReplayCmd())
 	root.AddCommand(newCompletionCmd())
 
 	return root

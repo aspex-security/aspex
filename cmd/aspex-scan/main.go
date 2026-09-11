@@ -203,6 +203,7 @@ COMPARING OVER TIME
 	root.AddCommand(newExploreCmd(&gf))
 	root.AddCommand(newCorpusCmd(&gf))
 	root.AddCommand(newHistoryCmd(&gf))
+	root.AddCommand(newSimulateCmd(&gf))
 	root.AddCommand(newInventoryCmd(&gf))
 	root.AddCommand(newAttackPathsCmd(&gf))
 	root.AddCommand(newShadowCmd(&gf))
@@ -954,47 +955,160 @@ func runPhantom(gf *globalFlags, jsonOut bool, interval time.Duration) error {
 }
 
 func newInspectCmd(gf *globalFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:     "inspect <server-name>",
-		Short:   "Deep-inspect a single MCP server",
-		Long:    "Launch and interrogate one MCP server by name (as it appears in your client config) and print a full finding report for that server alone.",
-		Example: "  aspex-scan inspect github\n  aspex-scan inspect filesystem --no-exec",
-		Args:    cobra.ExactArgs(1),
+	var impact, noImpact bool
+	cmd := &cobra.Command{
+		Use:   "inspect <server-name | command string | path>",
+		Short: "Inspect one server, including one you have not installed yet, and its impact on your environment",
+		Long: `Three kinds of target:
+
+  a configured server name      aspex-scan inspect github
+  a command string (quoted)     aspex-scan inspect "npx -y @scope/some-mcp-server"
+  a local package directory     aspex-scan inspect ./new-mcp-server
+
+A command string or path is treated as a server you are considering adding.
+It is analyzed statically by default (capabilities inferred from the package
+name and, for a directory, its package.json; nothing is executed or
+installed). Pass --exec to launch a command string and read its live tool
+list; local directories are never executed.
+
+Impact on YOUR environment is shown for anything not yet configured: the
+server is added to a copy of the current environment and the blast radius and
+attack paths before and after are compared. Nothing is modified.`,
+		Example: `  aspex-scan inspect github
+  aspex-scan inspect "npx -y @modelcontextprotocol/server-filesystem /Users/me"
+  aspex-scan inspect ./vendor/some-mcp-server --json`,
+		Args:          cobra.ExactArgs(1),
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			entry := discover.ServerEntry{
-				Name:    args[0],
-				Client:  "cli",
-				Command: args[0],
+			target := args[0]
+			in := loadInputs(gf, true)
+			// 1. A configured server: inspect it as before.
+			for _, srv := range in.Servers {
+				if strings.EqualFold(srv.Entry.Name, target) {
+					return printSingleServer(gf, srv)
+				}
+			}
+			// 2. A path or command string: a candidate server.
+			entry, static, err := candidateEntry(target)
+			if err != nil {
+				return err
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			srv := inspect.InspectServer(ctx, entry, inspect.Options{NoExec: gf.noExec})
-			findings := rules.EvalServer(srv)
-			sc := score.ScoreServer(findings)
-			overall := score.ScoreOverall([]score.ServerScore{sc})
-
+			noExec := gf.noExec || static || !impact
+			if !cmd.Flags().Changed("exec") {
+				noExec = true
+			}
+			srv := inspect.InspectServer(ctx, entry, inspect.Options{NoExec: noExec})
+			if noExec {
+				srv.StaticOnly = true
+			}
+			if err := printSingleServer(gf, srv); err != nil && err != errExitOne {
+				return err
+			}
+			if noImpact {
+				return nil
+			}
+			sim := agentenv.Simulate(in, []agentenv.HypotheticalChange{{Kind: agentenv.AddServer, Added: srv}})
 			if gf.jsonOut {
-				out := report.JSONScanOutput{
-					Version: version.Version,
-					Overall: overall,
-					Servers: []report.JSONServerResult{toJSONServer(srv, sc)},
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				return enc.Encode(struct {
+					Schema string `json:"$schema"`
+					Target string `json:"target"`
+					Static bool   `json:"static"`
+					agentenv.Simulation
+				}{fmt.Sprintf("aspex-simulate/v%d", agentenv.SimSchemaVersion), target, noExec, sim})
+			}
+			c := func(col, s string) string {
+				if gf.noColor {
+					return s
 				}
-				return report.WriteJSONScan(os.Stdout, out)
+				return col + s + ansiReset
 			}
-
-			r := report.ScanReport{
-				Version:   version.Version,
-				ElapsedMS: 0,
-				Servers:   []*inspect.Server{srv},
-				Scores:    []score.ServerScore{sc},
-				Overall:   overall,
-				NoColor:   gf.noColor,
-				Explain:   gf.explain,
+			fmt.Fprintf(os.Stdout, "  %s  %s\n", c(ansiPurple+ansiBold, "◆"), c(ansiBold, "Impact on your current environment if you add "+entry.Name))
+			if noExec {
+				fmt.Fprintf(os.Stdout, "     %s\n", c(ansiDim, "capabilities inferred statically from the package; nothing was executed or installed"))
 			}
-			report.PrintScanReport(os.Stdout, r)
-			return checkExitCode(gf.failOn, overall, nil)
+			fmt.Fprintln(os.Stdout)
+			printSimulation(os.Stdout, sim, gf.noColor)
+			if len(sim.Drift.PathsAdded) > 0 {
+				after := sim.After
+				fmt.Fprintf(os.Stdout, "  %s\n", c(ansiBold, "Recommendation"))
+				seen := map[string]bool{}
+				for _, p := range sim.Drift.PathsAdded {
+					t := agentenv.FirstControl(after, p, projectRootHint())
+					if !seen[t] {
+						seen[t] = true
+						fmt.Fprintf(os.Stdout, "     %s %s\n", c(ansiGreen, "→"), report.SanitizeForTerminal(t))
+					}
+				}
+				fmt.Fprintln(os.Stdout)
+			}
+			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&impact, "exec", false, "Launch a command-string target to read its live tool list (never for directories)")
+	cmd.Flags().BoolVar(&noImpact, "no-impact", false, "Only inspect the target; skip the environment impact simulation")
+	return cmd
+}
+
+// candidateEntry builds a server entry from a command string or a local
+// package directory. static is true when the target must not be executed.
+func candidateEntry(target string) (discover.ServerEntry, bool, error) {
+	cwd, _ := os.Getwd()
+	if st, err := os.Stat(target); err == nil && st.IsDir() {
+		name := filepath.Base(filepath.Clean(target))
+		pkgName := ""
+		if data, err := os.ReadFile(filepath.Join(target, "package.json")); err == nil {
+			var pj struct {
+				Name string `json:"name"`
+				Bin  interface{}
+			}
+			if json.Unmarshal(data, &pj) == nil && pj.Name != "" {
+				pkgName = pj.Name
+				name = pj.Name
+			}
+		}
+		args := []string{target}
+		if pkgName != "" {
+			args = []string{"-y", pkgName, target}
+		}
+		// The command line is what static inference reads; it is never run here.
+		return discover.ServerEntry{Name: name, Client: "candidate", Command: "npx", Args: args, ConfigPath: filepath.Join(cwd, "(not configured)")}, true, nil
+	}
+	fields := strings.Fields(target)
+	if len(fields) == 0 {
+		return discover.ServerEntry{}, true, fmt.Errorf("empty target")
+	}
+	name := fields[len(fields)-1]
+	for _, f := range fields[1:] {
+		if strings.HasPrefix(f, "@") || strings.Contains(f, "mcp") || strings.Contains(f, "server-") {
+			name = f
+			break
+		}
+	}
+	if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") {
+		return discover.ServerEntry{Name: target, Client: "candidate", URL: target, ConfigPath: filepath.Join(cwd, "(not configured)")}, false, nil
+	}
+	return discover.ServerEntry{Name: name, Client: "candidate", Command: fields[0], Args: fields[1:], ConfigPath: filepath.Join(cwd, "(not configured)")}, false, nil
+}
+
+// printSingleServer prints the per-server report for one inspected server.
+func printSingleServer(gf *globalFlags, srv *inspect.Server) error {
+	findings := rules.EvalServer(srv)
+	sc := score.ScoreServer(findings)
+	overall := score.ScoreOverall([]score.ServerScore{sc})
+	if gf.jsonOut {
+		return nil // the caller emits one JSON document
+	}
+	r := report.ScanReport{
+		Version: version.Version, Servers: []*inspect.Server{srv}, Scores: []score.ServerScore{sc},
+		Overall: overall, NoColor: gf.noColor, Explain: gf.explain,
+	}
+	report.PrintScanReport(os.Stdout, r)
+	return checkExitCode(gf.failOn, overall, nil)
 }
 
 // runFindingDiff is the pre-0.8 `diff --baseline` behaviour: compare finding
@@ -2921,6 +3035,9 @@ verdict is computed from what the configured servers can do.
   aspex-scan explain "Can a malicious README steal my AWS credentials?"
   aspex-scan explain "Can this agent delete production data?"
   aspex-scan explain "Can external content change my agent's hooks?"
+  aspex-scan explain "Where could data from ~/.aws/credentials go?"
+  aspex-scan explain "What sensitive data could reach Slack?"
+  aspex-scan explain AP003                # what a finding is, why it fires here, what breaks it
 
 Answers say YES (plausible path exists) or NO COMPLETE PATH, list every
 required condition as met or unmet with evidence, and state what is not
@@ -2935,6 +3052,9 @@ A server name prints that server's findings, advisories and risk narrative.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			arg := strings.Join(args, " ")
 			if len(args) == 1 && !strings.ContainsAny(arg, " ?") {
+				if isFindingID(arg) {
+					return runExplainFinding(gf, arg)
+				}
 				return runExplainServer(gf, arg)
 			}
 			return runExplainQuestion(gf, arg)
@@ -3224,4 +3344,23 @@ func newDoctorCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&noColor, "no-color", false, "Disable color output")
 
 	return cmd
+}
+
+func isFindingID(s string) bool {
+	u := strings.ToUpper(s)
+	for _, p := range []string{"AP", "MCP", "AT", "HOOK", "REG"} {
+		if strings.HasPrefix(u, p) && len(u) > len(p) {
+			rest := u[len(p):]
+			digits := true
+			for _, r := range rest {
+				if r < '0' || r > '9' {
+					digits = false
+				}
+			}
+			if digits {
+				return true
+			}
+		}
+	}
+	return false
 }
