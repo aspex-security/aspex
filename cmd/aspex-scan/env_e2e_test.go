@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -15,7 +16,14 @@ import (
 	"github.com/aspex-security/aspex/internal/testenv"
 )
 
+func skipOnWindows(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture uses POSIX filesystem roots; scope classification of Windows paths is covered by the attackpath unit tests")
+	}
+}
+
 func TestE2E_LockIsDeterministicAndVerifyPassesThenFailsOnDrift(t *testing.T) {
+	skipOnWindows(t)
 	home := testenv.FakeHome(t)
 	dir := t.TempDir()
 	t.Chdir(dir)
@@ -120,6 +128,7 @@ func git(t *testing.T, dir string, args ...string) {
 }
 
 func TestE2E_DiffBetweenGitRevisionsIsASecurityImpactDiff(t *testing.T) {
+	skipOnWindows(t)
 	home := testenv.FakeHome(t)
 	repo := t.TempDir()
 	t.Chdir(repo)

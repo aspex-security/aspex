@@ -8,6 +8,7 @@ package tighten
 import (
 	"fmt"
 	"io"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -150,9 +151,9 @@ func observedPaths(events []logparse.Event, home string) map[string][]string {
 			if skip[strings.ToLower(k)] || v == "" {
 				continue
 			}
-			v = strings.TrimSpace(v)
+			v = filepath.ToSlash(strings.TrimSpace(v))
 			if strings.HasPrefix(v, "~/") && home != "" {
-				v = filepath.Join(home, v[2:])
+				v = path.Join(filepath.ToSlash(home), v[2:])
 			}
 			if !strings.HasPrefix(v, "/") || strings.ContainsAny(v, "\n ") {
 				continue
@@ -160,7 +161,7 @@ func observedPaths(events []logparse.Event, home string) map[string][]string {
 			if out[key] == nil {
 				out[key] = map[string]bool{}
 			}
-			out[key][filepath.Clean(v)] = true
+			out[key][path.Clean(v)] = true
 		}
 	}
 	res := map[string][]string{}
@@ -181,6 +182,10 @@ func observedPaths(events []logparse.Event, home string) map[string][]string {
 func recommendRoots(roots, observed []string, home string, strong bool) (recommended, neverObserved []string, reduction string) {
 	if len(observed) == 0 {
 		return nil, nil, ""
+	}
+	home = filepath.ToSlash(home)
+	for i := range roots {
+		roots[i] = filepath.ToSlash(roots[i])
 	}
 	broad := false
 	for _, r := range roots {
@@ -244,9 +249,9 @@ func collapse(p, home string) string {
 	return "/" + strings.Join(parts[:n], "/")
 }
 
-func isAncestorOf(dir, path string) bool {
-	rel, err := filepath.Rel(dir, path)
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, "../")
+func isAncestorOf(dir, p string) bool {
+	dir = strings.TrimSuffix(dir, "/")
+	return p == dir || strings.HasPrefix(p, dir+"/")
 }
 
 func plural(n int, one, many string) string {

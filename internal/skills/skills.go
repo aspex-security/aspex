@@ -110,6 +110,7 @@ func Load(dir, scope string) (Skill, bool) {
 			return nil
 		}
 		rel, _ := filepath.Rel(dir, p)
+		rel = filepath.ToSlash(rel) // stable across OSes; the hash covers this name
 		if scriptExt[strings.ToLower(filepath.Ext(p))] || info.Mode()&0o111 != 0 {
 			if data, err := os.ReadFile(p); err == nil {
 				others[rel] = data

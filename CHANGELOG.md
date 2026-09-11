@@ -237,14 +237,14 @@ your agents actually did, then scan what they could do."
 ## [0.5.5] - 2026-06-29
 
 ### Added
-- aspex-scan: **Score delta** — summary box now shows change since last scan (`↑ +12 pts`, `↓ -5 pts`, `= no change`)
-- aspex-scan: **Prioritized fix plan** — after each scan, shows "Top actions to improve your score" ranked by estimated point gain (e.g. `Fix Secrets in config env across 2 servers (~+70 pts)`)
-- aspex-scan: **First-run calibration** — on first-ever scan, explains that a low score is typical for developer machines and most findings are fixable in under 30 minutes
-- aspex-scan: **`--share` flag** — prints a privacy-safe Markdown summary (no server names, URLs, or values) suitable for sharing with a team or security review
-- aspex-scan: **`--report soc2|iso27001`** — generates a compliance mapping report, showing PASS/FAIL per control with matching findings, and an overall posture verdict
-- aspex-scan: **`explain <server-name>`** subcommand — deep-inspection narrative per server: score, all findings with full advisory (why/exploit/impact), and a risk summary sentence
-- aspex-scan: **`fix env`** subcommand — generates macOS Keychain migration commands for each hardcoded credential found in MCP configs (`security add-generic-password` + `$(security find-generic-password ...)` replacement snippets)
-- aspex-scan: **Continuous monitoring prompt** — footer now suggests `aspex-scan cron --interval 1h` when findings exist
+- aspex-scan: **Score delta** - summary box now shows change since last scan (`↑ +12 pts`, `↓ -5 pts`, `= no change`)
+- aspex-scan: **Prioritized fix plan** - after each scan, shows "Top actions to improve your score" ranked by estimated point gain (e.g. `Fix Secrets in config env across 2 servers (~+70 pts)`)
+- aspex-scan: **First-run calibration** - on first-ever scan, explains that a low score is typical for developer machines and most findings are fixable in under 30 minutes
+- aspex-scan: **`--share` flag** - prints a privacy-safe Markdown summary (no server names, URLs, or values) suitable for sharing with a team or security review
+- aspex-scan: **`--report soc2|iso27001`** - generates a compliance mapping report, showing PASS/FAIL per control with matching findings, and an overall posture verdict
+- aspex-scan: **`explain <server-name>`** subcommand - deep-inspection narrative per server: score, all findings with full advisory (why/exploit/impact), and a risk summary sentence
+- aspex-scan: **`fix env`** subcommand - generates macOS Keychain migration commands for each hardcoded credential found in MCP configs (`security add-generic-password` + `$(security find-generic-password ...)` replacement snippets)
+- aspex-scan: **Continuous monitoring prompt** - footer now suggests `aspex-scan cron --interval 1h` when findings exist
 - internal: new `history` package reads previous scan logs from the OS cache dir to power score delta and first-run detection
 
 ---
@@ -252,13 +252,13 @@ your agents actually did, then scan what they could do."
 ## [0.5.4] - 2026-06-29
 
 ### Fixed
-- aspex-scan: `npm` added to `knownRuntimes` — servers launched via `npm exec` (e.g. Onyx MCP gateway) were treated as static-only, causing 0 tools to be enumerated and all tool-level rules (prompt injection, credential exposure, etc.) to be silently skipped
+- aspex-scan: `npm` added to `knownRuntimes` - servers launched via `npm exec` (e.g. Onyx MCP gateway) were treated as static-only, causing 0 tools to be enumerated and all tool-level rules (prompt injection, credential exposure, etc.) to be silently skipped
 - aspex-scan MCP021: plaintext HTTP remote server now correctly rated CRITICAL (was MEDIUM); transmitting MCP tool calls over unencrypted HTTP is a critical interception risk
 - aspex-scan MCP001: prompt injection patterns now also checked against `metadata.description` in the server config entry (static analysis, no server connection required)
-- aspex-doctor: removed over-broad `"AUTH"` pattern from `dangerousEnvPatterns` — it matched `OAUTH` state flags (`USE_STAGING_OAUTH`, `CLAUDE_CODE_OAUTH_SCOPES`, `CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH`, `CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH`) causing false positives
-- aspex-doctor: vars ending in `_URL` are no longer flagged as secrets — URLs are endpoints, not credentials
+- aspex-doctor: removed over-broad `"AUTH"` pattern from `dangerousEnvPatterns` - it matched `OAUTH` state flags (`USE_STAGING_OAUTH`, `CLAUDE_CODE_OAUTH_SCOPES`, `CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH`, `CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH`) causing false positives
+- aspex-doctor: vars ending in `_URL` are no longer flagged as secrets - URLs are endpoints, not credentials
 - aspex-doctor: added known OAuth state vars to `envFalsePositives` (`USE_STAGING_OAUTH`, `USE_LOCAL_OAUTH`, `CLAUDE_CODE_*`, `MCP_GATEWAY_OAUTH_PROVIDERS_URL`)
-- aspex-doctor: config-secrets findings now deduplicated by key name across all server blocks — gateway-style configs where N servers share the same env block no longer report the same key N times
+- aspex-doctor: config-secrets findings now deduplicated by key name across all server blocks - gateway-style configs where N servers share the same env block no longer report the same key N times
 
 ---
 
@@ -266,7 +266,7 @@ your agents actually did, then scan what they could do."
 
 ### Fixed
 - aspex-doctor: section headers were garbled on all sections except Environment due to byte-slicing multi-byte UTF-8 `─` characters (each is 3 bytes; `sep[:52]` was cutting mid-rune). Fixed by using `strings.Repeat("─", N)` directly.
-- aspex-doctor: uninstalled clients (vscode, windsurf, etc.) no longer show as red `✗ config not found` — collapsed to a single dim `· not detected: ...` line
+- aspex-doctor: uninstalled clients (vscode, windsurf, etc.) no longer show as red `✗ config not found` - collapsed to a single dim `· not detected: ...` line
 - aspex-scan attack-paths: 14 near-duplicate findings now grouped by attack type (4 blocks instead of 14), with all server pairs listed under each type
 
 ---
