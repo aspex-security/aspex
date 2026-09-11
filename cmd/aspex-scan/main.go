@@ -196,6 +196,10 @@ COMPARING OVER TIME
 	root.AddCommand(newVerifyCmd(&gf))
 	root.AddCommand(newCheckPackageCmd())
 	root.AddCommand(newLockCmd(&gf))
+	root.AddCommand(newBomCmd(&gf))
+	root.AddCommand(newTightenCmd(&gf))
+	root.AddCommand(newMCPCmd(&gf))
+	root.AddCommand(newExploreCmd(&gf))
 	root.AddCommand(newInventoryCmd(&gf))
 	root.AddCommand(newAttackPathsCmd(&gf))
 	root.AddCommand(newShadowCmd(&gf))
@@ -2857,16 +2861,34 @@ func printComplianceReport(w io.Writer, format string, allFindings [][]rules.Fin
 
 func newExplainCmd(gf *globalFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "explain <server-name>",
-		Short: "Show detailed findings and risk narrative for a specific server",
-		Long: `Inspect a single MCP server by name and print full finding details,
-advisories, and a risk narrative.`,
-		Example: `  aspex-scan explain github
-  aspex-scan explain my-custom-server`,
-		Args:         cobra.ExactArgs(1),
-		SilenceUsage: true,
+		Use:   "explain <server-name> | \"<question>\"",
+		Short: "Answer a security question about this environment, or narrate one server",
+		Long: `Two forms.
+
+A question is answered deterministically from Aspex's own capability graph
+(no LLM): it is reduced to a bounded query (source, verb, target) and the
+verdict is computed from what the configured servers can do.
+
+  aspex-scan explain "Can a malicious README steal my AWS credentials?"
+  aspex-scan explain "Can this agent delete production data?"
+  aspex-scan explain "Can external content change my agent's hooks?"
+
+Answers say YES (plausible path exists) or NO COMPLETE PATH, list every
+required condition as met or unmet with evidence, and state what is not
+proven. A YES never claims anything happened.
+
+A server name prints that server's findings, advisories and risk narrative.`,
+		Example: `  aspex-scan explain "Can this agent exfiltrate SSH keys?"
+  aspex-scan explain github`,
+		Args:          cobra.MinimumNArgs(1),
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runExplainServer(gf, args[0])
+			arg := strings.Join(args, " ")
+			if len(args) == 1 && !strings.ContainsAny(arg, " ?") {
+				return runExplainServer(gf, arg)
+			}
+			return runExplainQuestion(gf, arg)
 		},
 	}
 	return cmd

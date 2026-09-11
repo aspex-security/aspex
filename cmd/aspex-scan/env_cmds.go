@@ -8,16 +8,27 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/aspex-security/aspex/internal/agentenv"
+	"github.com/aspex-security/aspex/internal/aspexmcp"
 	"github.com/aspex-security/aspex/internal/discover"
+	"github.com/aspex-security/aspex/internal/explore"
 	"github.com/aspex-security/aspex/internal/inspect"
+	"github.com/aspex-security/aspex/internal/killchain"
+	"github.com/aspex-security/aspex/internal/logparse"
+	"github.com/aspex-security/aspex/internal/provenance"
 	"github.com/aspex-security/aspex/internal/registry"
+	"github.com/aspex-security/aspex/internal/tighten"
+	"github.com/aspex-security/aspex/internal/trace"
 	"github.com/aspex-security/aspex/internal/version"
 )
 
@@ -352,4 +363,322 @@ aspex-scan --json output.`,
 	cmd.Flags().StringVar(&markdownOut, "markdown", "", "Also write a Markdown report (PR comment) to this file, or - for stdout")
 	cmd.Flags().BoolVar(&verbose, "verbose", false, "Show informational changes too")
 	return cmd
+}
+
+// ---------------------------------------------------------------------------
+// explain <question>  (server-name form kept)
+// ---------------------------------------------------------------------------
+
+func printAnswer(w *os.File, a agentenv.Answer, noColor bool) {
+	c := func(col, s string) string {
+		if noColor {
+			return s
+		}
+		return col + s + ansiReset
+	}
+	verdictColor := ansiGreen
+	if a.Verdict == "YES" {
+		verdictColor = ansiRed
+	}
+	sub := ""
+	switch a.Verdict {
+	case "YES":
+		sub = "plausible path exists"
+	case "NO COMPLETE PATH":
+		sub = "no complete path found"
+	}
+	fmt.Fprintf(w, "\n  %s  %s\n", c(verdictColor+ansiBold, a.Verdict), c(ansiDim, sub))
+	fmt.Fprintf(w, "  %s %s\n\n", c(ansiDim, "Understood as:"), a.Query.Interpretation)
+	fmt.Fprintf(w, "  %s\n\n", a.Summary)
+	if len(a.Path) > 0 {
+		for i, hop := range a.Path {
+			if i == 0 {
+				fmt.Fprintf(w, "     %s\n", c(ansiBold, hop))
+			} else {
+				fmt.Fprintf(w, "       %s\n     %s\n", c(ansiDim, "↓"), c(ansiBold, hop))
+			}
+		}
+		fmt.Fprintln(w)
+	}
+	fmt.Fprintf(w, "  %s\n", c(ansiDim, "Required conditions"))
+	for _, cond := range a.Conditions {
+		mark := c(ansiGreen, "✓")
+		if !cond.Met {
+			mark = c(ansiRed, "✗")
+		}
+		fmt.Fprintf(w, "     %s %s\n", mark, cond.Text)
+		if cond.Evidence != "" {
+			fmt.Fprintf(w, "       %s\n", c(ansiDim, cond.Evidence))
+		}
+	}
+	if len(a.Missing) > 0 {
+		fmt.Fprintf(w, "\n  %s\n", c(ansiDim, "Missing capabilities"))
+		for _, m := range a.Missing {
+			fmt.Fprintf(w, "     %s %s\n", c(ansiDim, "✗"), m)
+		}
+	}
+	if len(a.NotProven) > 0 {
+		fmt.Fprintf(w, "\n  %s\n", c(ansiDim, "Not proven"))
+		for _, n := range a.NotProven {
+			fmt.Fprintf(w, "     %s %s\n", c(ansiDim, "✗"), n)
+		}
+	}
+	fmt.Fprintf(w, "\n  %s %s\n\n", c(ansiDim, "Confidence:"), c(ansiBold, strings.ToUpper(a.Confidence)))
+}
+
+func runExplainQuestion(gf *globalFlags, question string) error {
+	env := loadEnvironment(gf, gf.jsonOut)
+	a, ok := agentenv.Explain(env, question)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "aspex could not map that question to a security query it can answer deterministically.\nSupported shapes:\n")
+		for _, s := range agentenv.SupportedQuestions {
+			fmt.Fprintf(os.Stderr, "  %s\n", s)
+		}
+		fmt.Fprintf(os.Stderr, "Or name a server: aspex-scan explain <server-name>\n")
+		return errExitOne
+	}
+	if gf.jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(struct {
+			Version  string `json:"version"`
+			Question string `json:"question"`
+			agentenv.Answer
+		}{version.Version, question, a})
+	}
+	printAnswer(os.Stdout, a, gf.noColor)
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// bom
+// ---------------------------------------------------------------------------
+
+func newBomCmd(gf *globalFlags) *cobra.Command {
+	var out string
+	cmd := &cobra.Command{
+		Use:   "bom",
+		Short: "Agent Security Bill of Materials: what constitutes this agent environment",
+		Long: `A portable description of the agent environment: agents, MCP servers and
+their tools, skills, hooks, persistent state, capabilities, reachable
+sensitive resources, external destinations, attack paths, fingerprints.
+
+  aspex-scan bom                 tree for humans
+  aspex-scan bom --json          aspex-asbom/v1 JSON (no secret values)
+
+The JSON is the same schema as .aspex.lock's environment, wrapped with a BOM
+header. It is not CycloneDX or SPDX; see docs for the mapping notes.`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			env := loadEnvironment(gf, gf.jsonOut || out != "")
+			if gf.jsonOut || out != "" {
+				doc := struct {
+					Schema      string               `json:"$schema"`
+					Generator   string               `json:"generator"`
+					Environment agentenv.Environment `json:"environment"`
+				}{fmt.Sprintf("aspex-asbom/v%d", agentenv.SchemaVersion), "aspex " + version.Version, env}
+				data, err := json.MarshalIndent(doc, "", "  ")
+				if err != nil {
+					return err
+				}
+				data = append(data, '\n')
+				if out != "" {
+					return os.WriteFile(out, data, 0o644)
+				}
+				os.Stdout.Write(data)
+				return nil
+			}
+			c := func(col, s string) string {
+				if gf.noColor {
+					return s
+				}
+				return col + s + ansiReset
+			}
+			fmt.Fprintf(os.Stdout, "\n  %s  %s\n\n", c(ansiPurple+ansiBold, "◆"), c(ansiBold, "Agent Security BOM"))
+			agentenv.PrintSummary(os.Stdout, env, gf.noColor)
+			fmt.Fprintln(os.Stdout)
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&out, "output", "o", "", "Write JSON BOM to this file (e.g. agent.asbom.json)")
+	return cmd
+}
+
+// ---------------------------------------------------------------------------
+// tighten
+// ---------------------------------------------------------------------------
+
+func newTightenCmd(gf *globalFlags) *cobra.Command {
+	var since string
+	var minCalls int
+	cmd := &cobra.Command{
+		Use:   "tighten",
+		Short: "Recommend least-privilege configuration from configured vs observed use",
+		Long: `Compare what each server is allowed to do (its tools and filesystem roots)
+with what your agents actually did (aspex-trace logs) and recommend:
+
+  - a tool allowlist per server: observed tools kept, unobserved tools listed
+    as candidates for removal
+  - narrower filesystem roots from the paths that were actually accessed,
+    naming the sensitive directories never touched
+
+Recommendations are based on observed usage in the window. An unobserved tool
+is a candidate, not proven unnecessary; thin evidence is labelled weak. Aspex
+never edits your configuration.`,
+		Example: `  aspex-scan tighten
+  aspex-scan tighten --since 30d
+  aspex-scan tighten --json`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			window, err := parseWindow(since)
+			if err != nil {
+				return err
+			}
+			env := loadEnvironment(gf, gf.jsonOut)
+			events, _, _ := logparse.CollectEvents(nil, time.Now().Add(-window))
+			home, _ := os.UserHomeDir()
+			r := tighten.Analyze(env, events, tighten.Options{Window: window, MinCalls: minCalls, Home: home})
+			if gf.jsonOut {
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				return enc.Encode(struct {
+					Version string `json:"version"`
+					Since   string `json:"since"`
+					tighten.Report
+				}{version.Version, since, r})
+			}
+			tighten.Print(os.Stdout, r, gf.noColor)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&since, "since", "30d", "Activity window (e.g. 7d, 30d)")
+	cmd.Flags().IntVar(&minCalls, "min-calls", 20, "Calls below which a server's tool evidence is marked weak")
+	return cmd
+}
+
+// ---------------------------------------------------------------------------
+// mcp (read-only MCP server exposing Aspex to agents)
+// ---------------------------------------------------------------------------
+
+func newMCPCmd(gf *globalFlags) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mcp",
+		Short: "Serve Aspex to an AI agent as a read-only MCP server (stdio)",
+		Long: `Expose Aspex's analysis to the agent itself over the Model Context Protocol
+on stdin/stdout. The agent can then ask, before it edits .mcp.json or hooks:
+
+  aspex_security_impact   what would this proposed config do to my attack surface?
+  aspex_explain           can external content reach my credentials?
+  aspex_scan              summarize servers, capabilities, blast radius
+  aspex_get_attack_paths  list compositions with evidence
+  aspex_get_capabilities  per-server capabilities and scope
+  aspex_verify            drift against .aspex.lock
+
+Every tool is read-only. Nothing here writes files, runs commands, or changes
+Aspex configuration. Proposed configs are analyzed statically, never launched.
+
+Add to Claude Code:  claude mcp add aspex -- aspex-scan mcp --no-exec
+Add to .mcp.json:    {"aspex":{"command":"aspex-scan","args":["mcp","--no-exec"]}}`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			loader := func(ctx context.Context) agentenv.Environment { return loadEnvironment(gf, true) }
+			s := aspexmcp.New(loader, version.Version, os.Stderr)
+			return s.Serve(context.Background(), os.Stdin, os.Stdout)
+		},
+	}
+	return cmd
+}
+
+// ---------------------------------------------------------------------------
+// explore (local session explorer, loopback only)
+// ---------------------------------------------------------------------------
+
+func newExploreCmd(gf *globalFlags) *cobra.Command {
+	var since string
+	var port int
+	var noOpen, printOnly bool
+	cmd := &cobra.Command{
+		Use:   "explore",
+		Short: "Open a local session explorer: timeline, provenance, capability graph, findings",
+		Long: `Launch an ephemeral local web UI bound to 127.0.0.1 (never any other
+interface) that shows what your agents did and what they could do:
+
+  Timeline      every tool call, content ingestion and network call, per session
+  Provenance    which ingested content preceded a suspicious call, with
+                OBSERVED / INFERRED / NOT OBSERVED evidence
+  Kill chains   multi-step patterns with labeled evidence
+  Graph         external content -> agent -> servers -> sensitive resources,
+                attack-path edges highlighted, exercised edges in green
+  Findings      why Aspex believes each one, and what it cannot prove
+
+Nothing leaves the machine; the page loads one JSON document from the local
+process. Ctrl-C stops it.`,
+		Example: `  aspex-scan explore
+  aspex-scan explore --since 7d --port 7777
+  aspex-scan explore --json > session.json     # the dataset, no server`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			window, err := parseWindow(since)
+			if err != nil {
+				return err
+			}
+			ds, err := buildExploreDataset(gf, window)
+			if err != nil {
+				return err
+			}
+			if gf.jsonOut || printOnly {
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				return enc.Encode(ds)
+			}
+			ln, url, err := explore.Listen(port)
+			if err != nil {
+				return err
+			}
+			c := func(col, s string) string {
+				if gf.noColor {
+					return s
+				}
+				return col + s + ansiReset
+			}
+			fmt.Fprintf(os.Stderr, "\n  %s  aspex explore  %s\n  %s\n\n", c(ansiPurple+ansiBold, "◆"), c(ansiBold, url), c(ansiDim, "loopback only · nothing leaves this machine · Ctrl-C to stop"))
+			if !noOpen {
+				openBrowser(url)
+			}
+			srv := &http.Server{Handler: explore.Handler(ds), ReadHeaderTimeout: 5 * time.Second}
+			return srv.Serve(ln)
+		},
+	}
+	cmd.Flags().StringVar(&since, "since", "7d", "Activity window (e.g. 24h, 7d, 30d)")
+	cmd.Flags().IntVar(&port, "port", 0, "Port on 127.0.0.1 (default: a free port)")
+	cmd.Flags().BoolVar(&noOpen, "no-open", false, "Do not open a browser")
+	cmd.Flags().BoolVar(&printOnly, "dataset", false, "Print the dataset as JSON instead of serving")
+	return cmd
+}
+
+func buildExploreDataset(gf *globalFlags, window time.Duration) (explore.Dataset, error) {
+	since := time.Now().Add(-window)
+	events, _, _ := logparse.CollectEvents(nil, since)
+	flagged := trace.AnalyzeEvents(events)
+	chains := killchain.Analyze(events, flagged)
+	prov := provenance.Analyze(events, flagged)
+	env := loadEnvironment(gf, true)
+	return explore.Build(explore.Inputs{Events: events, Flagged: flagged, Chains: chains, Prov: prov, Env: env, Window: window}), nil
+}
+
+func openBrowser(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	default:
+		cmd = exec.Command("xdg-open", url)
+	}
+	_ = cmd.Start()
 }
