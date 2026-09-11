@@ -7,7 +7,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-## [Unreleased]
+## [0.9.0] - 2026-09-11
+
+The release that turns Aspex into a security debugger for AI agents: know what
+your agents can do, what they actually did, what changed, why it matters, and
+what would happen if you changed something.
 
 ### Added
 - `aspex simulate`: counterfactual security analysis. Clone the environment in
