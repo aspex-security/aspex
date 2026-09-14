@@ -67,10 +67,18 @@ func EvalToolCatalog(t *mcpclient.Tool) []Finding {
 		var matched bool
 		detail := ""
 
+		// Detail names the tool and where the signal was found (name /
+		// description / input schema), phrased as the capability the rule
+		// detects — not the raw substring that matched. Exposing the pattern
+		// (e.g. "name contains 'r_eval'") reads like a bug and makes a correct
+		// finding look crude; the matched pattern is kept in Evidence for
+		// debugging.
+		matchedPat := ""
 		if !matched {
 			for _, pat := range rule.toolNames {
 				if strings.Contains(nameLower, pat) {
-					detail = "Tool '" + t.Name + "' name contains '" + pat + "'."
+					detail = "Tool '" + t.Name + "' has a name consistent with " + lowerFirst(rule.name) + "."
+					matchedPat = "name pattern '" + pat + "'"
 					matched = true
 					break
 				}
@@ -79,7 +87,8 @@ func EvalToolCatalog(t *mcpclient.Tool) []Finding {
 		if !matched {
 			for _, word := range rule.descWords {
 				if strings.Contains(descLower, word) {
-					detail = "Tool '" + t.Name + "' description contains '" + word + "'."
+					detail = "Tool '" + t.Name + "' has a description consistent with " + lowerFirst(rule.name) + "."
+					matchedPat = "description pattern '" + word + "'"
 					matched = true
 					break
 				}
@@ -88,15 +97,21 @@ func EvalToolCatalog(t *mcpclient.Tool) []Finding {
 		if !matched {
 			for _, key := range rule.schemaKeys {
 				if strings.Contains(schemaLower, key) {
-					detail = "Tool '" + t.Name + "' input schema contains '" + key + "'."
+					detail = "Tool '" + t.Name + "' has an input schema consistent with " + lowerFirst(rule.name) + "."
+					matchedPat = "schema pattern '" + key + "'"
 					matched = true
 					break
 				}
 			}
 		}
 		if matched {
+			ev := []Evidence{Observed(detail)}
+			if matchedPat != "" {
+				ev = append(ev, Inferred("matched "+matchedPat))
+			}
+			ev = append(ev, Inferred(rule.name))
 			f = append(f, Finding{
-				Evidence: []Evidence{Observed(detail), Inferred(rule.name)},
+				Evidence: ev,
 				RuleID:   rule.ruleID,
 				Name:     rule.name,
 				Severity: rule.sev,
@@ -107,6 +122,21 @@ func EvalToolCatalog(t *mcpclient.Tool) []Finding {
 		}
 	}
 	return f
+}
+
+// lowerFirst lowercases the first rune of s, so a rule name reads naturally
+// mid-sentence ("... consistent with a language REPL or eval capability.").
+func lowerFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	r := []rune(s)
+	// Leave acronyms (two leading capitals, e.g. "SSRF") untouched.
+	if len(r) >= 2 && r[1] >= 'A' && r[1] <= 'Z' {
+		return s
+	}
+	r[0] = []rune(strings.ToLower(string(r[0])))[0]
+	return string(r)
 }
 
 // ─── EvalResourceCatalog ──────────────────────────────────────────────────────

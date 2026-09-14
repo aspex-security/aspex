@@ -97,10 +97,16 @@ func PrintAttackPaths(w io.Writer, noColor bool, chains []attackpath.AttackChain
 	)
 	for _, ch := range chains {
 		sevCol := severityColorName(ch.Severity)
+		title := SanitizeForTerminal(ch.Name)
+		if len(ch.Servers) > 0 {
+			// Two paths can share an ID and name (e.g. two AP005 remote-control
+			// compositions); the servers involved tell them apart at a glance.
+			title += "  " + SanitizeForTerminal(strings.Join(ch.Servers, " + "))
+		}
 		fmt.Fprintf(w, "  %s  %s  %s  %s\n",
 			c(sevCol+colorBold, fmt.Sprintf("%-8s", strings.ToUpper(ch.Severity))),
 			c(colorPurple, ch.ID),
-			c(colorBold, SanitizeForTerminal(ch.Name)),
+			c(colorBold, title),
 			c(colorDim, "confidence: "+ch.Confidence),
 		)
 
@@ -367,7 +373,7 @@ func PrintScanReport(w io.Writer, r ScanReport) {
 			deltaText = fmt.Sprintf("%s %s pts since last scan (was %d/100)", arrow, r.ScoreDelta, r.PrevScore)
 		default:
 			deltaCol = colorDim
-			deltaText = fmt.Sprintf("= no change since last scan (was %d/100)", r.PrevScore)
+			deltaText = fmt.Sprintf("unchanged since last scan (still %d/100)", r.PrevScore)
 		}
 		deltaLine := "  " + c(deltaCol, deltaText)
 		deltaPad := 63 - len(stripANSI(deltaLine))
@@ -434,34 +440,27 @@ func PrintScanReport(w io.Writer, r ScanReport) {
 	}
 
 	// Prioritized fix plan (only when score < 100 and there are findings).
+	// Ranked by the risk each fix retires (critical/high findings cleared, then
+	// how many servers), not by a score-point estimate: the score is dominated
+	// by the worst server and capped by attack paths, so a per-fix "+N pts"
+	// number is misleading. We show what the fix actually removes.
 	if r.Overall.Score < 100 && len(r.Scores) > 0 {
 		type fixAction struct {
-			ruleID        string
-			name          string
-			serverCount   int
-			estimatedGain int
+			name        string
+			serverCount int
+			critical    int
+			high        int
+			medium      int
+			rank        int // severity-weighted, for ordering only
 		}
 		type ruleAgg struct {
-			name        string
-			servers     map[string]bool
-			totalWeight int
-			hasCritHigh bool
+			name     string
+			servers  map[string]bool
+			critical int
+			high     int
+			medium   int
 		}
 		agg := map[string]*ruleAgg{}
-		weightOf := func(sev rules.Severity) int {
-			switch sev {
-			case rules.SeverityCritical:
-				return 35
-			case rules.SeverityHigh:
-				return 20
-			case rules.SeverityMedium:
-				return 10
-			case rules.SeverityLow:
-				return 3
-			default:
-				return 0
-			}
-		}
 		for i, sc := range r.Scores {
 			srvName := r.Servers[i].Entry.Name
 			for _, f := range sc.Findings {
@@ -470,48 +469,60 @@ func PrintScanReport(w io.Writer, r ScanReport) {
 				}
 				a := agg[f.RuleID]
 				a.servers[srvName] = true
-				a.totalWeight += weightOf(f.Severity)
-				if f.Severity >= rules.SeverityHigh {
-					a.hasCritHigh = true
+				switch f.Severity {
+				case rules.SeverityCritical:
+					a.critical++
+				case rules.SeverityHigh:
+					a.high++
+				case rules.SeverityMedium:
+					a.medium++
 				}
 			}
 		}
 		var actions []fixAction
-		headroom := 100 - r.Overall.Score
-		for ruleID, a := range agg {
-			if !a.hasCritHigh {
-				continue
-			}
-			gain := a.totalWeight
-			if gain > headroom {
-				gain = headroom
+		for _, a := range agg {
+			if a.critical == 0 && a.high == 0 {
+				continue // only surface fixes that clear a critical or high
 			}
 			actions = append(actions, fixAction{
-				ruleID:        ruleID,
-				name:          a.name,
-				serverCount:   len(a.servers),
-				estimatedGain: gain,
+				name:        a.name,
+				serverCount: len(a.servers),
+				critical:    a.critical,
+				high:        a.high,
+				medium:      a.medium,
+				rank:        a.critical*100 + a.high*10 + a.medium,
 			})
 		}
 		sort.Slice(actions, func(i, j int) bool {
-			return actions[i].estimatedGain > actions[j].estimatedGain
+			if actions[i].rank != actions[j].rank {
+				return actions[i].rank > actions[j].rank
+			}
+			return actions[i].serverCount > actions[j].serverCount
 		})
 		if len(actions) > 5 {
 			actions = actions[:5]
 		}
 		if len(actions) > 0 {
-			fmt.Fprintf(w, "  %s\n", c(colorBold, "Top actions to improve your score"))
+			fmt.Fprintf(w, "  %s\n", c(colorBold, "Highest-impact fixes"))
 			for _, a := range actions {
 				serverWord := "server"
 				if a.serverCount > 1 {
 					serverWord = "servers"
 				}
-				fmt.Fprintf(w, "  %s Fix %s across %d %s  %s\n",
+				var parts []string
+				if a.critical > 0 {
+					parts = append(parts, fmt.Sprintf("%d critical", a.critical))
+				}
+				if a.high > 0 {
+					parts = append(parts, fmt.Sprintf("%d high", a.high))
+				}
+				if a.medium > 0 {
+					parts = append(parts, fmt.Sprintf("%d medium", a.medium))
+				}
+				fmt.Fprintf(w, "  %s Fix %s  %s\n",
 					c(colorCyan, "→"),
-					c(colorBold, a.name),
-					a.serverCount,
-					serverWord,
-					c(colorBrGreen, fmt.Sprintf("(~+%d pts)", a.estimatedGain)),
+					c(colorBold, SanitizeForTerminal(a.name)),
+					c(colorDim, fmt.Sprintf("clears %s across %d %s", strings.Join(parts, ", "), a.serverCount, serverWord)),
 				)
 			}
 			fmt.Fprintln(w)
@@ -695,9 +706,89 @@ func printServerBlock(w io.Writer, c colorFn, col string, srv *inspect.Server, s
 	}
 
 	fmt.Fprintln(w)
+	// Collapse rules that fire many times on one server (for example MCP018
+	// "long tool description" across every tool) into a single line, so a wall
+	// of near-identical findings does not bury the criticals. Rules that fire
+	// once or twice print in full. The worst severity in the group represents
+	// it; --json keeps every individual finding.
+	counts := map[string]int{}
 	for _, f := range sc.Findings {
+		counts[f.RuleID]++
+	}
+	toolsByRule := map[string][]string{}
+	worstByRule := map[string]rules.Finding{}
+	for _, f := range sc.Findings {
+		if counts[f.RuleID] <= 2 {
+			continue
+		}
+		if t := toolNameFromDetail(f.Detail); t != "" {
+			toolsByRule[f.RuleID] = append(toolsByRule[f.RuleID], t)
+		}
+		if w0, ok := worstByRule[f.RuleID]; !ok || f.Severity > w0.Severity {
+			worstByRule[f.RuleID] = f
+		}
+	}
+	printedAgg := map[string]bool{}
+	for _, f := range sc.Findings {
+		if counts[f.RuleID] > 2 {
+			if printedAgg[f.RuleID] {
+				continue
+			}
+			printedAgg[f.RuleID] = true
+			printAggregatedFinding(w, c, worstByRule[f.RuleID], counts[f.RuleID], toolsByRule[f.RuleID], explain)
+			continue
+		}
 		printFinding(w, c, f, explain)
 	}
+}
+
+// toolNameFromDetail pulls the tool name out of a finding detail that begins
+// "Tool 'name' ...", or returns "" when the detail is not tool-scoped.
+func toolNameFromDetail(d string) string {
+	const p = "Tool '"
+	i := strings.Index(d, p)
+	if i < 0 {
+		return ""
+	}
+	rest := d[i+len(p):]
+	j := strings.Index(rest, "'")
+	if j < 0 {
+		return ""
+	}
+	return rest[:j]
+}
+
+// printAggregatedFinding renders one line for a rule that fired on many tools
+// of a server, listing the tools instead of repeating the whole advisory.
+func printAggregatedFinding(w io.Writer, c colorFn, rep rules.Finding, count int, tools []string, explain bool) {
+	sevCol := findingSeverityColor(rep.Severity)
+	fmt.Fprintf(w, "     %s  %s  %s %s\n",
+		c(sevCol+colorBold, fmt.Sprintf("%-8s", rep.Severity.String())),
+		c(colorPurple, rep.RuleID),
+		c(colorBold, SanitizeForTerminal(rep.Name)),
+		c(colorDim, fmt.Sprintf("×%d", count)),
+	)
+	if len(tools) > 0 {
+		const maxTools = 6
+		shown := tools
+		suffix := ""
+		if len(tools) > maxTools {
+			shown = tools[:maxTools]
+			suffix = fmt.Sprintf(", +%d more", len(tools)-maxTools)
+		}
+		list := "tools: " + strings.Join(shown, ", ") + suffix
+		for _, line := range wrapText(SanitizeForTerminal(list), 58) {
+			fmt.Fprintf(w, "     %s %s\n", c(colorDim, "│"), c(colorDim, line))
+		}
+	}
+	if rep.Mapping != "" {
+		fmt.Fprintf(w, "     %s %s\n", c(colorDim, "│"), c(colorDim+colorPurple, SanitizeForTerminal(rep.Mapping)))
+	}
+	if rep.Fix != "" {
+		fmt.Fprintf(w, "     %s %s %s\n", c(colorDim, "╰"), c(colorCyan, "fix:"), SanitizeForTerminal(rep.Fix))
+	}
+	fmt.Fprintf(w, "     %s\n", c(colorDim, "(see --json for each tool)"))
+	fmt.Fprintln(w)
 }
 
 func printFinding(w io.Writer, c colorFn, f rules.Finding, explain bool) {

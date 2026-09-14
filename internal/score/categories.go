@@ -41,9 +41,12 @@ var ruleCategory = map[string]Category{
 	// Tool Security
 	"MCP003": CatToolSecurity,
 	"MCP004": CatToolSecurity,
+	"MCP009": CatToolSecurity, // process spawn
 	"MCP012": CatToolSecurity, // browser automation
+	"MCP013": CatToolSecurity, // screen capture
+	"MCP020": CatToolSecurity, // arbitrary code execution (eval/interpreter)
 	"MCP021": CatToolSecurity, // screenshot
-	"MCP024": CatToolSecurity, // process listing
+	"MCP024": CatToolSecurity, // system information gathering
 	"MCP025": CatToolSecurity, // clipboard
 	"MCP027": CatToolSecurity, // container exec
 	"MCP028": CatToolSecurity, // k8s exec
@@ -54,12 +57,11 @@ var ruleCategory = map[string]Category{
 	"MCP038": CatToolSecurity,
 
 	// Data Protection
-	"MCP005": CatDataProtection, // file read + net exfil
-	"MCP006": CatDataProtection, // env var read
-	"MCP009": CatDataProtection, // credential file access
+	"MCP006": CatDataProtection, // plaintext secret in config env
 	"MCP011": CatDataProtection, // SSH key
 	"MCP014": CatDataProtection, // DB write
 	"MCP019": CatDataProtection, // secrets manager
+	"MCP046": CatDataProtection, // file upload / share link (local-file exfil)
 	"MCP040": CatDataProtection,
 	"MCP041": CatDataProtection,
 	"MCP042": CatDataProtection,
@@ -68,22 +70,21 @@ var ruleCategory = map[string]Category{
 	"MCP045": CatDataProtection,
 
 	// Supply Chain
-	"MCP007": CatSupplyChain,
+	"MCP007": CatSupplyChain, // unpinned/mutable source tag
 	"MCP010": CatSupplyChain, // git config write
-	"MCP018": CatSupplyChain, // CI/CD modification
+	"MCP018": CatSupplyChain, // suspiciously long tool description
 	"MCP022": CatSupplyChain, // npm/pip publish
 	"MCP029": CatSupplyChain, // config management
 	"MCP030": CatSupplyChain, // IaC apply/destroy
 	"MCP031": CatSupplyChain, // container image push
 	"MCP032": CatSupplyChain, // package manager exec
 	"MCP033": CatSupplyChain, // build system
-	"MCP046": CatSupplyChain,
 	"MCP047": CatSupplyChain,
 	"MCP048": CatSupplyChain,
 
 	// Network Security
+	"MCP005": CatNetworkSecurity, // unrestricted network access (SSRF)
 	"MCP008": CatNetworkSecurity, // outbound exfil
-	"MCP013": CatNetworkSecurity, // email send
 	"MCP015": CatNetworkSecurity, // cloud CLI
 	"MCP017": CatNetworkSecurity, // GitHub token scope
 	"MCP023": CatNetworkSecurity, // DNS manipulation
@@ -91,9 +92,9 @@ var ruleCategory = map[string]Category{
 	"MCP050": CatNetworkSecurity,
 
 	// Access Control
-	"MCP020": CatAccessControl, // memory/state write
 	"MCP026": CatAccessControl, // calendar/contacts
 	"MCP039": CatAccessControl,
+	"MCP200": CatAccessControl, // server can write agent-trusted state
 }
 
 // categoryOf returns the category for a rule ID, defaulting to ToolSecurity.

@@ -110,6 +110,9 @@ func TestE2E_VerifyWithoutLockfileExplains(t *testing.T) {
 func TestE2E_VerifyPackageCompatibilityRoutesToRegistry(t *testing.T) {
 	testenv.FakeHome(t)
 	t.Chdir(t.TempDir())
+	// A bare package name routes to the registry lookup path. The advisory list
+	// ships empty (only real, cited entries belong in it), so a legitimate
+	// package correctly reports no known advisory rather than a fabricated one.
 	out, err := runCLI(t, "verify", "@modelcontextprotocol/server-filesystem")
 	if err != nil {
 		t.Fatalf("legacy package lookup should still work: %v", err)
