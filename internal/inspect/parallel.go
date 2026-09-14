@@ -38,12 +38,14 @@ func InspectAll(ctx context.Context, entries []discover.ServerEntry, opts Option
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
+			results[i] = InspectServer(ctx, entry, opts)
+			// Report on completion, not on start: with parallel workers a
+			// start-of-work callback would show a misleading count and name.
 			if progress != nil {
 				progressMu.Lock()
 				progress(entry.Name)
 				progressMu.Unlock()
 			}
-			results[i] = InspectServer(ctx, entry, opts)
 		}(i, entry)
 	}
 	wg.Wait()

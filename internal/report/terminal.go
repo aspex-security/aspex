@@ -55,7 +55,6 @@ const (
 	colorBrRed    = "\033[91m"
 	colorBrYellow = "\033[93m"
 	colorBrGreen  = "\033[92m"
-	clearLine     = "\r\033[K"
 )
 
 // ScanReport is the full data for an aspex-scan terminal render.
@@ -189,69 +188,142 @@ func severityColorName(s string) string {
 	return colorBlue
 }
 
-// Spinner shows an animated progress indicator on stderr during scanning.
-type Spinner struct {
-	mu      sync.Mutex
-	msg     string
-	done    chan struct{}
-	noColor bool
+// Progress reports the status of a long-running action. It always writes to the
+// configured progress stream (stderr in normal use) so stdout stays clean for
+// piping, and it is TTY-aware: on an interactive terminal it animates a spinner
+// with a completed/total counter and elapsed time; when the stream is not a
+// terminal (CI, pipes) or color is disabled, it emits a plain status line
+// periodically so a run is never silent, and it never writes escape sequences.
+//
+// A result printed to stdout mid-run must go through Print, which clears the
+// transient line first so the two streams do not collide on a shared terminal.
+type Progress struct {
+	mu       sync.Mutex
+	prefix   string
+	total    int
+	done     int
+	item     string
+	start    time.Time
+	stop     chan struct{}
+	stopped  bool
+	animated bool
 }
 
-// NewSpinner creates and starts an animated spinner writing to w.
-func NewSpinner(initial string, noColor bool) *Spinner {
-	s := &Spinner{
-		msg:     initial,
-		done:    make(chan struct{}),
-		noColor: noColor,
+// NewProgress starts a progress reporter. total is the number of work units, or
+// 0 for indeterminate (no N/M counter). It runs until Stop is called.
+func NewProgress(prefix string, total int) *Progress {
+	p := &Progress{
+		prefix:   prefix,
+		total:    total,
+		start:    time.Now(),
+		stop:     make(chan struct{}),
+		animated: spinnerIsTTY,
 	}
-	go s.run()
-	return s
+	go p.run()
+	return p
 }
 
-func (s *Spinner) run() {
-	if s.noColor {
-		return
-	}
+func (p *Progress) run() {
 	frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	interval := 80 * time.Millisecond
+	if !p.animated {
+		interval = 1200 * time.Millisecond // plain lines: informative, not spammy
+	}
 	i := 0
 	for {
 		select {
-		case <-s.done:
-			fmt.Fprintf(writerStderr, "%s", clearLine)
+		case <-p.stop:
 			return
-		case <-time.After(80 * time.Millisecond):
-			s.mu.Lock()
-			msg := s.msg
-			s.mu.Unlock()
-			fmt.Fprintf(writerStderr, "\r  \033[35m%s\033[0m  \033[2m%s\033[0m", frames[i%len(frames)], msg)
-			i++
+		case <-time.After(interval):
+			p.mu.Lock()
+			line := p.status()
+			if p.animated {
+				fmt.Fprintf(writerStderr, "\r\033[2K  \033[35m%s\033[0m  \033[2m%s\033[0m", frames[i%len(frames)], line)
+				i++
+			} else {
+				fmt.Fprintf(writerStderr, "  %s\n", line)
+			}
+			p.mu.Unlock()
 		}
 	}
 }
 
-// Update changes the spinner message.
-func (s *Spinner) Update(msg string) {
-	s.mu.Lock()
-	s.msg = msg
-	s.mu.Unlock()
+// status renders "prefix N/M · Xs · item"; the caller holds the lock.
+func (p *Progress) status() string {
+	var b strings.Builder
+	b.WriteString(p.prefix)
+	if p.total > 0 {
+		fmt.Fprintf(&b, " %d/%d", p.done, p.total)
+	}
+	fmt.Fprintf(&b, " · %.0fs", time.Since(p.start).Seconds())
+	if p.item != "" {
+		b.WriteString(" · " + p.item)
+	}
+	return b.String()
 }
 
-// Stop clears the spinner line.
-func (s *Spinner) Stop() {
-	if s.noColor {
+// Item sets the label of the current work unit (e.g. the server being scanned).
+func (p *Progress) Item(name string) {
+	p.mu.Lock()
+	p.item = SanitizeForTerminal(name)
+	p.mu.Unlock()
+}
+
+// Done increments the completed-unit counter.
+func (p *Progress) Done() {
+	p.mu.Lock()
+	p.done++
+	p.mu.Unlock()
+}
+
+// Print clears the transient line (on a TTY) and writes s to w. Use it for a
+// result that must appear on stdout while the reporter is running, so the
+// animation and the result do not overwrite each other.
+func (p *Progress) Print(w io.Writer, s string) {
+	p.mu.Lock()
+	if p.animated {
+		fmt.Fprint(writerStderr, "\r\033[2K")
+	}
+	fmt.Fprint(w, s)
+	p.mu.Unlock()
+}
+
+// Stop ends the reporter. On a TTY it clears the transient line; otherwise it
+// prints a final status line so logs record completion.
+func (p *Progress) Stop() {
+	p.mu.Lock()
+	if p.stopped {
+		p.mu.Unlock()
 		return
 	}
-	close(s.done)
-	time.Sleep(20 * time.Millisecond)
+	p.stopped = true
+	p.mu.Unlock()
+
+	close(p.stop)
+	time.Sleep(20 * time.Millisecond) // let run() observe stop before we redraw
+
+	p.mu.Lock()
+	if p.animated {
+		fmt.Fprint(writerStderr, "\r\033[2K")
+	} else {
+		fmt.Fprintf(writerStderr, "  %s\n", p.status())
+	}
+	p.mu.Unlock()
 }
 
-// writerStderr is used by the spinner; set to os.Stderr by the caller via init.
-// We use a package-level var so spinner does not import os directly.
-var writerStderr io.Writer = io.Discard
+var (
+	// writerStderr is the progress stream; set to os.Stderr by the caller so the
+	// report package need not import os. Defaults to Discard (silent in tests).
+	writerStderr io.Writer = io.Discard
+	// spinnerIsTTY selects animation (true) vs plain periodic lines (false).
+	spinnerIsTTY bool
+)
 
-// SetSpinnerOutput sets the writer the spinner writes to (should be os.Stderr).
-func SetSpinnerOutput(w io.Writer) {
+// SetSpinnerOutput sets the progress stream and whether it is an interactive
+// terminal. Pass os.Stderr and term.IsTerminal(stderr) && wantColor.
+func SetSpinnerOutput(w io.Writer, isTTY bool) {
 	writerStderr = w
+	spinnerIsTTY = isTTY
 }
 
 // categoryBar renders a compact bar for a category score out of maxWidth chars.

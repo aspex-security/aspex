@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/aspex-security/aspex/internal/baseline"
 	"github.com/aspex-security/aspex/internal/killchain"
@@ -130,6 +131,13 @@ BASELINES
 
 	root.PersistentFlags().BoolP("version", "v", false, "Print version and exit")
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		// Strip color for non-terminal stdout so pipes/CI get no escape codes.
+		nc := os.Getenv("NO_COLOR") != "" || !term.IsTerminal(int(os.Stdout.Fd()))
+		if nc {
+			tf.noColor = true
+		}
+		// Progress goes to stderr; animates only on an interactive terminal.
+		report.SetSpinnerOutput(os.Stderr, term.IsTerminal(int(os.Stderr.Fd())) && !nc)
 		if v, _ := cmd.Flags().GetBool("version"); v {
 			fmt.Printf("aspex-trace %s (built %s)\n", version.Version, version.BuildDate)
 			os.Exit(0)
@@ -1454,7 +1462,14 @@ func runTrace(tf traceFlags) error {
 	}
 	sinceTime := time.Now().Add(-sinceDur)
 
+	var prog *report.Progress
+	if !tf.jsonOut && !tf.sarifOut {
+		prog = report.NewProgress("Reading agent logs", 0)
+	}
 	allEvents, clientsFound := collectEvents(tf.client, sinceTime)
+	if prog != nil {
+		prog.Stop()
+	}
 
 	// Apply server filter.
 	if tf.server != "" {

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/aspex-security/aspex/internal/agentenv"
 	"github.com/aspex-security/aspex/internal/attackpath"
@@ -160,9 +161,15 @@ COMPARING OVER TIME
 
 	root.PersistentFlags().BoolP("version", "v", false, "Print version and exit")
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		if os.Getenv("NO_COLOR") != "" {
+		// Strip color when stdout is not a terminal (pipes, CI) so redirected
+		// output carries no escape codes, unless the user forced it off already.
+		if os.Getenv("NO_COLOR") != "" || !term.IsTerminal(int(os.Stdout.Fd())) {
 			gf.noColor = true
 		}
+		// Progress always goes to stderr. It animates only on an interactive
+		// stderr with color enabled; otherwise it degrades to plain status lines
+		// (see report.Progress), so a run is never silent and never leaks escapes.
+		report.SetSpinnerOutput(os.Stderr, term.IsTerminal(int(os.Stderr.Fd())) && !gf.noColor)
 		if v, _ := cmd.Flags().GetBool("version"); v {
 			fmt.Printf("aspex-scan %s (built %s)\n", version.Version, version.BuildDate)
 			os.Exit(0)
@@ -842,16 +849,29 @@ func runPhantom(gf *globalFlags, jsonOut bool, interval time.Duration) error {
 	var results []jsonResult
 	dirtyCount := 0
 
+	var prog *report.Progress
+	if !jsonOut && !gf.jsonOut && len(servers) > 0 {
+		prog = report.NewProgress("Checking servers", len(servers))
+	}
+	// emit writes a result to stdout, clearing the transient progress line first
+	// so the two do not collide on a terminal.
+	emit := func(s string) {
+		if prog != nil {
+			prog.Print(os.Stdout, s)
+		} else {
+			fmt.Fprint(os.Stdout, s)
+		}
+	}
+
 	for _, entry := range servers {
-		if !jsonOut && !gf.jsonOut {
-			fmt.Fprintf(os.Stdout, "  %s %s %s\r",
-				c(dim, "scanning"),
-				c(bold, entry.Name),
-				c(dim, "..."),
-			)
+		if prog != nil {
+			prog.Item(entry.Name)
 		}
 
 		res := phantom.Analyze(ctx, entry, interval)
+		if prog != nil {
+			prog.Done()
+		}
 
 		if jsonOut || gf.jsonOut {
 			jr := jsonResult{
@@ -886,25 +906,26 @@ func runPhantom(gf *globalFlags, jsonOut bool, interval time.Duration) error {
 
 		// Terminal output.
 		if res.Err != nil {
-			fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
+			emit(fmt.Sprintf("  %s  %s  %s\n",
 				c(yellow, "?"),
 				c(bold, res.ServerName),
 				c(dim, res.Err.Error()),
-			)
+			))
 			continue
 		}
 
 		if res.Clean() {
-			fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
+			emit(fmt.Sprintf("  %s  %s  %s\n",
 				c(green, "✓"),
 				c(bold, res.ServerName),
 				c(dim, fmt.Sprintf("stable · %d tools on both calls", len(res.FirstCall))),
-			)
+			))
 			continue
 		}
 
 		dirtyCount++
-		fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "  %s  %s  %s\n",
 			c(red+bold, "!"),
 			c(bold, res.ServerName),
 			c(dim, fmt.Sprintf("%d change(s) detected", len(res.Changes))),
@@ -914,18 +935,22 @@ func runPhantom(gf *globalFlags, jsonOut bool, interval time.Duration) error {
 			if ch.Severity == "critical" {
 				sevColor = red + bold
 			}
-			fmt.Fprintf(os.Stdout, "    %s  %s %s\n",
+			fmt.Fprintf(&sb, "    %s  %s %s\n",
 				c(sevColor, strings.ToUpper(ch.Severity)),
 				c(bold, ch.ToolName),
 				c(dim, "("+ch.Kind+")"),
 			)
-			fmt.Fprintf(os.Stdout, "       %s\n", c(dim, ch.Explanation))
+			fmt.Fprintf(&sb, "       %s\n", c(dim, ch.Explanation))
 			if ch.Before != "" && ch.After != "" {
-				fmt.Fprintf(os.Stdout, "       %s %s\n", c(dim, "before:"), ch.Before)
-				fmt.Fprintf(os.Stdout, "       %s %s\n", c(dim, " after:"), c(yellow, ch.After))
+				fmt.Fprintf(&sb, "       %s %s\n", c(dim, "before:"), ch.Before)
+				fmt.Fprintf(&sb, "       %s %s\n", c(dim, " after:"), c(yellow, ch.After))
 			}
 		}
-		fmt.Fprintln(os.Stdout)
+		sb.WriteString("\n")
+		emit(sb.String())
+	}
+	if prog != nil {
+		prog.Stop()
 	}
 
 	if jsonOut || gf.jsonOut {
@@ -1548,11 +1573,9 @@ func runScanEnv(gf globalFlags) (agentenv.Environment, error) {
 func runScanInner(gf globalFlags, envOut *agentenv.Environment) error {
 	start := time.Now()
 
-	// Spinner only on interactive (non-JSON, non-SARIF) runs.
-	showSpinner := !gf.jsonOut && !gf.sarifOut && !gf.noColor
-	if showSpinner {
-		report.SetSpinnerOutput(os.Stderr)
-	}
+	// Progress shows on every interactive run; the stream and TTY-ness were set
+	// in PersistentPreRunE. It is suppressed only for machine output formats.
+	showProgress := !gf.jsonOut && !gf.sarifOut
 
 	servers, discoveryErrs := discover.DiscoverAll(gf.clients)
 
@@ -1564,19 +1587,21 @@ func runScanInner(gf globalFlags, envOut *agentenv.Environment) error {
 	ctx := context.Background()
 	opts := inspect.Options{NoExec: gf.noExec, Concurrency: gf.concurrency}
 
-	var spin *report.Spinner
-	if showSpinner && len(servers) > 0 {
-		spin = report.NewSpinner(fmt.Sprintf("Scanning %d servers...", len(servers)), gf.noColor)
+	var prog *report.Progress
+	if showProgress && len(servers) > 0 {
+		prog = report.NewProgress("Inspecting servers", len(servers))
 	}
 
+	// The callback fires as each server finishes, so the counter is accurate.
 	inspected := inspect.InspectAll(ctx, servers, opts, func(name string) {
-		if spin != nil {
-			spin.Update(fmt.Sprintf("Connecting to %s...", name))
+		if prog != nil {
+			prog.Item(name)
+			prog.Done()
 		}
 	})
 
-	if spin != nil {
-		spin.Stop()
+	if prog != nil {
+		prog.Stop()
 	}
 
 	var allFindings [][]rules.Finding

@@ -13,8 +13,10 @@ import (
 	"github.com/aspex-security/aspex/internal/discover"
 	"github.com/aspex-security/aspex/internal/inspect"
 	"github.com/aspex-security/aspex/internal/redteam"
+	"github.com/aspex-security/aspex/internal/report"
 	"github.com/aspex-security/aspex/internal/version"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 func main() {
@@ -96,16 +98,6 @@ func truncate(s string, max int) string {
 
 // progressBar renders a filled/unfilled bar of given width.
 // e.g. progressBar(6, 10, 20) → "████████████░░░░░░░░"
-func progressBar(done, total, width int) string {
-	if total == 0 {
-		return strings.Repeat("░", width)
-	}
-	filled := done * width / total
-	if filled > width {
-		filled = width
-	}
-	return strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
-}
 
 func run(serverFlag string, timeoutSecs int, categories []string, jsonOut, noColor bool, clients []string, failOn string) error {
 	c := colorFunc(noColor, jsonOut)
@@ -207,24 +199,41 @@ func run(serverFlag string, timeoutSecs int, categories []string, jsonOut, noCol
 
 	ctx := context.Background()
 
-	for _, entry := range servers {
-		if !jsonOut {
-			fmt.Fprintf(os.Stdout, "  %s %s\n",
-				c(dim, "▸"),
-				c(bold, entry.Name),
-			)
+	// Progress on stderr, so streamed findings on stdout stay clean. It animates
+	// on an interactive terminal and degrades to periodic plain lines otherwise,
+	// so a long probing run is never silent (see report.Progress).
+	var prog *report.Progress
+	if !jsonOut {
+		report.SetSpinnerOutput(os.Stderr, term.IsTerminal(int(os.Stderr.Fd())) && !noColor)
+		prog = report.NewProgress("Probing servers", len(servers))
+	}
+	// emit writes a result to stdout, clearing the transient progress line first.
+	// In JSON mode there is no human output at all.
+	emit := func(s string) {
+		if jsonOut {
+			return
 		}
+		if prog != nil {
+			prog.Print(os.Stdout, s)
+		} else {
+			fmt.Fprint(os.Stdout, s)
+		}
+	}
+
+	for _, entry := range servers {
+		if prog != nil {
+			prog.Item(entry.Name)
+		}
+		emit(fmt.Sprintf("  %s %s\n", c(dim, "▸"), c(bold, entry.Name)))
 
 		opts := inspect.Options{NoExec: false}
 		srv := inspect.InspectServer(ctx, entry, opts)
 
 		if srv.StaticOnly {
-			if !jsonOut {
-				fmt.Fprintf(os.Stdout, "    %s %s\n",
-					c(yellow, "~"),
-					c(dim, "static-only server, skipping probes"),
-				)
-			}
+			emit(fmt.Sprintf("    %s %s\n",
+				c(yellow, "~"),
+				c(dim, "static-only server, skipping probes"),
+			))
 			jsonServers = append(jsonServers, jsonServerResult{
 				Name:    entry.Name,
 				Client:  entry.Client,
@@ -232,46 +241,31 @@ func run(serverFlag string, timeoutSecs int, categories []string, jsonOut, noCol
 				Error:   "static-only server",
 			})
 			summaries = append(summaries, serverSummary{name: entry.Name, verdict: "SKIPPED"})
+			if prog != nil {
+				prog.Done()
+			}
 			continue
 		}
 
 		if len(srv.Tools) == 0 {
-			if !jsonOut {
-				fmt.Fprintf(os.Stdout, "    %s %s\n",
-					c(dim, "-"),
-					c(dim, "no tools found"),
-				)
-			}
+			emit(fmt.Sprintf("    %s %s\n",
+				c(dim, "-"),
+				c(dim, "no tools found"),
+			))
 			jsonServers = append(jsonServers, jsonServerResult{
 				Name:    entry.Name,
 				Client:  entry.Client,
 				Verdict: "CLEAN",
 			})
 			summaries = append(summaries, serverSummary{name: entry.Name, verdict: "CLEAN"})
+			if prog != nil {
+				prog.Done()
+			}
 			continue
 		}
 
 		serverProbes := 0
 		serverVulns := 0
-
-		// Count total probes for this server upfront (for the progress bar).
-		totalProbesForServer := 0
-		// We'll iterate tools and track progress as we go.
-		probesDone := 0
-		// Pre-count probes for progress bar.
-		for _, tool := range srv.Tools {
-			ps := redteam.ProbesForTool(tool)
-			if len(catFilter) > 0 {
-				var f []redteam.Probe
-				for _, p := range ps {
-					if catFilter[p.Category] {
-						f = append(f, p)
-					}
-				}
-				ps = f
-			}
-			totalProbesForServer += len(ps)
-		}
 
 		for _, tool := range srv.Tools {
 			probes := redteam.ProbesForTool(tool)
@@ -290,34 +284,14 @@ func run(serverFlag string, timeoutSecs int, categories []string, jsonOut, noCol
 				continue
 			}
 
-			// Show per-probe progress with a bar, overwriting the line.
-			if !jsonOut {
-				pct := 0
-				if totalProbesForServer > 0 {
-					pct = probesDone * 100 / totalProbesForServer
-				}
-				bar := progressBar(probesDone, totalProbesForServer, 10)
-				probeName := ""
-				if len(probes) > 0 {
-					probeName = probes[0].Name
-				}
-				fmt.Fprintf(os.Stdout, "\r    %s %s%s%s %d%% %s %s %s",
-					c(dim, "["),
-					c(purple, bar),
-					c(dim, "]"),
-					"",
-					pct,
-					c(dim, "·"),
-					c(dim, tool.Name),
-					c(dim, "· "+probeName),
-				)
+			if prog != nil {
+				prog.Item(entry.Name + " · " + tool.Name)
 			}
 
 			probeCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSecs)*time.Second)
 			results := redteam.RunProbes(probeCtx, entry, tool, probes)
 			cancel()
 
-			probesDone += len(results)
 			serverProbes += len(results)
 			totalProbes += len(results)
 
@@ -340,27 +314,22 @@ func run(serverFlag string, timeoutSecs int, categories []string, jsonOut, noCol
 			}
 
 			if !jsonOut && len(toolVulns) > 0 {
-				// Clear in-progress line.
-				fmt.Fprintf(os.Stdout, "\r\033[2K")
-				fmt.Fprintf(os.Stdout, "    %s  %s  %s\n",
+				var sb strings.Builder
+				fmt.Fprintf(&sb, "    %s  %s  %s\n",
 					c(red+bold, "VULNERABLE"),
 					c(bold, tool.Name),
 					c(dim, fmt.Sprintf("%d/%d probes triggered", len(toolVulns), len(results))),
 				)
 				for _, vr := range toolVulns {
-					fmt.Fprintf(os.Stdout, "       %s %s  %s  %s\n",
+					fmt.Fprintf(&sb, "       %s %s  %s  %s\n",
 						c(red, "▸"),
 						c(bold, vr.Probe.Name),
 						c(dim, "("+strings.Join(vr.Triggered, ", ")+")"),
 						c(dim, "["+vr.Severity+"]"),
 					)
 				}
+				emit(sb.String())
 			}
-		}
-
-		// Clear progress line.
-		if !jsonOut {
-			fmt.Fprintf(os.Stdout, "\r\033[2K")
 		}
 
 		verdict := "CLEAN"
@@ -368,20 +337,18 @@ func run(serverFlag string, timeoutSecs int, categories []string, jsonOut, noCol
 			verdict = "VULNERABLE"
 		}
 
-		if !jsonOut {
-			if serverVulns == 0 {
-				fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
-					c(dim, "·"),
-					c(bold, entry.Name),
-					c(dim, fmt.Sprintf("No findings triggered by these %d probes - this does not mean the server is secure", serverProbes)),
-				)
-			} else {
-				fmt.Fprintf(os.Stdout, "  %s  %s  %s\n",
-					c(red+bold, "✗"),
-					c(bold, entry.Name),
-					c(dim, fmt.Sprintf("%d finding(s) · %d probes · %d tools", serverVulns, serverProbes, len(srv.Tools))),
-				)
-			}
+		if serverVulns == 0 {
+			emit(fmt.Sprintf("  %s  %s  %s\n",
+				c(dim, "·"),
+				c(bold, entry.Name),
+				c(dim, fmt.Sprintf("No findings triggered by these %d probes - this does not mean the server is secure", serverProbes)),
+			))
+		} else {
+			emit(fmt.Sprintf("  %s  %s  %s\n",
+				c(red+bold, "✗"),
+				c(bold, entry.Name),
+				c(dim, fmt.Sprintf("%d finding(s) · %d probes · %d tools", serverVulns, serverProbes, len(srv.Tools))),
+			))
 		}
 
 		jsonServers = append(jsonServers, jsonServerResult{
@@ -399,6 +366,12 @@ func run(serverFlag string, timeoutSecs int, categories []string, jsonOut, noCol
 			vulnCount:  serverVulns,
 			verdict:    verdict,
 		})
+		if prog != nil {
+			prog.Done()
+		}
+	}
+	if prog != nil {
+		prog.Stop()
 	}
 
 	if jsonOut {

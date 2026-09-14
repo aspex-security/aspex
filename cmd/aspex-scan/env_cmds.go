@@ -53,7 +53,19 @@ func loadInputs(gf *globalFlags, quiet bool) agentenv.Inputs {
 		}
 	}
 	ctx := context.Background()
-	inspected := inspect.InspectAll(ctx, entries, inspect.Options{NoExec: gf.noExec, Concurrency: gf.concurrency}, nil)
+	var prog *report.Progress
+	if !quiet && !gf.jsonOut && len(entries) > 0 {
+		prog = report.NewProgress("Inspecting servers", len(entries))
+	}
+	inspected := inspect.InspectAll(ctx, entries, inspect.Options{NoExec: gf.noExec, Concurrency: gf.concurrency}, func(name string) {
+		if prog != nil {
+			prog.Item(name)
+			prog.Done()
+		}
+	})
+	if prog != nil {
+		prog.Stop()
+	}
 	cwd, _ := os.Getwd()
 	return agentenv.Inputs{Servers: inspected, Options: agentenv.Options{Cwd: cwd}}
 }
