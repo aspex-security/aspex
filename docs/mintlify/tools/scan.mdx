@@ -68,7 +68,7 @@ A capability on its own is never a path. One critical path caps the overall scor
 | `--no-exec` | Configs only; nothing is launched. Capabilities inferred for well-known packages at medium confidence |
 | `--explain` | Evidence and full advisory for every finding: WHY, EXPLOIT, IMPACT, CONFIDENCE |
 | `--fail-on <sev>` | Exit 1 when any finding or path reaches `critical`, `high`, `medium` or `low`. `.aspex.yaml` can set the default |
-| `--json` · `--sarif` · `--html` | Machine-readable output, GitHub Code Scanning, or a self-contained report |
+| `--json` · `--sarif` · `--html` | Machine-readable output, GitHub Code Scanning, or a self-contained, shareable report (attack paths and blast radius included) |
 | `--baseline <file>` · `--save-baseline <file>` | Hide known findings and never fail on them; write the current set as a new baseline |
 | `--with-trace` · `--trace-since` | Correlate findings with what your agents actually did (default window `7d`) |
 | `--clients` | Limit to specific clients, e.g. `--clients claude,cursor` |

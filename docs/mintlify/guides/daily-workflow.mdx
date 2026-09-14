@@ -117,7 +117,8 @@ aspex scan fix env
 aspex scan hooks
 
 # 6. Generate a shareable summary (privacy-safe, no tool output values)
-aspex scan --share
+aspex scan --share                 # Markdown, for an issue or commit message
+aspex scan --html report.html      # self-contained page: attack paths + blast radius
 
 # 7. Compliance export if your team needs it
 aspex scan --report soc2

@@ -11,6 +11,8 @@ aspex explore --dataset > session.json     # the data, no server
 
 Think Chrome DevTools plus Wireshark for one agent's sessions. It is built for one person investigating, not a fleet dashboard.
 
+It opens on the Timeline when there is recorded activity. Opened against an environment with a live attack surface but no events in the window (for example straight after a scan, or with a short `--since`), it lands on the capability graph instead, so the "what could happen" picture is in front of you rather than an empty timeline.
+
 ## Views
 
 **Timeline.** Every event in the window, per session (a session is Claude Code's session id, or a 30-minute idle gap for clients without one): `TOOL`, `CONTENT` (a read that brings content into the context), `NETWORK`, `RESOURCE`, `ERROR`. The detail column shows the path or URL argument; content-bearing arguments are never displayed.

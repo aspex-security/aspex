@@ -68,4 +68,15 @@ Config updated. Plaintext values removed.
 
 ## Reports
 
-`--share` writes a privacy-safe Markdown summary with server commands, env values and paths redacted. `--report soc2` or `--report iso27001` maps findings to controls and emits PASS/FAIL per control. `--html` writes a self-contained report.
+`--share` writes a privacy-safe Markdown summary with server commands, env values and paths redacted. `--report soc2` or `--report iso27001` maps findings to controls and emits PASS/FAIL per control.
+
+`--html` writes a self-contained report (one file, no external assets) built to be shared: attach it to a PR, drop it in Slack, or open it in a browser. Alongside the per-server findings it renders the two things that are hard to read as terminal text:
+
+- **Attack paths.** Each composed cross-server path drawn hop by hop, from the source instruction through the servers involved to where the data leaves, with the impact and what removes it.
+- **Blast radius.** The overall reach (HIGH/MEDIUM/LOW), with every contributing reason listed present or absent, and a note explaining any score cap.
+
+```sh
+aspex scan --html report.html
+```
+
+The report contains no secret values, only what a scan already prints. Server tool names and descriptions are HTML-escaped, so an untrusted server cannot inject markup into a report you share.
