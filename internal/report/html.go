@@ -96,6 +96,18 @@ var htmlFuncs = template.FuncMap{
 	},
 	"lower": strings.ToLower,
 	"sub":   func(a, b int) int { return a - b },
+	"blastColor": func(level string) string {
+		switch strings.ToUpper(level) {
+		case "HIGH":
+			return "#ef4444"
+		case "MEDIUM":
+			return "#f97316"
+		case "LOW":
+			return "#eab308"
+		default:
+			return "#22c55e"
+		}
+	},
 }
 
 var htmlTmpl = template.Must(template.New("scan").Funcs(htmlFuncs).Parse(`<!DOCTYPE html>
@@ -103,7 +115,7 @@ var htmlTmpl = template.Must(template.New("scan").Funcs(htmlFuncs).Parse(`<!DOCT
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MCP Security Scan · Aspex</title>
+<title>Agent Security Scan · Aspex</title>
 <style>
 :root {
   --bg:       #080a0f;
@@ -113,8 +125,10 @@ var htmlTmpl = template.Must(template.New("scan").Funcs(htmlFuncs).Parse(`<!DOCT
   --border2:  #242c3d;
   --text:     #e2e8f0;
   --muted:    #64748b;
-  --purple:   #7c5cfc;
-  --purple-dim: rgba(124,92,252,0.15);
+  --brand:      #ec3013;
+  --brand-dark: #ae1800;
+  --brand-light:#ff9783;
+  --brand-dim:  rgba(236,48,19,0.14);
   --red:      #ef4444;
   --orange:   #f97316;
   --yellow:   #eab308;
@@ -160,7 +174,7 @@ body {
 .topbar-mark {
   width: 22px;
   height: 22px;
-  background: var(--purple);
+  background: var(--brand);
   border-radius: 5px;
   display: flex;
   align-items: center;
@@ -220,8 +234,8 @@ body {
   transition: all 0.15s;
 }
 .filter-btn:hover, .filter-btn.active {
-  background: var(--purple-dim);
-  border-color: var(--purple);
+  background: var(--brand-dim);
+  border-color: var(--brand);
   color: var(--text);
 }
 .filter-btn[data-sev="critical"].active { background: rgba(239,68,68,0.12); border-color: var(--red); color: var(--red); }
@@ -476,7 +490,7 @@ body {
 .rule-id {
   font-family: var(--mono);
   font-size: 10px;
-  color: var(--purple);
+  color: var(--brand);
   white-space: nowrap;
 }
 .finding-body { flex: 1; min-width: 0; }
@@ -501,17 +515,17 @@ body {
 .framework-tag {
   padding: 2px 7px;
   border-radius: 4px;
-  background: var(--purple-dim);
-  border: 1px solid rgba(124,92,252,0.25);
+  background: var(--brand-dim);
+  border: 1px solid rgba(236,48,19,0.30);
   font-size: 10px;
-  color: #a78bfa;
+  color: var(--brand-light);
   font-family: var(--mono);
   white-space: nowrap;
 }
 .fix-block {
   background: rgba(0,0,0,0.3);
   border: 1px solid var(--border);
-  border-left: 3px solid var(--purple);
+  border-left: 3px solid var(--brand);
   border-radius: 0 6px 6px 0;
   padding: 10px 14px;
 }
@@ -520,7 +534,7 @@ body {
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--purple);
+  color: var(--brand);
   margin-bottom: 4px;
 }
 .fix-text {
@@ -571,8 +585,109 @@ body {
   gap: 12px;
 }
 .footer-brand { font-size: 12px; color: var(--muted); }
-.footer-link { color: var(--purple); text-decoration: none; font-size: 12px; }
+.footer-link { color: var(--brand); text-decoration: none; font-size: 12px; }
 .footer-link:hover { text-decoration: underline; }
+
+/* ── Attack paths (the headline: composed cross-server paths) ── */
+.paths {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 8px 28px 0;
+}
+.path-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--path-color, var(--red));
+  border-radius: 10px;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.path-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 20px 12px;
+  flex-wrap: wrap;
+}
+.path-title { flex: 1; min-width: 200px; }
+.path-name { font-size: 15px; font-weight: 700; color: #f1f5f9; }
+.path-desc { font-size: 12.5px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+.path-badges { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; flex-shrink: 0; }
+.path-servers {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 0 20px 14px;
+}
+.path-server-chip {
+  padding: 2px 9px; border-radius: 5px;
+  background: var(--surface2); border: 1px solid var(--border2);
+  font-family: var(--mono); font-size: 11px; color: var(--text);
+}
+.path-flow {
+  background: rgba(0,0,0,0.28);
+  border-top: 1px solid var(--border);
+  padding: 16px 20px;
+}
+.flow-step {
+  display: flex; align-items: flex-start; gap: 12px;
+  font-size: 12.5px; line-height: 1.5;
+  padding: 3px 0;
+}
+.flow-node {
+  flex-shrink: 0; width: 18px; text-align: center;
+  color: var(--path-color, var(--red)); font-weight: 700;
+  font-family: var(--mono);
+}
+.flow-text { color: #cbd5e1; }
+.path-foot {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+  background: var(--border);
+  border-top: 1px solid var(--border);
+}
+.path-foot > div { background: var(--surface); padding: 12px 20px; }
+.path-foot-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 4px;
+}
+.path-foot-text { font-size: 12px; color: #94a3b8; line-height: 1.5; }
+.path-impact .path-foot-text { color: var(--brand-light); }
+@media (max-width: 640px) { .path-foot { grid-template-columns: 1fr; } }
+
+/* ── Blast radius panel ── */
+.blast {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 4px 28px 0;
+}
+.blast-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.blast-level {
+  display: flex; flex-direction: column; gap: 2px; flex-shrink: 0;
+  padding-right: 20px; border-right: 1px solid var(--border);
+}
+.blast-level-num { font-size: 22px; font-weight: 800; line-height: 1; }
+.blast-level-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; }
+.blast-reasons { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 240px; }
+.blast-reason { display: flex; align-items: flex-start; gap: 9px; font-size: 12.5px; line-height: 1.45; }
+.blast-reason.on  { color: #cbd5e1; }
+.blast-reason.off { color: var(--muted); }
+.blast-mark { flex-shrink: 0; font-weight: 700; width: 14px; text-align: center; }
+.blast-reason.on .blast-mark  { color: var(--brand); }
+.blast-reason.off .blast-mark { color: var(--border2); }
+
+/* Score-cap note under the hero gauge */
+.cap-note {
+  max-width: 960px; margin: -8px auto 0; padding: 0 28px;
+  font-size: 12px; color: var(--muted);
+}
+.cap-note strong { color: var(--brand-light); font-weight: 600; }
 
 /* Print */
 @media print {
@@ -581,6 +696,7 @@ body {
   .server-chevron { display: none; }
   .findings-list { display: block !important; }
   .server-card { break-inside: avoid; }
+  .path-card, .blast-card { break-inside: avoid; }
 }
 
 /* Responsive */
@@ -599,8 +715,8 @@ body {
 <!-- Topbar -->
 <header class="topbar">
   <div class="topbar-brand">
-    <div class="topbar-mark">O</div>
-    MCP Scan
+    <div class="topbar-mark">A</div>
+    Aspex
   </div>
   <div class="topbar-score">
     <span class="topbar-score-num" style="color: {{bandColor .Overall.Band}};">{{.Overall.Score}}</span>
@@ -675,6 +791,88 @@ body {
     {{end}}
   </div>
 </section>
+
+{{if .ScoreCapReason}}
+<div class="cap-note">Score capped: <strong>{{.ScoreCapReason}}</strong></div>
+{{end}}
+
+{{if .BlastRadius}}
+<section class="blast">
+  <div class="section-label" style="max-width:none;padding:0;">
+    <span class="section-label-text">Blast radius</span>
+    <span class="section-label-line"></span>
+  </div>
+  <div class="blast-card">
+    <div class="blast-level">
+      <span class="blast-level-num" style="color: {{blastColor .BlastRadius.Level}};">{{.BlastRadius.Level}}</span>
+      <span class="blast-level-lbl">reach</span>
+    </div>
+    <div class="blast-reasons">
+      {{range .BlastRadius.Why}}
+      <div class="blast-reason {{if .Present}}on{{else}}off{{end}}">
+        <span class="blast-mark">{{if .Present}}✓{{else}}·{{end}}</span>
+        <span>{{.Text}}</span>
+      </div>
+      {{end}}
+    </div>
+  </div>
+</section>
+{{end}}
+
+{{if .AttackPaths}}
+<section class="paths">
+  <div class="section-label" style="max-width:none;padding:0;">
+    <span class="section-label-text">Attack paths</span>
+    <span class="section-label-line"></span>
+    <span class="section-label-text" style="color:var(--muted);">{{len .AttackPaths}}</span>
+  </div>
+  {{range .AttackPaths}}
+  <div class="path-card" style="--path-color: {{sevColor .Severity}};">
+    <div class="path-head">
+      <div class="path-title">
+        <div class="path-name">{{.Name}}</div>
+        {{if .Description}}<div class="path-desc">{{.Description}}</div>{{end}}
+      </div>
+      <div class="path-badges">
+        <span class="sev-badge" style="background: {{sevColor .Severity}};">{{.Severity}}</span>
+        <span class="rule-id">{{.ID}}{{if .Confidence}} · confidence {{.Confidence}}{{end}}</span>
+      </div>
+    </div>
+    {{if .Servers}}
+    <div class="path-servers">
+      {{range .Servers}}<span class="path-server-chip">{{.}}</span>{{end}}
+    </div>
+    {{end}}
+    {{if .Steps}}
+    <div class="path-flow">
+      {{range $i, $s := .Steps}}
+      <div class="flow-step">
+        <span class="flow-node">{{if eq $i 0}}◆{{else}}↓{{end}}</span>
+        <span class="flow-text">{{$s}}</span>
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+    {{if or .Impact .Remediation}}
+    <div class="path-foot">
+      {{if .Impact}}
+      <div class="path-impact">
+        <div class="path-foot-label">Impact</div>
+        <div class="path-foot-text">{{.Impact}}</div>
+      </div>
+      {{end}}
+      {{if .Remediation}}
+      <div>
+        <div class="path-foot-label">What removes it</div>
+        <div class="path-foot-text">{{.Remediation}}</div>
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+</section>
+{{end}}
 
 <!-- Server cards -->
 <main class="server-list">

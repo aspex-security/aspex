@@ -2,7 +2,7 @@
 <meta charset="utf-8">
 <title>aspex explore</title>
 <style>
-:root{--bg:#0f1115;--panel:#161a22;--fg:#e6e6e6;--dim:#8b93a7;--line:#262c38;--red:#ec3013;--salmon:#ff9783;--yellow:#fbbf24;--green:#34d399;--cyan:#67e8f9;--purple:#a78bfa}
+:root{--bg:#0f1115;--panel:#161a22;--fg:#e6e6e6;--dim:#8b93a7;--line:#262c38;--red:#ec3013;--salmon:#ff9783;--yellow:#fbbf24;--green:#34d399;--cyan:#67e8f9}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
 header{display:flex;gap:18px;align-items:baseline;padding:12px 18px;border-bottom:2px solid var(--line)}
 header h1{font-size:15px;margin:0;color:var(--red)}header .k{color:var(--dim)}header .k b{color:var(--fg)}
@@ -16,7 +16,7 @@ main{display:grid;grid-template-columns:minmax(180px,220px) minmax(0,1fr) minmax
 .row{display:grid;grid-template-columns:70px 84px 1fr;gap:10px;padding:5px 8px;cursor:pointer}.row:hover{background:var(--panel)}.row.sel{background:#1e2433}
 .ts{color:var(--dim)}.kind{font-weight:600}.kind.TOOL{color:var(--fg)}.kind.CONTENT{color:var(--cyan)}.kind.NETWORK{color:var(--yellow)}.kind.ERROR{color:var(--red)}.kind.RESOURCE{color:var(--cyan)}
 .sev{display:inline-block;padding:0 6px;font-size:11px;margin-left:6px;border:1px solid}.sev.critical,.sev.high{border-color:var(--red);color:var(--salmon)}.sev.medium{border-color:var(--yellow);color:var(--yellow)}.sev.low,.sev.info{border-color:var(--cyan);color:var(--cyan)}
-.what .srv{color:var(--purple)}.what .arg{color:var(--dim);margin-left:8px}
+.what .srv{color:var(--salmon)}.what .arg{color:var(--dim);margin-left:8px}
 h2{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin:14px 0 6px}
 .ev{padding:6px 8px;border-left:3px solid var(--line);margin:4px 0;background:#12151c}.ev .lv{font-size:10px;font-weight:700;letter-spacing:.06em;margin-right:8px}
 .ev.OBSERVED{border-left-style:solid;border-color:var(--green)}.ev.OBSERVED .lv{color:var(--green)}.ev.OBSERVED .lv::before{content:"● "}
@@ -24,11 +24,11 @@ h2{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)
 .ev.POSSIBLE{border-left-style:dotted;border-color:var(--dim)}.ev.POSSIBLE .lv{color:var(--dim)}.ev.POSSIBLE .lv::before{content:"○ "}
 .ev.NOT{border-left-style:double;border-color:var(--red)}.ev.NOT .lv{color:var(--salmon)}.ev.NOT .lv::before{content:"✗ "}
 .card{border:1px solid var(--line);padding:10px 12px;margin:10px 0;cursor:pointer}.card:hover{border-color:var(--red)}.card.sel{border-color:var(--red)}
-.hop{padding:3px 0}.hop b{color:var(--purple)}.arrow{color:var(--dim);padding-left:16px}
+.hop{padding:3px 0}.hop b{color:var(--salmon)}.arrow{color:var(--dim);padding-left:16px}
 .empty{color:var(--dim);padding:30px 0;text-align:center}
 .why{color:var(--dim);margin-top:8px}.blast{display:inline-block;padding:2px 8px;font-weight:700;border:1px solid}.blast.HIGH{border-color:var(--red);color:var(--salmon)}.blast.MEDIUM{border-color:var(--yellow);color:var(--yellow)}.blast.LOW{border-color:var(--green);color:var(--green)}
 svg text{font:12px ui-monospace,Menlo,monospace;fill:var(--fg)}svg .meta{fill:var(--dim);font-size:10px}svg .lane{fill:var(--dim);font-size:10px;letter-spacing:.08em}
-.node rect{fill:#1a1f2b;stroke:var(--line)}.node.server rect{stroke:var(--purple)}.node.resource rect{stroke:var(--cyan)}.node.destination rect{stroke:var(--yellow)}.node.source rect{stroke:var(--dim);stroke-dasharray:3 3}.node.persists rect{stroke:var(--salmon);stroke-width:2}
+.node rect{fill:#1a1f2b;stroke:var(--line)}.node.server rect{stroke:var(--salmon)}.node.resource rect{stroke:var(--cyan)}.node.destination rect{stroke:var(--yellow)}.node.source rect{stroke:var(--dim);stroke-dasharray:3 3}.node.persists rect{stroke:var(--salmon);stroke-width:2}
 .node.sel rect{stroke:var(--fg);stroke-width:2}
 .edge{stroke:var(--line);stroke-width:1.5;fill:none}.edge.observed{stroke:var(--green);stroke-width:2}.edge.critical,.edge.high{stroke:var(--red);stroke-width:2.5}.edge.medium{stroke:var(--yellow)}.edge.persists{stroke-dasharray:6 4}
 .laneline{stroke:var(--line);stroke-dasharray:2 4}.boundary{stroke:var(--salmon);stroke-dasharray:8 6;stroke-width:1.5}
@@ -52,6 +52,11 @@ const lvClass=l=>l.startsWith('NOT')?'NOT':l.split(' ')[0];
 const ev=e=>`<div class="ev ${lvClass(e.level)}"><span class="lv">${esc(e.level)}</span>${esc(e.text)}</div>`;
 fetch('/api/dataset').then(r=>r.json()).then(d=>{D=d;
  $('#hdr').innerHTML=`last <b>${esc(d.window)}</b> · <b>${d.summary.events}</b> events · <b>${d.summary.sessions}</b> sessions · <b>${d.summary.flagged}</b> findings · <b>${d.attack_paths.length}</b> attack paths · blast radius <span class="blast ${esc(d.blast_radius.level)}">${esc(d.blast_radius.level)}</span>`;
+ // With no recorded activity but a live attack surface (e.g. opened straight
+ // after a scan), the "what CAN happen" graph is the useful landing, not an
+ // empty timeline.
+ if(d.summary.events===0 && d.attack_paths.length>0){view='graph';
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v==='graph'));}
  renderSessions(); render();});
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{view=b.dataset.v;document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));render();});
 function renderSessions(){const S=$('#sessions');S.innerHTML=`<h2>Sessions</h2><div class="sess ${session===''?'on':''}" data-id=""><span class="id">all sessions</span><div class="m">${D.summary.events} events</div></div>`+D.sessions.map(s=>`<div class="sess ${session===s.id?'on':''}" data-id="${esc(s.id)}"><span class="id">${esc(s.id)}</span><div class="m">${new Date(s.start).toLocaleDateString()} · ${s.events} ev · ${s.flagged} flagged · ${s.servers.map(esc).join(', ')}</div></div>`).join('');
@@ -61,7 +66,7 @@ function timeline(){const rows=D.timeline.filter(e=>!session||e.session===sessio
  $('#list').innerHTML=rows.map(e=>`<div class="row" data-id="${e.id}"><span class="ts">${t(e.ts)}</span><span class="kind ${esc(e.kind)}">${esc(e.kind)}</span><span class="what"><span class="srv">${esc(e.server)}</span>.${esc(e.tool)}${e.severity?`<span class="sev ${esc(e.severity)}">${esc(e.severity)}</span>`:''}<span class="arg">${esc(e.detail)}</span></span></div>`).join('');
  document.querySelectorAll('.row').forEach(r=>r.onclick=()=>{document.querySelectorAll('.row').forEach(x=>x.classList.remove('sel'));r.classList.add('sel');showEntry(+r.dataset.id);});}
 function showEntry(id){const e=D.timeline[id];const fs=D.findings.filter(f=>f.entry_id===id);
- let h=`<h2>Event</h2><div><span style="color:var(--purple)">${esc(e.server)}</span>.${esc(e.tool)}<br><span class="ts">${new Date(e.ts).toLocaleString()}</span> · session ${esc(e.session)}<br>${esc(e.detail)}</div>`;
+ let h=`<h2>Event</h2><div><span style="color:var(--salmon)">${esc(e.server)}</span>.${esc(e.tool)}<br><span class="ts">${new Date(e.ts).toLocaleString()}</span> · session ${esc(e.session)}<br>${esc(e.detail)}</div>`;
  if(!fs.length)h+=`<h2>Findings</h2><div class="why">No rule fired on this event.</div>`;
  for(const f of fs){h+=`<h2>${esc(f.rule_id)} · ${esc(f.name)} <span class="sev ${esc(f.severity)}">${esc(f.severity)}</span></h2><div class="why">Why does Aspex believe this?</div>${f.evidence.map(ev).join('')}<h2>Remediation</h2><div>${esc(f.fix)}</div><div class="why">${esc(f.mapping)}</div>`;}
  const prov=D.provenance.filter(p=>p.target.id===id||p.source.id===id);if(prov.length){h+=`<h2>Provenance</h2>`+prov.map(p=>`<div class="hop"><b>${esc(p.source.server)}.${esc(p.source.tool)}</b> → <b>${esc(p.target.server)}.${esc(p.target.tool)}</b> <span class="why">${esc(p.delta)} · ${esc(p.confidence)} confidence</span></div>${p.evidence.map(ev).join('')}`).join('');}
