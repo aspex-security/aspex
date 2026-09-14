@@ -43,16 +43,18 @@ Not a number. A list of factors, each shown present or absent in `aspex scan`, `
 
 ## History
 
-Each scan writes a JSON log and, when the environment changed, a lockfile-shaped snapshot to your user cache directory. On later runs the score box shows the delta and the report ends with the actions that would move the score most. Real output:
+Each scan writes a JSON log and, when the environment changed, a lockfile-shaped snapshot to your user cache directory. On later runs the score box shows the delta and the report ends with the highest-impact fixes, ranked by the risk each one retires. Real output:
 
 ```
   │  ↓ -21 pts since last scan (was 39/100)                     │
 
-  Top actions to improve your score
-  → Fix Dangerous capability: arbitrary filesystem write across 2 servers  (~+82 pts)
-  → Fix Known vulnerable package across 3 servers  (~+82 pts)
-  → Fix Server can write agent-trusted state across 3 servers  (~+60 pts)
+  Highest-impact fixes
+  → Fix Dangerous capability: arbitrary filesystem write  clears 3 high across 2 servers
+  → Fix Dangerous capability: shell/exec (schema pattern)  clears 1 critical across 1 server
+  → Fix Server can write agent-trusted state  clears 3 high across 3 servers
 ```
+
+Fixes are ranked by the criticals and highs they clear, not by a "+N points" estimate: the score is pulled toward the worst server and capped by any attack path, so a per-fix point number would be misleading. The list tells you what each fix actually removes.
 
 `aspex history` replays the snapshots: servers, tools, attack paths and blast radius per point, and the security-relevant changes between them.
 
